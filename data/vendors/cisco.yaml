@@ -11,6 +11,12 @@ aliases:
   - Cisco
   - Cisco Systems
   - Cisco Systems, Inc.
+  # Acquired by Cisco in March 2024 and now assigned under Cisco's CNA, but the
+  # affected-entry vendor string is still "Splunk". Without these aliases every
+  # Splunk CVE resolves to no vendor at all — 69 of them were being dropped.
+  - Splunk
+  - Splunk Inc.
+  - Splunk LLC
 
 psirtHosts:
   - sec.cloudapps.cisco.com

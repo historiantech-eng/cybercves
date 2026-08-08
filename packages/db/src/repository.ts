@@ -237,6 +237,22 @@ export class Repository {
   async upsertCves(
     entries: ReadonlyArray<{ cve: NormalizedCve; resolved: readonly ResolvedProduct[] }>,
     now = new Date().toISOString(),
+    options: {
+      /**
+       * Rewrite even when the upstream record is byte-identical.
+       *
+       * The fingerprint skip below is keyed on the *source record*, not on our
+       * mapping of it — so editing data/products/*.yaml changes nothing for CVEs
+       * already stored. That is the documented workflow (propose a mapping,
+       * review it, commit it), and without this flag the commit silently applies
+       * only to CVEs that happen to be republished afterwards. Adding Splunk to
+       * Cisco mapped 41 new records and left 69 existing ones untouched.
+       *
+       * Off by default: a delta sync must keep skipping republished records, or
+       * it burns D1's write budget rewriting rows whose content did not change.
+       */
+      reresolve?: boolean;
+    } = {},
   ): Promise<UpsertResult> {
     const result: UpsertResult = { inserted: 0, updated: 0, skipped: 0 };
     if (!entries.length) return result;
@@ -246,7 +262,7 @@ export class Repository {
 
     for (const { cve, resolved } of entries) {
       const known = existing.get(cve.cveId);
-      if (known === cve.sourceHash) {
+      if (known === cve.sourceHash && !options.reresolve) {
         result.skipped++;
         continue;
       }

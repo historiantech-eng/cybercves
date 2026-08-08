@@ -21,6 +21,11 @@ export interface IngestSummary extends UpsertResult {
 
 export interface IngestOptions {
   /**
+   * Re-apply the taxonomy to records whose upstream content has not changed.
+   * Needed after editing data/products/*.yaml — see upsertCves.
+   */
+  reresolve?: boolean;
+  /**
    * Persist records that match no tracked vendor. Off by default: storing all
    * ~40k CVEs published each year, when we track a few thousand, would blow the
    * D1 free-tier storage budget for data the site never shows.
@@ -69,7 +74,7 @@ export async function ingestRecords(
     entries.push({ cve, resolved });
   }
 
-  const result = await repo.upsertCves(entries, now);
+  const result = await repo.upsertCves(entries, now, { reresolve: options.reresolve });
   await repo.recordUnmapped([...unmapped.values()], now);
 
   return {

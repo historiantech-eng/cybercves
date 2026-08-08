@@ -198,3 +198,51 @@ describe('product resolution', () => {
     );
   });
 });
+
+describe('unrecognised vendor on a CNA-assigned CVE', () => {
+  // Cisco acquired Splunk and began assigning Splunk CVEs under its own CNA
+  // while the affected entries still read vendor "Splunk". Every one of those
+  // 69 CVEs resolved to nothing and never reached the review queue, because the
+  // entry was discarded before the queue was written. The queue existing is the
+  // only thing that makes a gap like this visible before someone notices by eye.
+  const resolver = new TaxonomyResolver(
+    [
+      {
+        slug: 'cisco',
+        name: 'Cisco',
+        cnaShortNames: ['cisco'],
+        aliases: ['Cisco'],
+        psirtHosts: [],
+        psirtUrl: null,
+        homepage: null,
+        adapter: 'cvelist',
+        discoveryNote: null,
+        internalBrandMarkers: [],
+      },
+    ],
+    [],
+  );
+
+  const cve = {
+    cveId: 'CVE-2026-20298',
+    assignerShortName: 'cisco',
+    affected: [{ vendorRaw: 'Acquired Co', productRaw: 'Acquired Product', cpes: [], versions: [] }],
+    references: [],
+  } as unknown as Parameters<TaxonomyResolver['resolve']>[0];
+
+  it('queues the product for review instead of dropping it', () => {
+    const { unmapped } = resolver.resolve(cve);
+    expect(unmapped).toHaveLength(1);
+    expect(unmapped[0]).toMatchObject({
+      vendorRaw: 'Acquired Co',
+      productRaw: 'Acquired Product',
+      vendorSlug: 'cisco',
+    });
+  });
+
+  it('does not attribute the product to the assigning vendor', () => {
+    // A CNA does occasionally assign for a genuine third party, so surfacing the
+    // gap must not become a licence to claim the product.
+    expect(resolver.resolve(cve).resolved).toHaveLength(0);
+  });
+});

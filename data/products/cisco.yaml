@@ -353,3 +353,57 @@ products:
     categorySlug: other
     aliases: [Cisco ConfD, Cisco ConfD Basic, confd]
     patterns: ['^(cisco )?confd\b']
+
+  # --- Splunk -------------------------------------------------------------
+  #
+  # Cisco acquired Splunk in March 2024. These CVEs are already assigned under
+  # Cisco's CNA, but every affected entry still names the vendor as "Splunk",
+  # so without the aliases in data/vendors/cisco.yaml they resolve to no vendor
+  # and vanish.
+  #
+  # ORDER MATTERS. resolveProductName tries exact aliases first, then patterns
+  # in the order they appear in this file, taking the first hit. The specific
+  # entries must therefore precede the catch-all at the end, or "Splunk
+  # Enterprise Cloud" lands on Splunk Enterprise and "Splunk SOAR" on an app.
+  - slug: splunk-soar
+    name: Splunk SOAR
+    # No SOAR category exists in the taxonomy. Filed under SIEM & Log Management
+    # as part of the same SOC platform rather than invented as its own category
+    # for a single product — worth revisiting if more SOAR products are tracked.
+    categorySlug: siem-logging
+    aliases: [Splunk SOAR, Splunk Phantom]
+    patterns: ['^splunk soar\b', '\bphantom\b']
+
+  - slug: splunk-universal-forwarder
+    name: Splunk Universal Forwarder
+    categorySlug: siem-logging
+    aliases: [Splunk Universal Forwarder, Splunk/UniversalForwarder for Windows]
+    patterns: ['universal ?forwarder']
+
+  - slug: splunk-secure-gateway
+    name: Splunk Secure Gateway
+    categorySlug: siem-logging
+    aliases: [Splunk Secure Gateway]
+    patterns: ['^splunk secure gateway\b']
+
+  - slug: splunk-cloud-platform
+    name: Splunk Cloud Platform
+    categorySlug: siem-logging
+    aliases: [Splunk Cloud Platform, Splunk Enterprise Cloud, Splunk Cloud]
+    patterns: ['^splunk (cloud platform|enterprise cloud)\b', '^splunk cloud\b']
+
+  - slug: splunk-enterprise
+    name: Splunk Enterprise
+    categorySlug: siem-logging
+    aliases: [Splunk Enterprise]
+    patterns: ['^splunk enterprise\b']
+
+  # Catch-all for the long tail of first-party apps, add-ons and toolkits that
+  # ship on the Splunk platform. Anchored on "splunk" so that, for example,
+  # "Splunk Add-on for Palo Alto Networks" is counted as the Splunk product it
+  # is rather than attributed to Palo Alto.
+  - slug: splunk-apps
+    name: Splunk Apps & Add-ons
+    categorySlug: siem-logging
+    aliases: []
+    patterns: ['^splunk\b']

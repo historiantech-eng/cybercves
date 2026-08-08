@@ -93,12 +93,24 @@ function runWrangler(sqlFile: string) {
 /**
  * Read the live CVE count and high-water mark straight from D1.
  *
- * Returns null when the question cannot be answered — an empty database, a
- * missing table on a first-ever push, a wrangler that will not run. A guard that
- * cannot get a baseline must not become a guard that blocks every deploy.
+ * Throws if the question cannot be answered. That is deliberate, and it is a
+ * correction: this used to swallow the error and return null, which the caller
+ * treated as "no baseline, carry on". A transient wrangler failure therefore
+ * disabled the guard silently, and the log line it produced read like a benign
+ * first-push message rather than "the safety check is off". It happened on the
+ * first real push after the guard shipped.
+ *
+ * An *empty* D1 is not this case — that query succeeds and returns 0, which the
+ * caller handles separately. So a genuine first push is never confused with a
+ * check that could not run.
  */
-async function remoteBaseline(): Promise<{ count: number; newest: string | null } | null> {
-  try {
+async function remoteBaseline(): Promise<{ count: number; newest: string | null }> {
+  // Retried: the observed failure was transient, and one flaky subprocess call
+  // should not be enough to either halt a deploy or wave one through.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 2_000 * attempt));
+    try {
     const out = execFileSync(
       'npx',
       [
@@ -112,17 +124,23 @@ async function remoteBaseline(): Promise<{ count: number; newest: string | null 
         '--command',
         'SELECT COUNT(*) AS n, MAX(date_published) AS newest FROM cve',
       ],
-      { cwd: new URL('../../../worker/', import.meta.url).pathname, encoding: 'utf8' },
-    );
-    // wrangler prefixes human-readable noise before the JSON on some versions.
-    const json = out.slice(out.indexOf('['));
-    const parsed = JSON.parse(json) as Array<{ results?: Array<{ n?: number; newest?: string }> }>;
-    const row = parsed[0]?.results?.[0];
-    if (!row || typeof row.n !== 'number') return null;
-    return { count: row.n, newest: row.newest ?? null };
-  } catch {
-    return null;
+        { cwd: new URL('../../../worker/', import.meta.url).pathname, encoding: 'utf8' },
+      );
+      // wrangler prefixes human-readable noise before the JSON on some versions.
+      const json = out.slice(out.indexOf('['));
+      const parsed = JSON.parse(json) as Array<{ results?: Array<{ n?: number; newest?: string }> }>;
+      const row = parsed[0]?.results?.[0];
+      if (!row || typeof row.n !== 'number') throw new Error('unexpected wrangler output shape');
+      return { count: row.n, newest: row.newest ?? null };
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `  baseline query attempt ${attempt + 1}/3 failed: ` +
+          `${(err as Error).message.split('\n')[0]}`,
+      );
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error('could not read the D1 baseline');
 }
 
 /**
@@ -147,9 +165,25 @@ async function remoteBaseline(): Promise<{ count: number; newest: string | null 
 async function assertNotARegression(): Promise<void> {
   if (!values.remote || values.force || values['dry-run']) return;
 
-  const remote = await remoteBaseline();
-  if (!remote || remote.count === 0) {
-    console.log('no usable D1 baseline — skipping the regression guard');
+  let remote: { count: number; newest: string | null };
+  try {
+    remote = await remoteBaseline();
+  } catch (err) {
+    // Refuse rather than proceed unchecked. The wipe that follows is about to
+    // succeed against the very database we just failed to read, so "we could not
+    // verify this is safe" is not a reason to overwrite production — it is the
+    // reason not to.
+    throw new Error(
+      `refusing to push — could not read the current state of D1, so this push ` +
+        `cannot be checked for regressions:\n  ${(err as Error).message.split('\n')[0]}\n\n` +
+        `An empty database is not this error; that reads back as zero and is allowed.\n` +
+        `Override with --force if you are certain the local snapshot is good.`,
+    );
+  }
+
+  if (remote.count === 0) {
+    // A real first push. The query worked and production is genuinely empty.
+    console.log('D1 is empty — nothing to regress against, proceeding');
     return;
   }
 

@@ -26,6 +26,12 @@ const { values } = parseArgs({
     from: { type: 'string', default: '2016' },
     to: { type: 'string', default: String(new Date().getUTCFullYear()) },
     'skip-enrich': { type: 'boolean', default: false },
+    /**
+     * Re-apply the taxonomy to CVEs already stored. Use after editing
+     * data/products/*.yaml or data/vendors/*.yaml — without it, mapping changes
+     * only reach records that upstream happens to republish afterwards.
+     */
+    reresolve: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   },
 });
@@ -65,7 +71,9 @@ try {
   let seen = 0;
 
   for (const { year, records } of streamRecords(values.clone, fromYear, toYear)) {
-    const summary = await ingestRecords(repo, config.resolver, records);
+    const summary = await ingestRecords(repo, config.resolver, records, {
+      reresolve: values.reresolve,
+    });
     totals.inserted += summary.inserted;
     totals.updated += summary.updated;
     totals.skipped += summary.skipped;

@@ -181,7 +181,28 @@ export class TaxonomyResolver {
         // Only attribute this entry to the vendor if the entry itself points at
         // them; otherwise a multi-vendor CVE would assign every product to every
         // matched vendor.
-        if (!this.#entryBelongsTo(vendorSlug, affected, matchSignal)) continue;
+        if (!this.#entryBelongsTo(vendorSlug, affected, matchSignal)) {
+          // An entry naming a vendor we have never heard of, on a CVE the vendor
+          // assigned through their own CNA, is what an acquisition looks like
+          // before anyone adds the alias — Cisco issued 69 CVEs naming "Splunk"
+          // and every one resolved to nothing. Queue it for review rather than
+          // dropping it: the entry is deliberately NOT attributed, because a
+          // CNA occasionally assigns for a genuine third party, but a gap this
+          // shaped must never again be invisible.
+          if (
+            matchSignal === 'cna-assigner' &&
+            affected.vendorRaw &&
+            affected.productRaw &&
+            !this.#byAlias.has(normalizeKey(affected.vendorRaw))
+          ) {
+            unmapped.set(`${vendorSlug}::${normalizeKey(affected.productRaw)}`, {
+              vendorRaw: affected.vendorRaw,
+              productRaw: affected.productRaw,
+              vendorSlug,
+            });
+          }
+          continue;
+        }
 
         let hit = false;
         for (const candidate of candidates) {
