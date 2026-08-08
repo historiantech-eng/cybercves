@@ -1,0 +1,491 @@
+---
+import Base from '../layouts/Base.astro';
+import { CURRENT_YEAR, db } from '../lib/data';
+
+const repo = db();
+const years = repo ? await repo.listYears() : [];
+const vendors = repo ? await repo.listVendors() : [];
+const categories = repo ? await repo.listCategories() : [];
+
+// Server-rendered default so the page is indexable and useful without JS.
+const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
+---
+
+<Base
+  title="Compare vendors"
+  description="Compare CVE counts across cybersecurity vendors within the same product category — firewall against firewall, endpoint against endpoint — for any year, with year-over-year change."
+>
+  <h1>Compare vendors</h1>
+  <p class="lede">
+    Like-for-like comparison within the same product category — firewall against firewall.
+    Defaults to risk-weighted exposure rather than raw volume; switch to counts, pick a year,
+    choose which vendors to include, and optionally compare against the year before. Click any
+    bar for the CVEs behind it.
+  </p>
+
+  <div class="filters" role="group" aria-label="Comparison controls">
+    <div>
+      <label for="cmp-year">Year</label>
+      <select id="cmp-year" data-cmp-year>
+        {years.map((y) => <option value={y} selected={y === CURRENT_YEAR}>{y}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="cmp-compare">Compare</label>
+      <select id="cmp-compare" data-cmp-compare>
+        <option value="">No comparison</option>
+        <option value="prev">vs previous year</option>
+      </select>
+    </div>
+    <div>
+      <label for="cmp-metric">Metric</label>
+      <select id="cmp-metric" data-cmp-metric>
+        <option value="risk" selected>Risk-weighted</option>
+        <option value="cve_count">CVEs</option>
+        <option value="kev_count">Known exploited</option>
+      </select>
+    </div>
+    <div>
+      <label for="cmp-scope">Categories</label>
+      <select id="cmp-scope" data-cmp-scope>
+        <option value="security">Security only</option>
+        <option value="all">All, incl. routing &amp; other</option>
+      </select>
+    </div>
+    <span class="filter-count" data-cmp-note></span>
+  </div>
+
+  <fieldset class="vendor-toggles" data-cmp-vendors>
+    <legend class="sr-only">Vendors to include</legend>
+    {
+      vendors.map((v) => (
+        <label>
+          <input type="checkbox" value={v.slug} checked />
+          {v.name}
+        </label>
+      ))
+    }
+  </fieldset>
+
+  {/* Legend is always present for two or more series, so identity never rests
+      on colour alone. Values also ride each bar and repeat in the table. */}
+  <ul class="cmp-legend" data-cmp-legend></ul>
+
+  <div class="card">
+    <div data-cmp-chart>
+      {/* Replaced on load; this seed keeps the page meaningful without JS. */}
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Category</th>
+              <th scope="col" class="num">Risk ({CURRENT_YEAR})</th>
+              <th scope="col" class="num">CVEs</th>
+              <th scope="col" class="num">Exploited</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              seed.map((row) => (
+                <tr>
+                  <td><a href={`/categories/${row.category_slug}`}>{row.name}</a></td>
+                  <td class="num">{row.risk.toFixed(1)}</td>
+                  <td class="num">{row.cve_count.toLocaleString()}</td>
+                  <td class="num">{row.kev_count.toLocaleString()}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <details class="section" data-cmp-table-wrap>
+    <summary class="small muted" style="cursor:pointer">Table view</summary>
+    <div class="card" style="margin-top:10px">
+      <div class="table-scroll" data-cmp-table></div>
+    </div>
+  </details>
+
+  <p class="small muted">
+    Categories where every selected vendor has zero are hidden. Non-security categories —
+    routing, collaboration — are excluded by default so a broad-portfolio vendor is not
+    compared against a pure-play one on products that are not security. See{' '}
+    <a href="/methodology">methodology</a>.
+  </p>
+</Base>
+
+<style>
+  .sr-only {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+  fieldset.vendor-toggles { border: 0; margin: 0 0 14px; padding: 0; }
+</style>
+
+<script>
+  type Row = Record<string, string | number>;
+  type YearBundle = {
+    categories: Row[];
+    categoriesByVendor: Record<string, Row[]>;
+  };
+
+  const chart = document.querySelector<HTMLElement>('[data-cmp-chart]');
+  const legendEl = document.querySelector<HTMLElement>('[data-cmp-legend]');
+  const tableEl = document.querySelector<HTMLElement>('[data-cmp-table]');
+  const noteEl = document.querySelector<HTMLElement>('[data-cmp-note]');
+  const yearSel = document.querySelector<HTMLSelectElement>('[data-cmp-year]');
+  const cmpSel = document.querySelector<HTMLSelectElement>('[data-cmp-compare]');
+  const metricSel = document.querySelector<HTMLSelectElement>('[data-cmp-metric]');
+  const scopeSel = document.querySelector<HTMLSelectElement>('[data-cmp-scope]');
+  const vendorBox = document.querySelector<HTMLElement>('[data-cmp-vendors]');
+
+  if (chart && yearSel && vendorBox) {
+    let bundle: { years: number[]; byYear: Record<string, YearBundle> } | null = null;
+
+    const boxes = Array.from(vendorBox.querySelectorAll<HTMLInputElement>('input[type=checkbox]'));
+    /**
+     * Colour is bound to the vendor's position in the FULL list, not to its
+     * position among the currently selected ones. Assigning by rank would repaint
+     * the survivors whenever a vendor is toggled off, and a reader who learned
+     * "Cisco is blue" would be misled.
+     */
+    const slotOf = new Map(boxes.map((b, i) => [b.value, (i % 8) + 1]));
+    const nameOf = new Map(boxes.map((b) => [b.value, (b.parentElement?.textContent ?? b.value).trim()]));
+
+    const num = (v: unknown) => (typeof v === 'number' ? v : Number(v ?? 0));
+    /**
+     * Counts are integers; risk is a product of a weight and an EPSS probability,
+     * so it arrives with a float tail that toLocaleString would print in full.
+     * One decimal is as much precision as the input justifies.
+     */
+    const fmt = (n: number) => (Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1));
+    const esc = (v: string) =>
+      v.replace(/[&<>"']/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
+      );
+
+    function deltaText(cur: number, prev: number | null): string {
+      if (prev === null) return '';
+      // Rounded before differencing so a risk delta reads "▲ +12", not "▲ +11.7"
+      // against a displayed pair that differs by 12.
+      const d = Math.round(cur) - Math.round(prev);
+      if (d === 0) return ' <span class="delta delta-flat">±0</span>';
+      const cls = d > 0 ? 'delta-worse' : 'delta-better';
+      return ` <span class="delta ${cls}" title="vs previous year: ${fmt(prev)}">${
+        d > 0 ? '▲ +' : '▼ −'
+      }${fmt(Math.abs(d))}</span>`;
+    }
+
+    function selected(): string[] {
+      return boxes.filter((b) => b.checked).map((b) => b.value);
+    }
+
+    function rowsFor(bundleYear: YearBundle | null, vendor: string, metric: string) {
+      const map = new Map<string, { name: string; value: number; security: boolean }>();
+      for (const r of bundleYear?.categoriesByVendor[vendor] ?? []) {
+        map.set(String(r.category_slug), {
+          name: String(r.name),
+          value: num(r[metric]),
+          security: num(r.is_security) === 1,
+        });
+      }
+      return map;
+    }
+
+
+    /**
+     * CVE-level shards, fetched once per year and kept.
+     *
+     * The comparison bundle holds counts only; the actual records live in the
+     * same year shard the browse page already uses, so drilling down reuses that
+     * rather than shipping a second copy of the data.
+     */
+    type CveRow = {
+      i: string; d: string | null; s: string | null; c: number | null;
+      k: number; e: number | null; w: string | null;
+      v: string[]; p: string[]; g: string[];
+    };
+    const shardCache = new Map<string, CveRow[]>();
+
+    async function shardFor(year: string): Promise<CveRow[]> {
+      const cached = shardCache.get(year);
+      if (cached) return cached;
+      const res = await fetch(`/data/${year}.json`);
+      if (!res.ok) throw new Error(`shard ${year} unavailable`);
+      const payload = (await res.json()) as { rows: CveRow[] };
+      shardCache.set(year, payload.rows ?? []);
+      return payload.rows ?? [];
+    }
+
+    const SEV_CLASS: Record<string, string> = {
+      CRITICAL: 'critical', HIGH: 'serious', MEDIUM: 'warning', LOW: 'good',
+    };
+
+    function cveRows(rows: CveRow[]): string {
+      return rows
+        .map((r) => {
+          const token = r.s ? (SEV_CLASS[r.s] ?? 'unknown') : 'unknown';
+          const label = r.s ? r.s.charAt(0) + r.s.slice(1).toLowerCase() : 'Unscored';
+          const date = r.d
+            ? new Date(`${r.d}T00:00:00Z`).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
+              })
+            : '—';
+          const found =
+            r.w === 'INTERNAL' ? 'Vendor'
+            : r.w === 'EXTERNAL' ? 'Third party'
+            : r.w === 'USER' ? 'Customer'
+            : r.w === 'UNKNOWN' ? 'Unknown' : '—';
+          return `<tr>
+            <td><a class="cve-id" href="/cve/${encodeURIComponent(r.i)}">${esc(r.i)}</a>${
+              r.k === 1 ? ' <span class="kev-flag">KEV</span>' : ''
+            }</td>
+            <td class="muted small">${date}</td>
+            <td><span class="sev sev-${token}">${label}${r.c != null ? ` ${r.c}` : ''}</span></td>
+            <td class="small muted">${found}</td>
+            <td class="num small muted">${r.e != null ? r.e.toFixed(3) : '—'}</td>
+          </tr>`;
+        })
+        .join('');
+    }
+
+    const DRILL_LIMIT = 60;
+
+    async function openDrill(btn: HTMLButtonElement, year: string, metric: string) {
+      const vendor = btn.dataset.drillVendor!;
+      const category = btn.dataset.drillCategory!;
+      const group = btn.closest('.cmp-group');
+      const panel = group?.querySelector<HTMLElement>('[data-drill-panel]');
+      if (!panel) return;
+
+      // Clicking the open row again closes it.
+      const alreadyOpen = btn.getAttribute('aria-expanded') === 'true';
+      for (const other of group!.querySelectorAll<HTMLButtonElement>('.cmp-row')) {
+        other.setAttribute('aria-expanded', 'false');
+      }
+      if (alreadyOpen) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        return;
+      }
+
+      btn.setAttribute('aria-expanded', 'true');
+      panel.hidden = false;
+      panel.innerHTML = '<p class="small muted" style="margin:10px 0">Loading…</p>';
+
+      let rows: CveRow[];
+      try {
+        rows = await shardFor(year);
+      } catch {
+        panel.innerHTML =
+          '<p class="small muted" style="margin:10px 0">Could not load CVEs for this year.</p>';
+        return;
+      }
+
+      // Same predicate that produced the bar: this vendor, this category, and —
+      // when the chart is showing exploited counts — only KEV records, so the
+      // list always adds up to the number the user clicked.
+      const kevOnly = metric === 'kev_count';
+      const matched = rows.filter(
+        (r) => r.v.includes(vendor) && r.g.includes(category) && (!kevOnly || r.k === 1),
+      );
+
+      const browseUrl = `/years/${encodeURIComponent(year)}?vendor=${encodeURIComponent(
+        vendor,
+      )}&category=${encodeURIComponent(category)}${kevOnly ? '&kev=1' : ''}`;
+
+      // On the risk metric the bar is a score, not a tally, so the panel says
+      // both: how the score was reached, and out of how many records.
+      const scoreNote =
+        metric === 'risk' ? ` · ${esc(btn.dataset.drillValue ?? '')} risk` : '';
+
+      panel.innerHTML = `
+        <div class="cmp-drill-head">
+          <strong>${esc(btn.dataset.drillLabel ?? '')}</strong>
+          <span class="muted small">${matched.length.toLocaleString()} CVE${
+            matched.length === 1 ? '' : 's'
+          }${scoreNote}${matched.length > DRILL_LIMIT ? ` · showing first ${DRILL_LIMIT}` : ''}</span>
+          <a class="small" href="${browseUrl}">Open in browser →</a>
+        </div>
+        ${
+          matched.length
+            ? `<div class="table-scroll"><table>
+                <thead><tr>
+                  <th scope="col">CVE</th><th scope="col">Published</th>
+                  <th scope="col">Severity</th><th scope="col">Found by</th>
+                  <th scope="col" class="num">EPSS</th>
+                </tr></thead>
+                <tbody>${cveRows(matched.slice(0, DRILL_LIMIT))}</tbody>
+              </table></div>`
+            : '<p class="small muted">No matching CVEs.</p>'
+        }`;
+    }
+
+    function wireDrilldowns(year: string, metric: string) {
+      for (const btn of chart!.querySelectorAll<HTMLButtonElement>('.cmp-row')) {
+        btn.addEventListener('click', () => void openDrill(btn, year, metric));
+      }
+    }
+
+    function render() {
+      if (!bundle) return;
+      const year = yearSel!.value;
+      const cur = bundle.byYear[year];
+      if (!cur) return;
+
+      const metric = metricSel?.value ?? 'risk';
+      const securityOnly = (scopeSel?.value ?? 'security') === 'security';
+      const wantsCompare = cmpSel?.value === 'prev';
+      const prevYear = String(Number(year) - 1);
+      const prev = wantsCompare ? (bundle.byYear[prevYear] ?? null) : null;
+      const vendors = selected();
+
+      if (noteEl) {
+        noteEl.textContent =
+          wantsCompare && !prev
+            ? `${prevYear} is not tracked — no comparison available`
+            : `${vendors.length} vendor${vendors.length === 1 ? '' : 's'}`;
+      }
+
+      if (!vendors.length) {
+        chart!.innerHTML = '<p class="empty">Select at least one vendor.</p>';
+        if (legendEl) legendEl.innerHTML = '';
+        if (tableEl) tableEl.innerHTML = '';
+        return;
+      }
+
+      if (legendEl) {
+        legendEl.innerHTML = vendors
+          .map(
+            (v) =>
+              `<li><span class="cmp-key" style="background: var(--cat-${slotOf.get(v)})" aria-hidden="true"></span>${esc(
+                nameOf.get(v) ?? v,
+              )}</li>`,
+          )
+          .join('');
+      }
+
+      const curByVendor = new Map(vendors.map((v) => [v, rowsFor(cur, v, metric)]));
+      const prevByVendor = new Map(vendors.map((v) => [v, rowsFor(prev, v, metric)]));
+
+      // Union of categories present for any selected vendor.
+      const cats = new Map<string, { name: string; security: boolean }>();
+      for (const v of vendors) {
+        for (const [slug, row] of curByVendor.get(v)!) {
+          if (!cats.has(slug)) cats.set(slug, { name: row.name, security: row.security });
+        }
+      }
+
+      const groups = [...cats.entries()]
+        .filter(([, meta]) => (securityOnly ? meta.security : true))
+        .map(([slug, meta]) => {
+          const values = vendors.map((v) => ({
+            vendor: v,
+            value: curByVendor.get(v)!.get(slug)?.value ?? 0,
+            prev: prev ? (prevByVendor.get(v)!.get(slug)?.value ?? 0) : null,
+          }));
+          return { slug, name: meta.name, values, total: values.reduce((s, x) => s + x.value, 0) };
+        })
+        // Hidden when every selected vendor is zero — an all-empty row is noise.
+        .filter((g) => g.total > 0)
+        .sort((a, b) => b.total - a.total);
+
+      if (!groups.length) {
+        chart!.innerHTML = '<p class="empty">No CVEs for these vendors in this year.</p>';
+        if (tableEl) tableEl.innerHTML = '';
+        return;
+      }
+
+      // One shared scale across all groups, so bar lengths are comparable between
+      // categories as well as within them.
+      const max = Math.max(1, ...groups.flatMap((g) => g.values.map((v) => v.value)));
+
+      chart!.innerHTML = groups
+        .map(
+          (g) => `<div class="cmp-group">
+            <div class="cmp-label">
+              <a href="/categories/${encodeURIComponent(g.slug)}"><strong>${esc(g.name)}</strong></a>
+              <span class="cmp-total">${fmt(g.total)} total</span>
+            </div>
+            <div class="cmp-rows">
+              ${g.values
+                .map(
+                  (v) => `<button type="button" class="cmp-row" data-drill-vendor="${esc(v.vendor)}" data-drill-category="${esc(g.slug)}" data-drill-label="${esc(nameOf.get(v.vendor) ?? v.vendor)} · ${esc(g.name)}" data-drill-value="${fmt(v.value)}" aria-expanded="false"${v.value === 0 ? ' disabled' : ''}>
+                    <span class="cmp-name">${esc(nameOf.get(v.vendor) ?? v.vendor)}</span>
+                    <span class="cmp-track">
+                      <span class="cmp-bar" style="width: ${(v.value / max) * 100}%; background: var(--cat-${slotOf.get(v.vendor)})"></span>
+                    </span>
+                    <span class="cmp-value">${fmt(v.value)}${deltaText(v.value, v.prev)}</span>
+                  </button>`,
+                )
+                .join('')}
+            </div>
+            <div class="cmp-drill" data-drill-panel="${esc(g.slug)}" hidden></div>
+          </div>`,
+        )
+        .join('');
+
+      if (tableEl) {
+        tableEl.innerHTML = `<table>
+          <thead><tr><th scope="col">Category</th>${vendors
+            .map((v) => `<th scope="col" class="num">${esc(nameOf.get(v) ?? v)}</th>`)
+            .join('')}</tr></thead>
+          <tbody>${groups
+            .map(
+              (g) =>
+                `<tr><td>${esc(g.name)}</td>${g.values
+                  .map((v) => `<td class="num">${fmt(v.value)}${deltaText(v.value, v.prev)}</td>`)
+                  .join('')}</tr>`,
+            )
+            .join('')}</tbody>
+        </table>`;
+      }
+
+      wireDrilldowns(year, metric);
+
+      const params = new URLSearchParams();
+      params.set('year', year);
+      if (wantsCompare) params.set('compare', 'prev');
+      if (metric !== 'risk') params.set('metric', metric);
+      if (!securityOnly) params.set('scope', 'all');
+      if (vendors.length !== boxes.length) params.set('vendors', vendors.join(','));
+      history.replaceState(null, '', `?${params.toString()}`);
+    }
+
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const wantedYear = params.get('year');
+      if (wantedYear && yearSel.querySelector(`option[value="${CSS.escape(wantedYear)}"]`)) {
+        yearSel.value = wantedYear;
+      }
+      if (cmpSel && params.get('compare') === 'prev') cmpSel.value = 'prev';
+      if (metricSel && params.get('metric')) metricSel.value = params.get('metric')!;
+      if (scopeSel && params.get('scope') === 'all') scopeSel.value = 'all';
+      const wantedVendors = params.get('vendors')?.split(',').filter(Boolean);
+      if (wantedVendors?.length) {
+        for (const b of boxes) b.checked = wantedVendors.includes(b.value);
+      }
+
+      try {
+        const res = await fetch('/data/stats.json');
+        if (!res.ok) return;
+        bundle = await res.json();
+      } catch {
+        return; // Seed table stays on screen.
+      }
+
+      for (const el of [yearSel, cmpSel, metricSel, scopeSel]) {
+        el?.addEventListener('change', render);
+      }
+      for (const b of boxes) b.addEventListener('change', render);
+      render();
+    })();
+  }
+</script>

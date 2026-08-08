@@ -1,0 +1,155 @@
+---
+import Base from '../../layouts/Base.astro';
+import VendorRace from '../../components/VendorRace.astro';
+import DiscoveryBar from '../../components/DiscoveryBar.astro';
+import YearFilter from '../../components/YearFilter.astro';
+import { CURRENT_YEAR, db } from '../../lib/data';
+
+const repo = db();
+
+/**
+ * Firewall is the default lens, not "everything".
+ *
+ * A vendor's aggregate risk across a whole portfolio answers a question nobody
+ * asks; "who has the worse firewall exposure this year" is the question. The
+ * all-security-categories rollup is one selection away and still the honest
+ * baseline, so the narrowing is a default rather than a decision made for the
+ * reader. Fall back to it if the firewall category has no CVEs yet this year,
+ * because an empty page reads as broken rather than as scoped.
+ */
+const DEFAULT_CATEGORY = 'firewall';
+const categories = repo ? await repo.listCategories() : [];
+const firewall = repo ? await repo.getVendorRollup(CURRENT_YEAR, true, DEFAULT_CATEGORY) : [];
+const selectedCategory = firewall.length ? DEFAULT_CATEGORY : '';
+const scoped = firewall.length ? firewall : repo ? await repo.getVendorRollup(CURRENT_YEAR, true) : [];
+const categoryName =
+  categories.find((c) => c.slug === selectedCategory)?.name ?? 'All security categories';
+
+const all = repo ? await repo.getVendorRollup(CURRENT_YEAR, false) : [];
+const allBySlug = new Map(all.map((r) => [r.vendor_slug, r]));
+const discovery = repo ? await repo.getDiscoveryBreakdown() : [];
+const years = repo ? await repo.listYears() : [];
+---
+
+<Base
+  title="Vendors"
+  description="CVE counts and risk-weighted scores for every tracked cybersecurity vendor, with security products separated from routing and collaboration lines."
+>
+  <h1>Vendors</h1>
+  <p class="lede">
+    Ranked by risk — severity weighted, escalated for confirmed exploitation and exploit
+    probability. Raw counts are shown alongside, because volume alone rewards vendors with
+    weaker disclosure programs. Narrow to a single product line to compare firewalls against
+    firewalls rather than whole portfolios.
+  </p>
+
+  <YearFilter
+    years={years}
+    selected={CURRENT_YEAR}
+    categories={categories}
+    selectedCategory={selectedCategory}
+    scope="risk is scored within the selected category"
+  />
+
+  <section class="section">
+    <div class="card">
+      <div class="section-head">
+        <div>
+          <h2>
+            Risk-weighted, <span data-stat-year-label>{CURRENT_YEAR}</span>
+          </h2>
+          <p><span data-stat-category-label>{categoryName}</span></p>
+        </div>
+      </div>
+      <VendorRace
+        rows={scoped.map((r) => ({ vendor_slug: r.vendor_slug, name: r.name, value: r.risk }))}
+        unit="risk"
+        filterBy="risk"
+      />
+    </div>
+  </section>
+
+  {
+    discovery.length > 0 && (
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>Who finds the vulnerabilities</h2>
+            <p>
+              All years. A vendor that finds its own bugs is doing something different from one
+              whose bugs are found by outsiders — and raw counts cannot tell them apart.
+            </p>
+          </div>
+        </div>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))">
+          {discovery.map((row) => (
+            <div class="card">
+              <h3 style="margin-bottom:10px">
+                <a href={`/vendors/${row.vendor_slug}`}>{row.name}</a>
+              </h3>
+              <DiscoveryBar
+                internal={row.internal}
+                external={row.external}
+                user={row.user}
+                unknown={row.unknown}
+                undisclosed={row.undisclosed}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Vendor totals, <span data-stat-year-label>{CURRENT_YEAR}</span></h2>
+        <p><span data-stat-category-label>{categoryName}</span> — set the year, category and
+        comparison above.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Vendor</th>
+              <th scope="col" class="num">Risk</th>
+              <th scope="col" class="num">CVEs</th>
+              <th scope="col" class="num">Critical</th>
+              <th scope="col" class="num">Exploited</th>
+              <th scope="col" class="num">All products</th>
+            </tr>
+          </thead>
+          <tbody data-stat-table="vendors">
+            {
+              scoped.map((row) => (
+                <tr>
+                  <td>
+                    <a href={`/vendors/${row.vendor_slug}`}>{row.name}</a>
+                  </td>
+                  <td class="num">{row.risk.toFixed(1)}</td>
+                  <td class="num">{row.cve_count.toLocaleString()}</td>
+                  <td class="num">{row.critical_count.toLocaleString()}</td>
+                  <td class="num">{row.kev_count.toLocaleString()}</td>
+                  <td class="num muted">
+                    {(allBySlug.get(row.vendor_slug)?.cve_count ?? 0).toLocaleString()}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        {scoped.length === 0 && <p class="empty">No vendor data yet.</p>}
+      </div>
+      <p class="small muted" style="margin-top:14px">
+        Risk, CVEs, critical and exploited counts are scoped to the selected category.
+        “All products” is the vendor's whole portfolio for the year, including non-security
+        lines such as routing, switching and collaboration, which never count toward risk.
+        A CVE affecting products in two categories counts in full under each — it is a real
+        vulnerability in both.
+      </p>
+    </div>
+  </section>
+</Base>

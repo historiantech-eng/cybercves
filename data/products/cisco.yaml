@@ -1,0 +1,355 @@
+# Cisco product -> category mappings.
+#
+# Cisco's product strings are long and inconsistent ("Cisco IOS XE Software",
+# "Cisco Adaptive Security Appliance (ASA) Software"), so patterns carry more
+# weight here than exact aliases. Most Cisco CVEs land in routing-switching or
+# other, both excluded from default security comparisons — without that split,
+# Cisco's breadth would swamp any comparison against a pure-play security vendor.
+
+vendorSlug: cisco
+products:
+  - slug: cisco-ios-xe
+    name: Cisco IOS XE Software
+    categorySlug: routing-switching
+    aliases: [Cisco IOS XE Software, Cisco IOS XE, IOS XE]
+    patterns: ['^(cisco )?ios xe\b', '\bios xe software\b']
+
+  - slug: cisco-ios
+    name: Cisco IOS Software
+    categorySlug: routing-switching
+    aliases: [Cisco IOS Software, Cisco IOS, IOS]
+    patterns: ['^(cisco )?ios software\b', '^(cisco )?ios$']
+
+  - slug: cisco-nx-os
+    name: Cisco NX-OS Software
+    categorySlug: routing-switching
+    aliases: [Cisco NX-OS Software, Cisco NX-OS, NX-OS]
+    patterns: ['^(cisco )?nx.?os\b', '\bnx.?os software\b']
+
+  - slug: cisco-ios-xr
+    name: Cisco IOS XR Software
+    categorySlug: routing-switching
+    aliases: [Cisco IOS XR Software, Cisco IOS XR, IOS XR]
+    patterns: ['^(cisco )?ios xr\b']
+
+  - slug: cisco-asa
+    name: Cisco Adaptive Security Appliance (ASA)
+    categorySlug: firewall
+    aliases:
+      - Cisco Adaptive Security Appliance (ASA) Software
+      - Cisco ASA
+      - Cisco Adaptive Security Appliance
+    patterns: ['\badaptive security appliance\b', '^(cisco )?asa\b']
+
+  - slug: cisco-ftd
+    name: Cisco Firepower Threat Defense (FTD)
+    categorySlug: firewall
+    aliases:
+      - Cisco Firepower Threat Defense Software
+      - Cisco Firepower Threat Defense
+      - Cisco FTD
+    patterns: ['\bfirepower threat defense\b']
+
+  - slug: cisco-secure-firewall
+    name: Cisco Secure Firewall
+    categorySlug: firewall
+    aliases: [Cisco Secure Firewall, Cisco Secure Firewall ASA]
+    patterns: ['^(cisco )?secure firewall\b']
+
+  - slug: cisco-fmc
+    name: Cisco Secure Firewall Management Center
+    categorySlug: network-management
+    aliases:
+      - Cisco Firepower Management Center
+      - Cisco Secure Firewall Management Center
+      - Cisco FMC
+    patterns: ['\bfirepower management center\b', '\bfirewall management center\b']
+
+  - slug: cisco-secure-client
+    name: Cisco Secure Client (AnyConnect)
+    categorySlug: vpn-remote-access
+    aliases:
+      - Cisco AnyConnect Secure Mobility Client
+      - Cisco Secure Client
+      - Cisco AnyConnect
+    patterns: ['\banyconnect\b', '^(cisco )?secure client\b']
+
+  - slug: cisco-secure-endpoint
+    name: Cisco Secure Endpoint
+    categorySlug: endpoint
+    aliases:
+      - Cisco Secure Endpoint
+      - Cisco AMP for Endpoints
+      - Cisco Advanced Malware Protection for Endpoints
+    patterns: ['^(cisco )?secure endpoint\b', '\bamp for endpoints\b']
+
+  - slug: cisco-secure-email
+    name: Cisco Secure Email Gateway
+    categorySlug: email-security
+    aliases:
+      - Cisco Email Security Appliance
+      - Cisco Secure Email
+      - Cisco Secure Email Gateway
+      - Cisco ESA
+    patterns: ['\bemail security appliance\b', '^(cisco )?secure email\b']
+
+  - slug: cisco-secure-web
+    name: Cisco Secure Web Appliance
+    categorySlug: sase-sse
+    aliases:
+      - Cisco Web Security Appliance
+      - Cisco Secure Web Appliance
+      - Cisco WSA
+    patterns: ['\bweb security appliance\b', '^(cisco )?secure web\b']
+
+  - slug: cisco-umbrella
+    name: Cisco Umbrella
+    categorySlug: sase-sse
+    aliases: [Cisco Umbrella, Cisco Umbrella Roaming Client]
+    patterns: ['^(cisco )?umbrella\b']
+
+  - slug: cisco-ise
+    name: Cisco Identity Services Engine (ISE)
+    categorySlug: identity
+    aliases:
+      - Cisco Identity Services Engine
+      - Cisco Identity Services Engine Software
+      - Cisco ISE
+    patterns: ['\bidentity services engine\b']
+
+  - slug: cisco-duo
+    name: Cisco Duo
+    categorySlug: identity
+    aliases: [Cisco Duo, Duo Security, Cisco Duo Authentication Proxy]
+    patterns: ['^(cisco )?duo\b', '^duo\b']
+
+  - slug: cisco-catalyst-center
+    name: Cisco Catalyst Center (DNA Center)
+    categorySlug: network-management
+    aliases: [Cisco DNA Center, Cisco Catalyst Center]
+    patterns: ['\bdna center\b', '\bcatalyst center\b']
+
+  - slug: cisco-prime-infrastructure
+    name: Cisco Prime Infrastructure
+    categorySlug: network-management
+    aliases: [Cisco Prime Infrastructure]
+    patterns: ['^(cisco )?prime\b']
+
+  - slug: cisco-stealthwatch
+    name: Cisco Secure Network Analytics (Stealthwatch)
+    categorySlug: threat-detection
+    aliases: [Cisco Stealthwatch, Cisco Secure Network Analytics]
+    patterns: ['\bstealthwatch\b', '\bsecure network analytics\b']
+
+  - slug: cisco-secure-workload
+    name: Cisco Secure Workload (Tetration)
+    categorySlug: cloud-security
+    aliases: [Cisco Secure Workload, Cisco Tetration]
+    patterns: ['\btetration\b', '^(cisco )?secure workload\b']
+
+  - slug: cisco-ucm
+    name: Cisco Unified Communications Manager
+    categorySlug: other
+    aliases:
+      - Cisco Unified Communications Manager
+      - Cisco Unified Communications Manager IM & Presence Service
+      - Cisco Unified CM
+    # Deliberately not a bare `^unified\b`: that would swallow "unified computing
+    # system" before cisco-ucs is ever reached, since patterns are tried in file order.
+    patterns: ['\bunified communications manager\b', '^(cisco )?unified cm\b']
+
+  - slug: cisco-webex
+    name: Cisco Webex
+    categorySlug: other
+    aliases: [Cisco Webex Meetings, Cisco Webex App, Cisco Webex]
+    patterns: ['^(cisco )?webex\b', '\bwebex\b']
+
+  - slug: cisco-ucs
+    name: Cisco Unified Computing System (UCS)
+    categorySlug: other
+    aliases: [Cisco Unified Computing System, Cisco UCS Manager]
+    patterns: ['\bunified computing system\b', '^(cisco )?ucs\b']
+
+  # --- added from the review queue after the 2024-2026 backfill ---
+  # Security products first, then the portfolio tail. Most of Cisco's unmapped
+  # strings are collaboration and telephony, which belong in non-security
+  # categories so they never inflate a security comparison.
+
+  - slug: cisco-clamav
+    name: ClamAV
+    categorySlug: endpoint
+    aliases: [ClamAV, clamav]
+    patterns: ['^clamav\b']
+
+  - slug: cisco-cyber-vision
+    name: Cisco Cyber Vision
+    categorySlug: ot-iot-security
+    aliases: [Cisco Cyber Vision]
+    patterns: ['^(cisco )?cyber vision\b']
+
+  - slug: cisco-meraki
+    name: Cisco Meraki MX
+    categorySlug: firewall
+    aliases: [Cisco Meraki MX Firmware, Meraki MX]
+    patterns: ['\bmeraki mx\b']
+
+  - slug: cisco-fxos
+    name: Cisco Firepower Extensible OS (FXOS)
+    categorySlug: firewall
+    aliases: [Cisco Firepower Extensible Operating System (FXOS), Cisco FXOS]
+    patterns: ['\bfirepower extensible\b', '^(cisco )?fxos\b']
+
+  - slug: cisco-utd-snort
+    name: Cisco UTD SNORT IPS Engine
+    categorySlug: threat-detection
+    aliases: [Cisco UTD SNORT IPS Engine Software]
+    patterns: ['\butd snort\b', '\bsnort ips engine\b']
+
+  - slug: cisco-ise-pic
+    name: Cisco ISE Passive Identity Connector
+    categorySlug: identity
+    aliases: [Cisco ISE Passive Identity Connector]
+    patterns: ['\bpassive identity connector\b']
+
+  # Management and orchestration
+  - slug: cisco-apic
+    name: Cisco Application Policy Infrastructure Controller (APIC)
+    categorySlug: network-management
+    aliases: [Cisco Application Policy Infrastructure Controller (APIC)]
+    patterns: ['\bapplication policy infrastructure controller\b', '^(cisco )?apic\b']
+
+  - slug: cisco-nexus-dashboard
+    name: Cisco Nexus Dashboard
+    categorySlug: network-management
+    aliases: [Cisco Nexus Dashboard, Cisco Nexus Dashboard Insights, Cisco Nexus Dashboard Orchestrator]
+    patterns: ['\bnexus dashboard\b']
+
+  - slug: cisco-sd-wan-manager
+    name: Cisco Catalyst SD-WAN Manager
+    categorySlug: network-management
+    aliases: [Cisco Catalyst SD-WAN Manager, Cisco SD-WAN vManage]
+    patterns: ['\bsd.?wan manager\b', '\bvmanage\b']
+
+  - slug: cisco-dcnm
+    name: Cisco Data Center Network Manager
+    categorySlug: network-management
+    aliases: [Cisco Data Center Network Manager]
+    patterns: ['\bdata center network manager\b']
+
+  - slug: cisco-epnm
+    name: Cisco Evolved Programmable Network Manager
+    categorySlug: network-management
+    aliases: [Cisco Evolved Programmable Network Manager (EPNM)]
+    patterns: ['\bevolved programmable network\b']
+
+  - slug: cisco-crosswork
+    name: Cisco Crosswork
+    categorySlug: network-management
+    aliases: [Cisco Crosswork Network Change Automation]
+    patterns: ['^(cisco )?crosswork\b']
+
+  - slug: cisco-nso
+    name: Cisco Network Services Orchestrator
+    categorySlug: network-management
+    aliases: [Cisco Network Services Orchestrator]
+    patterns: ['\bnetwork services orchestrator\b']
+
+  - slug: cisco-ssm-on-prem
+    name: Cisco Smart Software Manager On-Prem
+    categorySlug: network-management
+    aliases: [Cisco Smart Software Manager On-Prem]
+    patterns: ['\bsmart software manager\b']
+
+  # Routing, switching and wireless
+  - slug: cisco-sd-wan-vedge
+    name: Cisco SD-WAN vEdge
+    categorySlug: routing-switching
+    aliases: [Cisco SD-WAN vEdge Cloud, Cisco SD-WAN vEdge router]
+    patterns: ['\bvedge\b']
+
+  - slug: cisco-aironet
+    name: Cisco Aironet Access Point Software
+    categorySlug: routing-switching
+    aliases: [Cisco Aironet Access Point Software (IOS XE Controller)]
+    patterns: ['\baironet\b']
+
+  - slug: cisco-small-business-network
+    name: Cisco Small Business Routers and Switches
+    categorySlug: routing-switching
+    aliases:
+      - Cisco Small Business RV Series Router Firmware
+      - Cisco Small Business Smart and Managed Switches
+    patterns: ['^(cisco )?small business\b']
+
+  # Collaboration, telephony and observability — non-security portfolio.
+  - slug: cisco-contact-center
+    name: Cisco Contact Center
+    categorySlug: other
+    aliases:
+      - Cisco Packaged Contact Center Enterprise
+      - Cisco Unified Contact Center Enterprise
+      - Cisco Unified Contact Center Express
+      - Cisco Finesse
+      - Cisco Unified Intelligence Center
+      - Cisco Enterprise Chat and Email
+    patterns: ['\bcontact center\b', '^(cisco )?finesse\b', '\bunified intelligence center\b']
+
+  - slug: cisco-telepresence
+    name: Cisco TelePresence
+    categorySlug: other
+    aliases:
+      - Cisco TelePresence Video Communication Server (VCS) Expressway
+      - Cisco TelePresence Management Suite (TMS)
+      - Cisco Meeting Management
+      - Cisco RoomOS Software
+    patterns: ['\btelepresence\b', '^(cisco )?roomos\b', '\bmeeting management\b']
+
+  - slug: cisco-ip-phone
+    name: Cisco IP Phones
+    categorySlug: other
+    aliases: [Cisco IP Phones with Multiplatform Firmware, Cisco PhoneOS]
+    # One pattern covers the whole ip_phone_NNNN_with_multiplatform_firmware family
+    # rather than an entry per handset model.
+    patterns: ['^(cisco )?ip phone', '^(cisco )?phoneos\b']
+
+  - slug: cisco-unity-connection
+    name: Cisco Unity Connection
+    categorySlug: other
+    aliases: [Cisco Unity Connection]
+    patterns: ['\bunity connection\b']
+
+  - slug: cisco-emergency-responder
+    name: Cisco Emergency Responder
+    categorySlug: other
+    aliases: [Cisco Emergency Responder]
+    patterns: ['\bemergency responder\b']
+
+  - slug: cisco-voice-browser
+    name: Cisco Virtualized Voice Browser
+    categorySlug: other
+    aliases: [Cisco Virtualized Voice Browser]
+    patterns: ['\bvoice browser\b']
+
+  - slug: cisco-sip-software
+    name: Cisco SIP Software
+    categorySlug: other
+    aliases: [Cisco Session Initiation Protocol (SIP) Software]
+    patterns: ['\bsession initiation protocol\b']
+
+  - slug: cisco-broadworks
+    name: Cisco BroadWorks
+    categorySlug: other
+    aliases: [Cisco BroadWorks]
+    patterns: ['^(cisco )?broadworks\b']
+
+  - slug: cisco-appdynamics
+    name: Cisco AppDynamics
+    categorySlug: other
+    aliases: [Cisco AppDynamics]
+    patterns: ['^(cisco )?appdynamics\b']
+
+  - slug: cisco-confd
+    name: Cisco ConfD
+    categorySlug: other
+    aliases: [Cisco ConfD, Cisco ConfD Basic, confd]
+    patterns: ['^(cisco )?confd\b']

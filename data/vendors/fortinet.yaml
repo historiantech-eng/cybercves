@@ -1,0 +1,44 @@
+slug: fortinet
+name: Fortinet
+homepage: https://www.fortinet.com
+psirtUrl: https://www.fortiguard.com/psirt
+
+# Verified against CVE-2025-32756, whose cveMetadata.assignerShortName is "fortinet".
+cnaShortNames:
+  - fortinet
+
+aliases:
+  - Fortinet
+  - Fortinet, Inc.
+  - Fortinet Inc
+
+# A Fortinet PSIRT advisory URL in a CVE's references is strong evidence the CVE
+# is theirs, even when a third party filed it through another CNA.
+psirtHosts:
+  - fortiguard.fortinet.com
+  - www.fortiguard.com
+  - fortiguard.com
+
+# The CVE List already carries Fortinet's structured advisory data. The RSS feed
+# at filestore.fortinet.com/fortiguard/rss/ir.xml has no structured CVE, CVSS, or
+# product fields, so it is a freshness signal only — used to surface an advisory
+# before its CVE record lands, not as a data source.
+adapter: rss
+rssUrl: https://filestore.fortinet.com/fortiguard/rss/ir.xml
+advisoryIdPattern: 'FG-IR-\d{2}-\d+'
+
+# Brands Fortinet's own security organisation publishes under. Used to tell an
+# in-house finder from an outside one when reading PSIRT acknowledgements —
+# "of FortiGuard Labs" is internal, and the string "Fortinet" never appears.
+internalBrandMarkers:
+  - FortiGuard
+
+# Shown on the vendor page when we hold no attribution for them. Fortinet does
+# publish who found each issue — in the Acknowledgement section of each PSIRT
+# advisory — just not in the CVE record like Cisco and Palo Alto do. Without this
+# note the vendor page would imply they disclose less than their peers, which is
+# not what the data says.
+discoveryNote: >-
+  Fortinet publishes discovery attribution in the Acknowledgement section of each
+  PSIRT advisory rather than in the machine-readable CVE record. Collecting it
+  requires reading those pages individually, which we have not completed.

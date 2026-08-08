@@ -1,0 +1,165 @@
+---
+import Base from '../layouts/Base.astro';
+import Odometer from '../components/Odometer.astro';
+import VendorRace from '../components/VendorRace.astro';
+import CveTable from '../components/CveTable.astro';
+import { CURRENT_YEAR, db, formatDate } from '../lib/data';
+
+const repo = db();
+
+const snapshot = repo ? await repo.getLiveSnapshot(CURRENT_YEAR) : null;
+const pace = repo ? await repo.getYearOverYearPace(CURRENT_YEAR) : null;
+const recent = repo ? await repo.listRecentCves(15) : [];
+const kevRecent = repo ? await repo.listKevCves(5) : [];
+
+// The hero counter is deliberately current-year — it resets on 1 January, which
+// is the point. The vendor race is not: for the first days of a new year that
+// query is legitimately empty, and a blank race would read as a broken site
+// rather than as "the year just started". Fall back to the newest year with data.
+const years = repo ? await repo.listYears() : [];
+let raceYear = CURRENT_YEAR;
+let rollup = repo ? await repo.getVendorRollup(CURRENT_YEAR, true) : [];
+if (!rollup.length && repo) {
+  for (const year of years) {
+    const candidate = await repo.getVendorRollup(year, true);
+    if (candidate.length) {
+      rollup = candidate;
+      raceYear = year;
+      break;
+    }
+  }
+}
+
+const total = snapshot?.total ?? 0;
+const raceRows = rollup.map((r) => ({ vendor_slug: r.vendor_slug, name: r.name, value: r.cve_count }));
+const latestOverall = recent[0] ?? null;
+
+const paceDelta =
+  pace && pace.previousYearToDate > 0
+    ? ((pace.current - pace.previousYearToDate) / pace.previousYearToDate) * 100
+    : null;
+---
+
+<Base
+  title="CyberCVE"
+  description="Live CVE tracking across leading cybersecurity vendors — Fortinet, Palo Alto Networks, Cisco and more — broken down by firewall, endpoint, SASE and identity products."
+>
+  <section class="section">
+    <div class="grid grid-2">
+      <div class="card">
+        <Odometer value={total} year={CURRENT_YEAR} />
+        <p class="hero-sub">
+          <span class="delta-up" data-added-today>
+            {snapshot && snapshot.addedToday > 0 ? `▲ ${snapshot.addedToday} today` : 'No new CVEs today'}
+          </span>
+          {
+            latestOverall && (
+              <>
+                {' · '}last: <a href={`/cve/${latestOverall.cve_id}`}>{latestOverall.cve_id}</a>
+              </>
+            )
+          }
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h2>Tracked vendors, {raceYear}</h2>
+          {raceYear !== CURRENT_YEAR && <p>Most recent year with data.</p>}
+        </div>
+        <p class="small muted" style="margin:0 0 14px">
+          Distinct CVEs affecting security products. Routing, collaboration and other
+          non-security lines are excluded — see <a href="/methodology">methodology</a>.
+        </p>
+        <VendorRace rows={raceRows} unit="CVEs" live />
+      </div>
+    </div>
+  </section>
+
+  {
+    pace && (
+      <section class="section">
+        <div class="card">
+          {/*
+            Marked for the live poll. These three come from the same KV payload
+            as the hero odometer and must refresh with it: "CVEs published in
+            2026" is live while "2026 to date" was frozen at the last static
+            build, so between rebuilds the page showed two different answers to
+            the same question a few hundred pixels apart.
+          */}
+          <div class="stat-row">
+            <div>
+              <div class="stat-label">{CURRENT_YEAR} to date</div>
+              <div class="stat-value" data-pace-current>{pace.current.toLocaleString()}</div>
+            </div>
+            <div>
+              <div class="stat-label">{CURRENT_YEAR - 1} same date</div>
+              <div class="stat-value" data-pace-previous>
+                {pace.previousYearToDate.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div class="stat-label">Pace</div>
+              <div class="stat-value" data-pace-delta>
+                {paceDelta === null
+                  ? '—'
+                  : `${paceDelta >= 0 ? '+' : ''}${paceDelta.toFixed(1)}%`}
+              </div>
+            </div>
+            <div>
+              <div class="stat-label">Known exploited</div>
+              <div class="stat-value">
+                {rollup.reduce((sum, r) => sum + r.kev_count, 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  <div class="ad-slot" aria-hidden="true">Reserved</div>
+
+  {
+    kevRecent.length > 0 && (
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>Recently exploited in the wild</h2>
+            <p>Added to the CISA KEV catalog — confirmed exploitation, not just severity.</p>
+          </div>
+          <a class="small" href="/kev">All exploited →</a>
+        </div>
+        <div class="card">
+          <CveTable rows={kevRecent} caption="Recently exploited CVEs" />
+        </div>
+      </section>
+    )
+  }
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Latest disclosures</h2>
+        <p>Newest CVEs affecting tracked vendors.</p>
+      </div>
+      <a class="small" href={`/years/${raceYear}`}>Browse all {raceYear} →</a>
+    </div>
+    <div class="card">
+      <CveTable rows={recent} caption="Latest CVEs" />
+    </div>
+  </section>
+
+  {
+    !repo && (
+      <section class="section">
+        <div class="card empty">
+          <p>
+            No data loaded yet. Run <code>npm run sync -- --db ./cybercves.sqlite --enrich</code>{' '}
+            then rebuild.
+          </p>
+        </div>
+      </section>
+    )
+  }
+</Base>

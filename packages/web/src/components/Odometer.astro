@@ -1,0 +1,153 @@
+---
+interface Props {
+  value: number;
+  year: number;
+}
+
+const { value, year } = Astro.props;
+const digits = String(value).split('');
+---
+
+{/*
+  The hero figure — exactly one per view, in the same system sans as everything
+  else. The prerendered value is the build-time count; the inline script below
+  swaps in the live number from the Worker's KV-backed API, so the counter is
+  fresh between nightly rebuilds without any rebuild at all.
+*/}
+<p class="hero-label">CVEs published in {year}</p>
+<p class="hero-number">
+  <span class="odo" data-odometer data-value={value} aria-live="polite" aria-atomic="true">
+    <span class="sr-only" data-odometer-text>{value.toLocaleString()}</span>
+    {
+      digits.map((digit) => (
+        <span class="odo-digit" aria-hidden="true">
+          <span class="odo-strip" style={`transform: translateY(-${Number(digit)}em)`}>
+            {Array.from({ length: 10 }, (_, n) => (
+              <span>{n}</span>
+            ))}
+          </span>
+        </span>
+      ))
+    }
+  </span>
+</p>
+
+<style>
+  .sr-only {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+</style>
+
+<script>
+  // The counter is a query over the current year, so it rolls over on 1 January
+  // by itself — there is no scheduled reset job to fail.
+  const root = document.querySelector<HTMLElement>('[data-odometer]');
+
+  function render(root: HTMLElement, value: number) {
+    const digits = String(value).split('');
+    const srText = root.querySelector<HTMLElement>('[data-odometer-text]');
+    if (srText) srText.textContent = value.toLocaleString();
+
+    let cells = Array.from(root.querySelectorAll<HTMLElement>('.odo-digit'));
+
+    // Grow or shrink the digit columns before animating, so 999 -> 1000 works.
+    while (cells.length < digits.length) {
+      const cell = document.createElement('span');
+      cell.className = 'odo-digit';
+      cell.setAttribute('aria-hidden', 'true');
+      const strip = document.createElement('span');
+      strip.className = 'odo-strip';
+      for (let n = 0; n <= 9; n++) {
+        const s = document.createElement('span');
+        s.textContent = String(n);
+        strip.appendChild(s);
+      }
+      cell.appendChild(strip);
+      root.appendChild(cell);
+      cells = Array.from(root.querySelectorAll<HTMLElement>('.odo-digit'));
+    }
+    while (cells.length > digits.length) {
+      cells.pop()?.remove();
+    }
+
+    digits.forEach((digit, i) => {
+      const strip = cells[i]?.querySelector<HTMLElement>('.odo-strip');
+      if (strip) strip.style.transform = `translateY(-${Number(digit)}em)`;
+    });
+  }
+
+  async function refresh() {
+    if (!root) return;
+    try {
+      const res = await fetch('/api/v1/live', { headers: { accept: 'application/json' } });
+      if (!res.ok) return;
+      const live = (await res.json()) as {
+        total?: number;
+        addedToday?: number;
+        byVendor?: Array<{ vendor_slug: string; n: number }>;
+        pace?: { current?: number; previousYearToDate?: number };
+      };
+
+      if (typeof live.total === 'number' && live.total !== Number(root.dataset.value)) {
+        root.dataset.value = String(live.total);
+        render(root, live.total);
+      }
+
+      const todayEl = document.querySelector<HTMLElement>('[data-added-today]');
+      if (todayEl && typeof live.addedToday === 'number') {
+        todayEl.textContent =
+          live.addedToday > 0 ? `▲ ${live.addedToday} today` : 'No new CVEs today';
+      }
+
+      // The pace row answers the same question as the hero number and is fed by
+      // the same payload, so it refreshes here too. Left server-rendered it would
+      // sit at the last static build's count while the odometer above it ticked
+      // on — two different totals for the same year, on the same screen.
+      const setText = (selector: string, text: string) => {
+        const el = document.querySelector<HTMLElement>(selector);
+        if (el) el.textContent = text;
+      };
+      const current = live.pace?.current;
+      const previous = live.pace?.previousYearToDate;
+      if (typeof current === 'number') setText('[data-pace-current]', current.toLocaleString());
+      if (typeof previous === 'number') setText('[data-pace-previous]', previous.toLocaleString());
+      if (typeof current === 'number' && typeof previous === 'number') {
+        // Recomputed rather than read: the percentage is derived from both
+        // figures, and updating them while leaving a stale delta underneath
+        // would trade one visible inconsistency for a less obvious one.
+        const delta = previous > 0 ? ((current - previous) / previous) * 100 : null;
+        setText(
+          '[data-pace-delta]',
+          delta === null ? '—' : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`,
+        );
+      }
+
+      // Re-scale the vendor race against the live maximum.
+      const race = document.querySelector<HTMLElement>('[data-vendor-race]');
+      if (race && live.byVendor?.length) {
+        const max = Math.max(1, ...live.byVendor.map((v) => v.n));
+        for (const vendor of live.byVendor) {
+          const row = race.querySelector<HTMLElement>(`[data-vendor="${vendor.vendor_slug}"]`);
+          const bar = row?.querySelector<HTMLElement>('.race-bar');
+          const val = row?.querySelector<HTMLElement>('.race-value');
+          if (bar) bar.style.width = `${Math.max((vendor.n / max) * 100, 1)}%`;
+          if (val) val.textContent = vendor.n.toLocaleString();
+        }
+      }
+    } catch {
+      // The prerendered value stays on screen — a failed poll must never blank
+      // the hero number.
+    }
+  }
+
+  if (root) {
+    refresh();
+    setInterval(refresh, 120_000);
+  }
+</script>

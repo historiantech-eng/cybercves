@@ -1,0 +1,33 @@
+slug: palo-alto
+name: Palo Alto Networks
+homepage: https://www.paloaltonetworks.com
+psirtUrl: https://security.paloaltonetworks.com
+
+# Verified against CVE-2024-3400: assignerShortName is "palo_alto" (underscore),
+# not "paloalto" or "palo-alto".
+cnaShortNames:
+  - palo_alto
+
+aliases:
+  - Palo Alto Networks
+  - Palo Alto
+  - Palo Alto Networks, Inc.
+  # CISA-ADP enriches PAN records using the CPE vendor form "paloaltonetworks"
+  # (one word), which differs from the CNA's "Palo Alto Networks". Without this
+  # alias, CPE-signal matching silently fails for PAN CVEs filed by third parties.
+  - paloaltonetworks
+
+psirtHosts:
+  - security.paloaltonetworks.com
+
+# Palo Alto serves CVE-5.0 JSON directly at /json/{CVE-ID}, which is richer and
+# fresher than their RSS. Their affected[] entries carry no CPEs, so vendor alias
+# matching — not CPE matching — is what attributes these CVEs.
+adapter: json
+jsonUrlTemplate: https://security.paloaltonetworks.com/json/{cveId}
+rssUrl: https://security.paloaltonetworks.com/rss.xml
+advisoryIdPattern: 'PAN-SA-\d{4}-\d+'
+
+# Palo Alto's in-house threat research team.
+internalBrandMarkers:
+  - Unit 42

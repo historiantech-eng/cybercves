@@ -1,0 +1,62 @@
+---
+interface Row {
+  vendor_slug: string;
+  name: string;
+  value: number;
+}
+
+interface Props {
+  rows: Row[];
+  /** Rendered next to each bar and in the tooltip. */
+  unit?: string;
+  live?: boolean;
+  /**
+   * Which measure a YearFilter on the same page should re-render this race from
+   * when the year or category changes. Leave unset for a race the filter must
+   * not touch.
+   */
+  filterBy?: 'risk' | 'cve_count';
+}
+
+const { rows, unit = 'CVEs', live = false, filterBy } = Astro.props;
+const max = Math.max(1, ...rows.map((r) => r.value));
+const fmt = (n: number) => (Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1));
+---
+
+{/*
+  One measure across nominal categories, so every bar wears the single series
+  hue. Coloring bars by rank would double-encode length as color and repaint
+  the survivors whenever a filter changes the ordering.
+
+  No legend: a single series is named by the section heading above it.
+
+  When `filterBy` is set, YearFilter rebuilds the rows below from the prebuilt
+  stats bundle — its `renderRace` mirrors this markup, so changes here need to
+  land there too.
+*/}
+<div
+  class="race"
+  data-vendor-race={live ? '' : undefined}
+  data-stat-race={filterBy}
+  data-stat-race-unit={filterBy ? unit : undefined}
+>
+  {
+    rows.map((row) => (
+      <div class="race-row" data-vendor={row.vendor_slug}>
+        <a class="race-name" href={`/vendors/${row.vendor_slug}`} title={row.name}>
+          {row.name}
+        </a>
+        <div
+          class="race-track"
+          role="img"
+          aria-label={`${row.name}: ${fmt(row.value)} ${unit}`}
+          title={`${row.name} — ${fmt(row.value)} ${unit}`}
+        >
+          <div class="race-bar" style={`width: ${Math.max((row.value / max) * 100, 1)}%`} />
+        </div>
+        <span class="race-value">{fmt(row.value)}</span>
+      </div>
+    ))
+  }
+  {rows.length === 0 && <p class="empty">No data yet.</p>}
+</div>

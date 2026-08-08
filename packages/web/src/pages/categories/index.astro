@@ -1,0 +1,62 @@
+---
+import Base from '../../layouts/Base.astro';
+import YearFilter from '../../components/YearFilter.astro';
+import { CURRENT_YEAR, db } from '../../lib/data';
+
+const repo = db();
+const categories = repo ? await repo.listCategories() : [];
+const breakdown = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
+const counts = new Map(breakdown.map((row) => [row.category_slug, row]));
+const years = repo ? await repo.listYears() : [];
+---
+
+<Base
+  title="Product categories"
+  description="CVE counts by product category — firewall, endpoint, SASE, identity, email security and more — across every tracked cybersecurity vendor."
+>
+  <h1>Product categories</h1>
+  <p class="lede">
+    The comparison that matters is like-for-like: firewall CVEs against firewall CVEs.
+    Categories marked non-security cover routing, collaboration and other lines outside a
+    vendor's security portfolio, and are excluded from risk rankings.
+  </p>
+
+  <YearFilter years={years} selected={CURRENT_YEAR} scope="all vendors" />
+
+  <section class="section">
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Category</th>
+              <th scope="col" class="num">Risk</th>
+              <th scope="col" class="num">CVEs (<span data-stat-year-label>{CURRENT_YEAR}</span>)</th>
+              <th scope="col" class="num">Exploited</th>
+              <th scope="col">Scope</th>
+            </tr>
+          </thead>
+          <tbody data-stat-table="categories">
+            {
+              categories.filter((cat) => counts.has(cat.slug)).map((cat) => {
+                const row = counts.get(cat.slug);
+                return (
+                  <tr>
+                    <td>
+                      <a href={`/categories/${cat.slug}`}>{cat.name}</a>
+                    </td>
+                    <td class="num">{(row?.risk ?? 0).toFixed(1)}</td>
+                    <td class="num">{(row?.cve_count ?? 0).toLocaleString()}</td>
+                    <td class="num">{(row?.kev_count ?? 0).toLocaleString()}</td>
+                    <td class="small muted">{cat.is_security === 1 ? 'Security' : 'Non-security'}</td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+        {categories.length === 0 && <p class="empty">No categories loaded yet.</p>}
+      </div>
+    </div>
+  </section>
+</Base>

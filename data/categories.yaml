@@ -1,0 +1,102 @@
+# Product categories. `sort` drives display order; `security` marks whether a
+# category counts toward cross-vendor security comparisons.
+#
+# The `security: false` flag exists because vendors have wildly different product
+# breadth. Cisco ships routers, switches, and collaboration software alongside its
+# security line; counting a Webex CVE against Fortinet's firewall CVEs would make
+# the comparison meaningless. Non-security categories stay visible and browsable
+# but are excluded from the default vendor comparison.
+
+categories:
+  - slug: firewall
+    name: Firewall / NGFW
+    description: Next-generation firewalls, security appliances, and firewall operating systems.
+    sort: 10
+    security: true
+
+  - slug: endpoint
+    name: Endpoint / EDR
+    description: Endpoint protection, detection and response agents, and host security software.
+    sort: 20
+    security: true
+
+  - slug: sase-sse
+    name: SASE / SSE / Secure Web
+    description: Secure access service edge, security service edge, secure web gateways, and CASB.
+    sort: 30
+    security: true
+
+  - slug: vpn-remote-access
+    name: VPN & Remote Access
+    description: VPN clients, concentrators, and zero-trust remote access gateways.
+    sort: 40
+    security: true
+
+  - slug: email-security
+    name: Email Security
+    description: Secure email gateways, anti-phishing, and mail protection platforms.
+    sort: 50
+    security: true
+
+  - slug: identity
+    name: Identity / IAM / MFA
+    description: Identity providers, access management, multi-factor authentication, and NAC.
+    sort: 60
+    security: true
+
+  - slug: siem-logging
+    name: SIEM & Log Management
+    description: Security information and event management, log analytics, and SOAR.
+    sort: 70
+    security: true
+
+  - slug: threat-detection
+    name: Threat Detection & Sandbox
+    description: Network detection and response, malware sandboxes, and deception platforms.
+    sort: 80
+    security: true
+
+  - slug: vulnerability-management
+    name: Vulnerability Management
+    description: Vulnerability scanners, attack surface management, and exposure platforms.
+    sort: 90
+    security: true
+
+  - slug: web-app-security
+    name: Web & Application Security
+    description: Web application firewalls, application delivery controllers, and API security.
+    sort: 100
+    security: true
+
+  - slug: cloud-security
+    name: Cloud Security
+    description: CNAPP, CSPM, cloud workload protection, and container security.
+    sort: 110
+    security: true
+
+  - slug: ot-iot-security
+    name: OT / IoT Security
+    description: Operational technology, industrial control system, and IoT security products.
+    sort: 120
+    security: true
+
+  - slug: network-management
+    name: Network & Security Management
+    description: Central management consoles, controllers, and orchestration platforms.
+    sort: 130
+    security: true
+
+  - slug: routing-switching
+    name: Routing & Switching
+    description: Router and switch operating systems and network infrastructure platforms.
+    sort: 140
+    security: false
+
+  - slug: other
+    name: Other Products
+    description: >-
+      Products outside the security portfolio — collaboration, telephony, and
+      general-purpose software. Tracked for completeness, excluded from security
+      comparisons by default.
+    sort: 999
+    security: false

@@ -1,0 +1,17 @@
+---
+import { severityToken } from '../lib/data';
+
+interface Props {
+  severity: string | null;
+  score?: number | null;
+}
+
+const { severity, score } = Astro.props;
+const token = severityToken(severity);
+const label = severity ? severity.charAt(0) + severity.slice(1).toLowerCase() : 'Unscored';
+---
+
+{/* The word is the accessible channel; the dot reinforces it. Never the dot alone. */}
+<span class={`sev sev-${token}`}>
+  {label}{score != null ? ` ${score}` : ''}
+</span>

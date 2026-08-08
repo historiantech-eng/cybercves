@@ -1,0 +1,243 @@
+import { parseCpe } from './cpe.js';
+import type {
+  MatchSignal,
+  NormalizedCve,
+  ProductConfig,
+  ResolvedProduct,
+  UnmappedProduct,
+  VendorConfig,
+} from './types.js';
+
+/**
+ * Signal strength, strongest first. When several signals point at the same
+ * vendor we keep the strongest, so the stored `match_signal` says how confidently
+ * a CVE was attributed rather than which check happened to run last.
+ */
+const SIGNAL_RANK: Readonly<Record<MatchSignal, number>> = {
+  'cna-assigner': 0,
+  'affected-vendor': 1,
+  cpe: 2,
+  'reference-host': 3,
+};
+
+/**
+ * Fold a raw vendor/product string into a comparable key: lowercase, strip
+ * trademark marks and punctuation, collapse whitespace. "FortiOS®" and
+ * "fortios" must land on the same key.
+ */
+export function normalizeKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[®™℠]/g, '')
+    .replace(/[_/]/g, ' ')
+    .replace(/[^a-z0-9+.\- ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+export class TaxonomyResolver {
+  readonly #vendors = new Map<string, VendorConfig>();
+  readonly #byCna = new Map<string, string>();
+  readonly #byAlias = new Map<string, string>();
+  readonly #byHost = new Map<string, string>();
+
+  /** vendorSlug -> (normalized product alias -> productSlug) */
+  readonly #productAliases = new Map<string, Map<string, string>>();
+  /** vendorSlug -> compiled patterns, evaluated only when no alias matches */
+  readonly #productPatterns = new Map<string, Array<{ re: RegExp; slug: string }>>();
+  readonly #products = new Map<string, ProductConfig>();
+
+  constructor(vendors: readonly VendorConfig[], products: readonly ProductConfig[]) {
+    for (const vendor of vendors) {
+      this.#vendors.set(vendor.slug, vendor);
+      for (const cna of vendor.cnaShortNames) this.#byCna.set(cna.toLowerCase(), vendor.slug);
+      for (const alias of vendor.aliases) this.#byAlias.set(normalizeKey(alias), vendor.slug);
+      for (const host of vendor.psirtHosts) this.#byHost.set(host.toLowerCase(), vendor.slug);
+    }
+
+    for (const product of products) {
+      this.#products.set(product.slug, product);
+
+      let aliases = this.#productAliases.get(product.vendorSlug);
+      if (!aliases) {
+        aliases = new Map();
+        this.#productAliases.set(product.vendorSlug, aliases);
+      }
+      aliases.set(normalizeKey(product.name), product.slug);
+      for (const alias of product.aliases) aliases.set(normalizeKey(alias), product.slug);
+
+      if (product.patterns.length) {
+        let patterns = this.#productPatterns.get(product.vendorSlug);
+        if (!patterns) {
+          patterns = [];
+          this.#productPatterns.set(product.vendorSlug, patterns);
+        }
+        for (const source of product.patterns) {
+          patterns.push({ re: new RegExp(source, 'i'), slug: product.slug });
+        }
+      }
+    }
+  }
+
+  getVendor(slug: string): VendorConfig | undefined {
+    return this.#vendors.get(slug);
+  }
+
+  getProduct(slug: string): ProductConfig | undefined {
+    return this.#products.get(slug);
+  }
+
+  /**
+   * Attribute a CVE to vendors using all three signals from the plan.
+   *
+   * The CNA assigner alone is not sufficient: researchers routinely file through
+   * MITRE or another CNA for bugs in a vendor's product, and those CVEs would be
+   * silently undercounted if we only trusted the assigner field.
+   */
+  matchVendors(cve: NormalizedCve): Map<string, MatchSignal> {
+    const matches = new Map<string, MatchSignal>();
+
+    const record = (slug: string | undefined, signal: MatchSignal) => {
+      if (!slug) return;
+      const existing = matches.get(slug);
+      if (existing === undefined || SIGNAL_RANK[signal] < SIGNAL_RANK[existing]) {
+        matches.set(slug, signal);
+      }
+    };
+
+    if (cve.assignerShortName) {
+      record(this.#byCna.get(cve.assignerShortName), 'cna-assigner');
+    }
+
+    for (const affected of cve.affected) {
+      if (affected.vendorRaw) {
+        record(this.#byAlias.get(normalizeKey(affected.vendorRaw)), 'affected-vendor');
+      }
+      for (const cpe of affected.cpes) {
+        const parsed = parseCpe(cpe);
+        if (parsed?.vendor) record(this.#byAlias.get(normalizeKey(parsed.vendor)), 'cpe');
+      }
+    }
+
+    for (const ref of cve.references) {
+      const host = hostOf(ref.url);
+      if (host) record(this.#byHost.get(host), 'reference-host');
+    }
+
+    return matches;
+  }
+
+  /** Map one raw product string to a canonical product slug for a known vendor. */
+  resolveProductName(vendorSlug: string, productRaw: string): string | null {
+    const key = normalizeKey(productRaw);
+    if (!key) return null;
+
+    const exact = this.#productAliases.get(vendorSlug)?.get(key);
+    if (exact) return exact;
+
+    for (const { re, slug } of this.#productPatterns.get(vendorSlug) ?? []) {
+      if (re.test(key)) return slug;
+    }
+    return null;
+  }
+
+  /**
+   * Resolve a CVE into canonical (vendor, product, category) rows.
+   *
+   * Anything we cannot map is returned separately rather than dropped — unmapped
+   * strings are the input to the AI suggestion pass and the human review queue,
+   * and silently discarding them is how a taxonomy quietly rots.
+   */
+  resolve(cve: NormalizedCve): {
+    resolved: ResolvedProduct[];
+    unmapped: UnmappedProduct[];
+    /** Returned so callers need not recompute it — matching parses every reference URL. */
+    vendors: Map<string, MatchSignal>;
+  } {
+    const vendorMatches = this.matchVendors(cve);
+    const resolved = new Map<string, ResolvedProduct>();
+    const unmapped = new Map<string, UnmappedProduct>();
+
+    for (const [vendorSlug, matchSignal] of vendorMatches) {
+      for (const affected of cve.affected) {
+        // Candidate product names for this affected entry: the free-text product
+        // plus any CPE product components, which are often cleaner.
+        const candidates: string[] = [];
+        if (affected.productRaw) candidates.push(affected.productRaw);
+        for (const cpe of affected.cpes) {
+          const parsed = parseCpe(cpe);
+          if (parsed?.product) candidates.push(parsed.product);
+        }
+        if (!candidates.length) continue;
+
+        // Only attribute this entry to the vendor if the entry itself points at
+        // them; otherwise a multi-vendor CVE would assign every product to every
+        // matched vendor.
+        if (!this.#entryBelongsTo(vendorSlug, affected, matchSignal)) continue;
+
+        let hit = false;
+        for (const candidate of candidates) {
+          const productSlug = this.resolveProductName(vendorSlug, candidate);
+          if (!productSlug) continue;
+          const product = this.#products.get(productSlug);
+          if (!product) continue;
+          resolved.set(productSlug, {
+            productSlug,
+            vendorSlug,
+            categorySlug: product.categorySlug,
+            matchSignal,
+          });
+          hit = true;
+          break;
+        }
+
+        if (!hit && affected.productRaw) {
+          const key = `${vendorSlug}::${normalizeKey(affected.productRaw)}`;
+          unmapped.set(key, {
+            vendorRaw: affected.vendorRaw,
+            productRaw: affected.productRaw,
+            vendorSlug,
+          });
+        }
+      }
+    }
+
+    return {
+      resolved: [...resolved.values()],
+      unmapped: [...unmapped.values()],
+      vendors: vendorMatches,
+    };
+  }
+
+  /**
+   * Does this specific affected-entry belong to the given vendor?
+   *
+   * When the entry names a vendor or carries a CPE, trust that. When it carries
+   * neither, fall back to the CVE-level attribution — but only if that came from
+   * the CNA assigner, the one signal strong enough to speak for an unlabelled entry.
+   */
+  #entryBelongsTo(
+    vendorSlug: string,
+    affected: NormalizedCve['affected'][number],
+    matchSignal: MatchSignal,
+  ): boolean {
+    if (affected.vendorRaw) {
+      return this.#byAlias.get(normalizeKey(affected.vendorRaw)) === vendorSlug;
+    }
+    for (const cpe of affected.cpes) {
+      const parsed = parseCpe(cpe);
+      if (parsed?.vendor) {
+        return this.#byAlias.get(normalizeKey(parsed.vendor)) === vendorSlug;
+      }
+    }
+    return matchSignal === 'cna-assigner';
+  }
+}

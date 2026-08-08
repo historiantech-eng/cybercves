@@ -1,0 +1,98 @@
+# Palo Alto Networks product -> category mappings.
+#
+# Palo Alto's CVE records carry no CPEs, so every match here runs against the
+# free-text `affected[].product` string.
+
+vendorSlug: palo-alto
+products:
+  - slug: palo-alto-pan-os
+    name: PAN-OS
+    categorySlug: firewall
+    aliases: [PAN-OS, PANOS, PAN OS, Palo Alto Networks PAN-OS]
+    patterns: ['^pan.?os\b']
+
+  - slug: palo-alto-cloud-ngfw
+    name: Cloud NGFW
+    categorySlug: firewall
+    aliases: [Cloud NGFW, Cloud NGFW for AWS, Cloud NGFW for Azure]
+    patterns: ['^cloud ngfw\b']
+
+  - slug: palo-alto-prisma-access
+    name: Prisma Access
+    categorySlug: sase-sse
+    aliases: [Prisma Access, Prisma Access Browser]
+    patterns: ['^prisma access\b']
+
+  - slug: palo-alto-prisma-sd-wan
+    name: Prisma SD-WAN
+    categorySlug: sase-sse
+    aliases: [Prisma SD-WAN, CloudGenix SD-WAN]
+    patterns: ['^prisma sd.?wan\b']
+
+  - slug: palo-alto-prisma-cloud
+    name: Prisma Cloud
+    categorySlug: cloud-security
+    aliases: [Prisma Cloud, Prisma Cloud Compute, Twistlock]
+    patterns: ['^prisma cloud\b']
+
+  - slug: palo-alto-cortex-xdr
+    name: Cortex XDR
+    categorySlug: endpoint
+    aliases: [Cortex XDR, Cortex XDR Agent, Traps]
+    patterns: ['^cortex xdr\b']
+
+  - slug: palo-alto-cortex-xsoar
+    name: Cortex XSOAR
+    categorySlug: siem-logging
+    aliases: [Cortex XSOAR, Demisto]
+    patterns: ['^cortex xsoar\b']
+
+  - slug: palo-alto-cortex-xsiam
+    name: Cortex XSIAM
+    categorySlug: siem-logging
+    aliases: [Cortex XSIAM]
+
+  - slug: palo-alto-globalprotect
+    name: GlobalProtect
+    categorySlug: vpn-remote-access
+    aliases:
+      - GlobalProtect
+      - GlobalProtect App
+      - GlobalProtect Agent
+      - GlobalProtect Clientless VPN
+    patterns: ['^globalprotect\b']
+
+  - slug: palo-alto-panorama
+    name: Panorama
+    categorySlug: network-management
+    aliases: [Panorama, Panorama Interconnect]
+    patterns: ['^panorama\b']
+
+  - slug: palo-alto-expedition
+    name: Expedition
+    categorySlug: network-management
+    aliases: [Expedition, Expedition Migration Tool]
+
+  - slug: palo-alto-user-id-agent
+    name: User-ID Agent
+    categorySlug: identity
+    aliases: [User-ID Agent, Terminal Server Agent, Windows User-ID Agent]
+
+  - slug: palo-alto-iot-security
+    name: IoT Security
+    categorySlug: ot-iot-security
+    aliases: [IoT Security, Enterprise IoT Security]
+
+  # --- added from the review queue after the 2024-2026 backfill ---
+
+  - slug: palo-alto-adem
+    name: Autonomous Digital Experience Manager
+    categorySlug: sase-sse
+    aliases: [Autonomous Digital Experience Manager, ADEM]
+    patterns: ['^autonomous digital experience\b']
+
+  - slug: palo-alto-prisma-browser
+    name: Prisma Browser
+    categorySlug: sase-sse
+    aliases: [Prisma Browser]
+    patterns: ['^prisma browser\b']

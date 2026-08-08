@@ -1,0 +1,19 @@
+{
+  // Editor + test-transformer config for the Node-side packages.
+  // The composite project build lives in tsconfig.build.json.
+  //
+  // packages/worker is excluded on purpose: it targets the Workers runtime and
+  // uses @cloudflare/workers-types, which conflicts with the Node globals the
+  // rest of the repo needs. It typechecks under its own tsconfig instead.
+  // packages/web is excluded because Astro owns its type environment.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "*.ts"],
+  "exclude": ["packages/worker/**", "packages/web/**", "**/dist/**", "**/node_modules/**"]
+}

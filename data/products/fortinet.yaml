@@ -1,0 +1,209 @@
+# Fortinet product -> category mappings.
+#
+# `aliases` are exact matches against the normalized key (lowercased, trademark
+# marks and punctuation stripped, underscores collapsed to spaces).
+# `patterns` are case-insensitive regexes tried only when no alias matches.
+#
+# Anything unmatched lands in the unmapped_product review queue rather than being
+# dropped, so gaps here surface as work rather than as silent undercounting.
+
+vendorSlug: fortinet
+products:
+  - slug: fortinet-fortios
+    name: FortiOS
+    categorySlug: firewall
+    aliases: [FortiOS, Fortinet FortiOS, FortiOS-6K7K]
+    patterns: ['^fortios\b']
+
+  - slug: fortinet-fortigate
+    name: FortiGate
+    categorySlug: firewall
+    aliases: [FortiGate, FortiGate Cloud, FortiGate Rugged]
+    patterns: ['^fortigate\b']
+
+  - slug: fortinet-fortiproxy
+    name: FortiProxy
+    categorySlug: sase-sse
+    aliases: [FortiProxy]
+    patterns: ['^fortiproxy\b']
+
+  - slug: fortinet-fortisase
+    name: FortiSASE
+    categorySlug: sase-sse
+    aliases: [FortiSASE]
+
+  - slug: fortinet-forticlient
+    name: FortiClient
+    categorySlug: endpoint
+    aliases:
+      - FortiClient
+      - FortiClientWindows
+      - FortiClientMac
+      - FortiClientLinux
+      - FortiClientAndroid
+      - FortiClientiOS
+      - FortiClientEMS
+    patterns: ['^forticlient\b']
+
+  - slug: fortinet-fortiedr
+    name: FortiEDR
+    categorySlug: endpoint
+    aliases: [FortiEDR, FortiEDR Collector]
+    patterns: ['^fortiedr\b']
+
+  - slug: fortinet-fortimail
+    name: FortiMail
+    categorySlug: email-security
+    aliases: [FortiMail]
+    patterns: ['^fortimail\b']
+
+  - slug: fortinet-fortiweb
+    name: FortiWeb
+    categorySlug: web-app-security
+    aliases: [FortiWeb, FortiWeb Manager]
+    patterns: ['^fortiweb\b']
+
+  - slug: fortinet-fortiadc
+    name: FortiADC
+    categorySlug: web-app-security
+    aliases: [FortiADC]
+    patterns: ['^fortiadc\b']
+
+  - slug: fortinet-fortianalyzer
+    name: FortiAnalyzer
+    categorySlug: siem-logging
+    aliases: [FortiAnalyzer, FortiAnalyzer Cloud, FortiAnalyzer-BigData]
+    patterns: ['^fortianalyzer\b']
+
+  - slug: fortinet-fortisiem
+    name: FortiSIEM
+    categorySlug: siem-logging
+    aliases: [FortiSIEM]
+    patterns: ['^fortisiem\b']
+
+  - slug: fortinet-fortisoar
+    name: FortiSOAR
+    categorySlug: siem-logging
+    aliases: [FortiSOAR]
+    patterns: ['^fortisoar\b']
+
+  - slug: fortinet-fortimanager
+    name: FortiManager
+    categorySlug: network-management
+    aliases: [FortiManager, FortiManager Cloud]
+    patterns: ['^fortimanager\b']
+
+  - slug: fortinet-fortiauthenticator
+    name: FortiAuthenticator
+    categorySlug: identity
+    aliases: [FortiAuthenticator]
+    patterns: ['^fortiauthenticator\b']
+
+  - slug: fortinet-fortitoken
+    name: FortiToken
+    categorySlug: identity
+    aliases: [FortiToken, FortiToken Cloud]
+    patterns: ['^fortitoken\b']
+
+  - slug: fortinet-fortinac
+    name: FortiNAC
+    categorySlug: identity
+    aliases: [FortiNAC, FortiNAC-F]
+    patterns: ['^fortinac\b']
+
+  - slug: fortinet-fortisandbox
+    name: FortiSandbox
+    categorySlug: threat-detection
+    aliases: [FortiSandbox]
+    patterns: ['^fortisandbox\b']
+
+  - slug: fortinet-fortindr
+    name: FortiNDR
+    categorySlug: threat-detection
+    aliases: [FortiNDR, FortiNDR Cloud]
+    patterns: ['^fortindr\b']
+
+  - slug: fortinet-fortideceptor
+    name: FortiDeceptor
+    categorySlug: threat-detection
+    aliases: [FortiDeceptor]
+
+  - slug: fortinet-fortivoice
+    name: FortiVoice
+    categorySlug: other
+    aliases: [FortiVoice, FortiVoice Enterprise]
+    patterns: ['^fortivoice\b']
+
+  - slug: fortinet-forticamera
+    name: FortiCamera
+    categorySlug: other
+    aliases: [FortiCamera]
+    patterns: ['^forticamera\b']
+
+  - slug: fortinet-fortirecorder
+    name: FortiRecorder
+    categorySlug: other
+    aliases: [FortiRecorder]
+    patterns: ['^fortirecorder\b']
+
+  # --- added from the review queue after the 2024-2026 backfill ---
+
+  - slug: fortinet-fortipam
+    name: FortiPAM
+    categorySlug: identity
+    aliases: [FortiPAM]
+    patterns: ['^fortipam\b']
+
+  - slug: fortinet-fortiportal
+    name: FortiPortal
+    categorySlug: network-management
+    aliases: [FortiPortal]
+    patterns: ['^fortiportal\b']
+
+  - slug: fortinet-fortiisolator
+    name: FortiIsolator
+    categorySlug: sase-sse
+    aliases: [FortiIsolator]
+    patterns: ['^fortiisolator\b']
+
+  - slug: fortinet-fortidlp
+    name: FortiDLP
+    categorySlug: endpoint
+    aliases: [FortiDLP]
+    patterns: ['^fortidlp\b']
+
+  - slug: fortinet-fortisra
+    name: FortiSRA
+    categorySlug: vpn-remote-access
+    aliases: [FortiSRA]
+    patterns: ['^fortisra\b']
+
+  - slug: fortinet-fortiddos
+    name: FortiDDoS
+    categorySlug: threat-detection
+    aliases: [FortiDDoS, FortiDDoS-F, FortiDDoS-CM]
+    patterns: ['^fortiddos\b']
+
+  - slug: fortinet-fortiaiops
+    name: FortiAIOps
+    categorySlug: network-management
+    aliases: [FortiAIOps]
+    patterns: ['^fortiaiops\b']
+
+  - slug: fortinet-fortiextender
+    name: FortiExtender
+    categorySlug: routing-switching
+    aliases: [FortiExtender]
+    patterns: ['^fortiextender\b']
+
+  - slug: fortinet-fortiswitch
+    name: FortiSwitch
+    categorySlug: routing-switching
+    aliases: [FortiSwitch, FortiSwitchManager]
+    patterns: ['^fortiswitch\b']
+
+  - slug: fortinet-fortiap
+    name: FortiAP
+    categorySlug: routing-switching
+    aliases: [FortiAP, FortiAP-U, FortiAP-W2]
+    patterns: ['^fortiap\b']

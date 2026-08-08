@@ -1,0 +1,20 @@
+{
+  "name": "@cybercves/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schema, migrations, and the repository layer. All SQL lives here so the storage engine stays swappable.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./migrate": "./src/migrate.ts",
+    "./drivers/node": "./src/drivers/node-sqlite.ts",
+    "./drivers/d1": "./src/drivers/d1.ts"
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@cybercves/core": "*"
+  }
+}

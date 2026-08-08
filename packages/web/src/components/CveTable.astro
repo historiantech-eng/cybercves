@@ -1,0 +1,96 @@
+---
+import Severity from './Severity.astro';
+import { formatDate, splitList } from '../lib/data';
+
+interface Row {
+  cve_id: string;
+  date_published?: string | null;
+  severity?: string | null;
+  score?: number | null;
+  in_kev?: number;
+  epss?: number | null;
+  vendors?: string | null;
+  products?: string | null;
+}
+
+interface Props {
+  rows: Row[];
+  showVendor?: boolean;
+  caption?: string;
+}
+
+const { rows, showVendor = true, caption } = Astro.props;
+---
+
+{/* Wide content scrolls inside its own container — the page body never scrolls sideways. */}
+<div class="table-scroll">
+  <table>
+    {caption && <caption class="sr-only">{caption}</caption>}
+    <thead>
+      <tr>
+        <th scope="col">CVE</th>
+        <th scope="col">Published</th>
+        <th scope="col">Severity</th>
+        {showVendor && <th scope="col">Vendor</th>}
+        <th scope="col">Products</th>
+        <th scope="col" class="num">EPSS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((row) => (
+          <tr>
+            <td>
+              <a class="cve-id" href={`/cve/${row.cve_id}`}>
+                {row.cve_id}
+              </a>
+              {row.in_kev === 1 && (
+                <>
+                  {' '}
+                  <span class="kev-flag" title="Listed in the CISA Known Exploited Vulnerabilities catalog">
+                    KEV
+                  </span>
+                </>
+              )}
+            </td>
+            <td class="muted small">{formatDate(row.date_published ?? null)}</td>
+            <td>
+              <Severity severity={row.severity ?? null} score={row.score ?? null} />
+            </td>
+            {showVendor && (
+              <td class="small">
+                {splitList(row.vendors ?? null).map((slug, i) => (
+                  <>
+                    {i > 0 && ', '}
+                    <a href={`/vendors/${slug}`}>{slug}</a>
+                  </>
+                ))}
+              </td>
+            )}
+            <td class="small muted">
+              {splitList(row.products ?? null).slice(0, 3).join(', ')}
+              {splitList(row.products ?? null).length > 3 &&
+                ` +${splitList(row.products ?? null).length - 3}`}
+            </td>
+            <td class="num small muted">
+              {row.epss != null ? row.epss.toFixed(3) : '—'}
+            </td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+  {rows.length === 0 && <p class="empty">No CVEs match these filters.</p>}
+</div>
+
+<style>
+  .sr-only {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+</style>

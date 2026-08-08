@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local data + build artifacts
+.cache/
+.wrangler/
+data/cache/
+*.sqlite
+*.sqlite-journal
+*.db
+
+# Secrets
+.dev.vars
+.env
+.env.*
+!.env.example
+
+# Machine-local agent settings — paths and allowlists from one developer's box,
+# not project configuration. Committed project settings belong in settings.json.
+.claude/settings.local.json

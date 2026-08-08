@@ -1,0 +1,64 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cybercve",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  // nodejs_compat gives the Workers runtime the Node built-ins Hono and our
+  // shared packages expect. Without it the bundle fails at deploy, not at build.
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": { "enabled": true },
+
+  // The prerendered Astro build.
+  //
+  // Deliberately assets-first (no `run_worker_first`): a matching static file is
+  // served straight from the edge WITHOUT invoking the Worker, so page views and
+  // asset requests cost nothing against the 100k/day request limit. Only paths
+  // with no matching asset fall through to the Worker — which is exactly the set
+  // we want it for: /api/*, and CVE pages published since the last rebuild.
+  //
+  // `not_found_handling` stays at its default ("none") for the same reason:
+  // "404-page" would short-circuit at the edge and the Worker would never see a
+  // missing CVE, losing the gap-filler. The Worker serves 404.html itself.
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cybercve",
+      // Filled in by `wrangler d1 create cybercve` — see DEPLOY.md step 2.
+      "database_id": "25cddb87-65c9-4365-b53a-f79924fb312a",
+      "migrations_dir": "../db/migrations"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "LIVE",
+      // Filled in by `wrangler kv namespace create LIVE` — see DEPLOY.md step 3.
+      "id": "d83019737fee4a46a3cdb855857d7145"
+    }
+  ],
+
+  // 2 of the 5 cron triggers available on the free plan; the third slot is
+  // reserved for the weekly AI narrative job.
+  "triggers": {
+    "crons": [
+      "*/15 * * * *", // CVE List delta poll + live snapshot refresh
+      "0 6 * * *" // KEV + EPSS refresh
+    ]
+  },
+
+  "vars": {
+    "ENVIRONMENT": "production"
+  },
+
+  // Custom domain. Requires cybercve.com to be an active zone on this account.
+  "routes": [
+    { "pattern": "cybercve.com", "custom_domain": true },
+    { "pattern": "www.cybercve.com", "custom_domain": true }
+  ]
+}

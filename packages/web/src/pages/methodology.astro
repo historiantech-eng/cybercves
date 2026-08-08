@@ -1,0 +1,249 @@
+---
+import Base from '../layouts/Base.astro';
+import { db } from '../lib/data';
+import { discoverySourceLabel, methodology } from '@cybercves/core';
+
+// Rendered straight from the scoring module, so the published formula cannot
+// drift from the one that produced the numbers on the rest of the site.
+const model = methodology();
+const repo = db();
+const scored = repo ? await repo.getUnscoredShare() : { total: 0, unscored: 0 };
+const discoverySources = repo ? await repo.getDiscoverySourceCounts() : [];
+const discovery = repo ? await repo.getDiscoveryBreakdown() : [];
+const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFixed(1) : '0.0';
+---
+
+<Base
+  title="Methodology"
+  description="How CyberCVE attributes CVEs to vendors, maps products to categories, and computes risk-weighted scores — including what the numbers cannot tell you."
+>
+  <h1>Methodology</h1>
+  <p class="lede">
+    Every figure on this site is computed in SQL from public data and is reproducible. This
+    page explains how, and — more importantly — what these numbers do not mean.
+  </p>
+
+  <section class="section">
+    <div class="card">
+      <h2>What CVE counts do not measure</h2>
+      <p class="muted">{model.caveat}</p>
+      <p class="muted">
+        A vendor that runs a mature disclosure program, publishes thoroughly, and acts as its
+        own CVE Numbering Authority will accumulate more CVEs than one that patches quietly and
+        publishes little. Read a high count as evidence of transparency at least as much as
+        evidence of weakness. That is why the default ranking is risk-weighted rather than
+        volume-based, and why confirmed exploitation carries the heaviest multiplier.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <h2>Risk score</h2>
+      <p class="muted small"><code>{model.formula}</code></p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th scope="col">Component</th><th scope="col">Value</th><th scope="col">Rationale</th></tr>
+          </thead>
+          <tbody>
+            {
+              Object.entries(model.severityWeights).map(([severity, weight]) => (
+                <tr>
+                  <td>Severity — {severity}</td>
+                  <td class="num">{weight}</td>
+                  <td class="small muted">
+                    CVSS base score band, preferring {model.cvssPreference.join(' → ')}
+                  </td>
+                </tr>
+              ))
+            }
+            <tr>
+              <td>KEV multiplier</td>
+              <td class="num">×{model.kevMultiplier}</td>
+              <td class="small muted">Listed in the CISA catalog — confirmed exploitation.</td>
+            </tr>
+            <tr>
+              <td>EPSS factor</td>
+              <td class="num">×{model.epssFactorRange[0]}–{model.epssFactorRange[1]}</td>
+              <td class="small muted">
+                Exploit probability over the next 30 days. A missing estimate scores ×1, so
+                absence neither helps nor hurts.
+              </td>
+            </tr>
+            <tr>
+              <td>Unscored CVE</td>
+              <td class="num">{model.unscoredWeight}</td>
+              <td class="small muted">
+                Treated as LOW rather than an imputed median — we do not invent severity we
+                were not given. Currently {unscoredPct}% of tracked CVEs
+                ({scored.unscored.toLocaleString()} of {scored.total.toLocaleString()}).
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top:18px">Scoping risk to a product category</h3>
+      <p class="muted">
+        A vendor's total risk across a whole portfolio compares badly between a pure-play
+        firewall vendor and one that also ships switches, phones and collaboration software.
+        Every risk figure can therefore be narrowed to a single product line — the vendor
+        ranking defaults to <strong>Firewall / NGFW</strong> — and the score is recomputed from
+        only the CVEs affecting products in that category, not filtered down from the total.
+      </p>
+      <p class="muted">
+        Two consequences worth stating plainly. A CVE affecting products in two categories
+        counts in full under each, because it is a real vulnerability in each of them — so the
+        category scores sum to more than the vendor's all-categories total, and comparing a
+        category score against a portfolio score is not meaningful. And a CVE is scored once
+        per category regardless of how many individual SKUs the advisory enumerates, so a
+        vendor that lists five affected models is not penalised against one that names a single
+        umbrella product for the same flaw.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <h2>Who discovered it</h2>
+      <p class="muted">
+        Every CVE is labelled with who found it: the vendor's own security team, an outside
+        researcher, or a customer. This is the honest counterweight to raw counts. A vendor
+        that finds and publishes its own bugs is doing something materially different from one
+        whose bugs are found by outsiders, and volume alone cannot tell those apart.
+      </p>
+      <p class="muted">
+        The percentage shown on each vendor page divides by CVEs where attribution was actually
+        disclosed. Undisclosed records are reported separately and never enter the denominator —
+        folding them in would turn a vendor's silence into a fake quality signal, which is the
+        exact error this measure exists to avoid.
+      </p>
+
+      <h3 style="margin-top:18px">Where the label comes from</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th scope="col">Source</th><th scope="col" class="num">CVEs</th><th scope="col">Strength</th></tr>
+          </thead>
+          <tbody>
+            {
+              discoverySources.map((row) => (
+                <tr>
+                  <td>{discoverySourceLabel(row.discovery_source).label}</td>
+                  <td class="num">{row.n.toLocaleString()}</td>
+                  <td class="small muted">{discoverySourceLabel(row.discovery_source).strength}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <p class="small muted" style="margin-top:14px">
+        Vendors differ in what they publish. Cisco and Palo Alto record discovery directly in the
+        CVE record. Fortinet publishes nothing there, but every FortiGuard PSIRT advisory carries a
+        labelled <em>Discovered</em> field — Internal, External, or Third-Party Library — which is
+        read from the advisory page. That is Fortinet's own value, not our reading of a sentence,
+        so it is treated as a published field. Where the field is absent the Acknowledgement prose
+        is classified by rule instead, and the CVE says which of the two it got. Where a vendor
+        publishes nothing at all, the CVE is shown as “not disclosed” rather than guessed at.
+      </p>
+      <p class="small muted">
+        <strong>Third-Party Library</strong> is folded into “third party”. It marks a flaw in a
+        bundled upstream component, which reached Fortinet through someone else's disclosure — so
+        whatever else it is, it is not the vendor's own team finding its own bug, and that is the
+        only question this measure asks. Fortinet's raw label is kept on the CVE page so you can
+        disagree with the folding.
+      </p>
+
+      {
+        discovery.length > 0 && (
+          <div class="table-scroll" style="margin-top:16px">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Vendor</th>
+                  <th scope="col" class="num">Vendor found</th>
+                  <th scope="col" class="num">Third party</th>
+                  <th scope="col" class="num">Customer</th>
+                  <th scope="col" class="num">Not disclosed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {discovery.map((row) => (
+                  <tr>
+                    <td><a href={`/vendors/${row.vendor_slug}`}>{row.name}</a></td>
+                    <td class="num">{row.internal.toLocaleString()}</td>
+                    <td class="num">{row.external.toLocaleString()}</td>
+                    <td class="num">{row.user.toLocaleString()}</td>
+                    <td class="num muted">{row.undisclosed.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <h2>How CVEs are attributed to vendors</h2>
+      <p class="muted">
+        Not every CVE affecting a vendor is filed by that vendor. Researchers routinely submit
+        through MITRE or another CNA, so matching on the assigning authority alone would
+        undercount. Three signals are used, and the one that matched is recorded on every CVE
+        page so attribution is auditable:
+      </p>
+      <ol class="muted small">
+        <li><strong>cna-assigner</strong> — the CVE was assigned by the vendor's own CNA.</li>
+        <li><strong>affected-vendor / cpe</strong> — the record names the vendor in its affected products or CPE identifiers.</li>
+        <li><strong>reference-host</strong> — the record links to the vendor's own security advisory.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <h2>Product categories</h2>
+      <p class="muted">
+        Raw product strings are mapped to categories through a version-controlled mapping file.
+        Anything unmatched enters a review queue rather than being dropped, so gaps surface as
+        work instead of as silent undercounting.
+      </p>
+      <p class="muted">
+        Vendors differ enormously in portfolio breadth. Cisco ships routers, switches and
+        collaboration software alongside its security line; counting those against a pure-play
+        security vendor's firewall CVEs would be meaningless. Non-security categories are
+        tracked and browsable but excluded from the default comparison.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <h2>Sources and update cadence</h2>
+      <ul class="muted small">
+        <li>
+          <a href="https://github.com/CVEProject/cvelistV5">CVE List</a> — checked every 15
+          minutes via the delta feed. Primary source for records, affected products, CVSS and CWE.
+        </li>
+        <li>
+          <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a> —
+          refreshed daily. Public domain.
+        </li>
+        <li>
+          <a href="https://first.org/epss">FIRST EPSS</a> — refreshed daily. EPSS data courtesy
+          of FIRST.
+        </li>
+        <li>Vendor PSIRT feeds — used for advisory identifiers and freshness, not as a primary source.</li>
+      </ul>
+      <p class="small muted">
+        Corrections are welcome. If a CVE is attributed to the wrong product, the match signal
+        shown on its page is the place to start.
+      </p>
+    </div>
+  </section>
+</Base>

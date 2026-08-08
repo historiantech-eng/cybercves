@@ -1,0 +1,27 @@
+{
+  "name": "@cybercves/ingest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Source adapters for the CVE List, CISA KEV, and FIRST EPSS. Plain TypeScript — runs in the Worker, in Node, and in tests.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "backfill": "tsx src/bin/backfill.ts",
+    "sync": "tsx src/bin/sync.ts",
+    "taxonomy:review": "tsx src/bin/taxonomy-review.ts",
+    "verify": "tsx src/bin/verify.ts",
+    "push:d1": "tsx src/bin/push-d1.ts",
+    "discovery": "tsx src/bin/discovery.ts",
+    "discovery:apply": "tsx src/bin/discovery-apply.ts"
+  },
+  "dependencies": {
+    "@cybercves/core": "*",
+    "@cybercves/db": "*",
+    "yaml": "^2.9.0"
+  }
+}

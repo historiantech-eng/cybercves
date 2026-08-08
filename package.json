@@ -1,0 +1,35 @@
+{
+  "name": "cybercves",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CVE tracking across leading cybersecurity vendors, by product category",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --build tsconfig.build.json",
+    "backfill": "npm run backfill -w @cybercves/ingest --",
+    "sync": "npm run sync -w @cybercves/ingest --",
+    "taxonomy:review": "npm run taxonomy:review -w @cybercves/ingest --",
+    "verify": "npm run verify -w @cybercves/ingest --",
+    "push:d1": "npm run push:d1 -w @cybercves/ingest --",
+    "build:web": "npm run build -w @cybercves/web",
+    "deploy": "npm run deploy -w @cybercves/worker",
+    "discovery": "npm run discovery -w @cybercves/ingest --",
+    "discovery:apply": "npm run discovery:apply -w @cybercves/ingest --"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.23.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10",
+    "yaml": "^2.9.0"
+  }
+}

@@ -1,0 +1,164 @@
+---
+interface Props {
+  internal: number;
+  external: number;
+  user: number;
+  unknown: number;
+  undisclosed: number;
+  /** Show the undisclosed remainder as a separate, visually recessive segment. */
+  showUndisclosed?: boolean;
+}
+
+const { internal, external, user, unknown, undisclosed, showUndisclosed = true } = Astro.props;
+
+const disclosed = internal + external + user + unknown;
+const total = disclosed + undisclosed;
+
+/**
+ * Minimum share of a vendor's CVEs that must carry attribution before a headline
+ * percentage is shown.
+ *
+ * A percentage computed from a thin slice is not a small error, it is a wrong
+ * claim about a named company: if only the handful of records we happened to
+ * resolve are internal, the vendor reads as "100% found in-house". Below this
+ * threshold the counts are still shown — they are individually true — but the
+ * summary figure is withheld.
+ */
+const MIN_COVERAGE = 0.4;
+
+const attributed = internal + external + user;
+const coverage = total > 0 ? disclosed / total : 0;
+
+// Divides by attributed CVEs only. Folding undisclosed into the denominator
+// would turn a vendor's failure to publish the field into a fake quality signal
+// — the exact error this feature exists to avoid.
+const rate = attributed > 0 && coverage >= MIN_COVERAGE ? internal / attributed : null;
+const suppressed = attributed > 0 && coverage < MIN_COVERAGE;
+
+const segments = [
+  { key: 'internal', label: 'Vendor found', n: internal },
+  { key: 'external', label: 'Third party', n: external },
+  { key: 'user', label: 'Customer', n: user },
+  { key: 'unknown', label: 'Unknown', n: unknown },
+  ...(showUndisclosed ? [{ key: 'undisclosed', label: 'Not disclosed', n: undisclosed }] : []),
+].filter((s) => s.n > 0);
+
+const denom = showUndisclosed ? total : disclosed;
+const pct = (n: number) => (denom > 0 ? (n / denom) * 100 : 0);
+---
+
+{/*
+  A single stacked bar, so the parts read as shares of one whole. Segments are
+  separated by a 2px surface gap rather than a border — a stroke would add ink
+  that is not data. Every segment is also in the legend below with its count, so
+  identity never depends on color alone.
+*/}
+<div class="disc">
+  {
+    rate !== null && (
+      <p class="disc-rate">
+        <strong>{(rate * 100).toFixed(0)}%</strong> found in-house
+        <span class="muted small"> · of {attributed.toLocaleString()} attributed</span>
+      </p>
+    )
+  }
+  {
+    suppressed && (
+      <p class="disc-rate muted small">
+        Too few attributed to summarise — {(coverage * 100).toFixed(0)}% of CVEs carry
+        attribution, below the {(MIN_COVERAGE * 100).toFixed(0)}% needed for a percentage.
+      </p>
+    )
+  }
+
+  <div
+    class="disc-track"
+    role="img"
+    aria-label={segments.map((s) => `${s.label}: ${s.n}`).join(', ')}
+  >
+    {
+      segments.map((s) => (
+        <span
+          class={`disc-seg disc-${s.key}`}
+          style={`width: ${pct(s.n)}%`}
+          title={`${s.label}: ${s.n.toLocaleString()} (${pct(s.n).toFixed(1)}%)`}
+        />
+      ))
+    }
+  </div>
+
+  <ul class="disc-legend">
+    {
+      segments.map((s) => (
+        <li>
+          <span class={`disc-key disc-${s.key}`} aria-hidden="true" />
+          {s.label} <span class="muted">{s.n.toLocaleString()}</span>
+        </li>
+      ))
+    }
+  </ul>
+</div>
+
+<style>
+  .disc-rate {
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+  .disc-rate strong {
+    font-size: 21px;
+    letter-spacing: -0.02em;
+  }
+
+  .disc-track {
+    background: var(--gridline);
+    border-radius: 3px;
+    display: flex;
+    /* 2px of surface between segments, matching the bar spec. */
+    gap: 2px;
+    height: 14px;
+    overflow: hidden;
+    width: 100%;
+  }
+  .disc-seg {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+  }
+
+  /* Steps come from the global token system, which handles light/dark correctly.
+     Undisclosed is a hatched neutral because it is an absence, not a value. */
+  .disc-internal { background: var(--disc-internal); }
+  .disc-external { background: var(--disc-external); }
+  .disc-user { background: var(--disc-user); }
+  .disc-unknown { background: var(--disc-unknown); }
+  .disc-undisclosed {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--gridline),
+      var(--gridline) 4px,
+      var(--surface-1) 4px,
+      var(--surface-1) 6px
+    );
+  }
+
+  .disc-legend {
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    gap: 4px 16px;
+    list-style: none;
+    margin: 9px 0 0;
+    padding: 0;
+  }
+  .disc-legend li {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+  }
+  .disc-key {
+    border-radius: 2px;
+    display: inline-block;
+    height: 10px;
+    width: 10px;
+  }
+</style>

@@ -1,0 +1,227 @@
+---
+import Base from '../../layouts/Base.astro';
+import Severity from '../../components/Severity.astro';
+import { db, formatDate } from '../../lib/data';
+import { discoverySourceLabel } from '@cybercves/core';
+
+export async function getStaticPaths() {
+  const repo = db();
+  if (!repo) return [];
+
+  const years = await repo.listYears();
+  const ids = (await Promise.all(years.map((year) => repo.listCveIndex(year))))
+    .flat()
+    .map((row) => row.cve_id);
+
+  // These detail pages are the SEO backbone — one indexable URL per CVE.
+  const details = await Promise.all(ids.map((id) => repo.getCveDetail(id)));
+  return details.flatMap((detail) =>
+    detail ? [{ params: { id: detail.cve_id }, props: { detail } }] : [],
+  );
+}
+
+const { detail } = Astro.props;
+const refs = JSON.parse(detail.refs || '[]') as Array<{ url: string; name: string | null }>;
+const cwes = JSON.parse(detail.cwe_ids || '[]') as string[];
+const affected = detail.affected ?? [];
+
+const summary =
+  detail.description?.slice(0, 155) ??
+  `${detail.cve_id} — vulnerability details, affected products, severity and exploitation status.`;
+---
+
+<Base title={detail.cve_id} description={summary} path={`/cve/${detail.cve_id}`}>
+  <h1 style="font-family: var(--font-mono); font-size: clamp(22px,3.4vw,30px)">
+    {detail.cve_id}
+  </h1>
+
+  <p class="lede">
+    {detail.title ?? detail.description?.slice(0, 200)}
+  </p>
+
+  <section class="section">
+    <div class="card">
+      <div class="stat-row">
+        <div>
+          <div class="stat-label">Severity</div>
+          <div style="margin-top:6px">
+            <Severity severity={detail.cvss_severity} score={detail.cvss_base_score} />
+          </div>
+          <div class="small muted">CVSS {detail.cvss_version ?? '—'}</div>
+        </div>
+        <div>
+          <div class="stat-label">Exploited</div>
+          <div class="stat-value" style="font-size:19px">
+            {detail.kev_date_added ? 'Yes — in CISA KEV' : 'Not listed'}
+          </div>
+          {
+            detail.kev_date_added && (
+              <div class="small muted">
+                Added {formatDate(detail.kev_date_added)}
+                {detail.ransomware_known === 1 && ' · known ransomware use'}
+              </div>
+            )
+          }
+        </div>
+        <div>
+          <div class="stat-label">EPSS</div>
+          <div class="stat-value">
+            {detail.epss_score != null ? detail.epss_score.toFixed(3) : '—'}
+          </div>
+          {
+            detail.epss_percentile != null && (
+              <div class="small muted">{(detail.epss_percentile * 100).toFixed(1)}th percentile</div>
+            )
+          }
+        </div>
+        <div>
+          <div class="stat-label">Discovered by</div>
+          <div class="stat-value" style="font-size:19px">
+            {
+              detail.discovery === 'INTERNAL' ? 'Vendor'
+              : detail.discovery === 'EXTERNAL' ? 'Third party'
+              : detail.discovery === 'USER' ? 'Customer'
+              : detail.discovery === 'UNKNOWN' ? 'Unknown'
+              : 'Not disclosed'
+            }
+          </div>
+          {
+            detail.discovery_source && (
+              <div class="small muted">{discoverySourceLabel(detail.discovery_source).label}</div>
+            )
+          }
+        </div>
+        <div>
+          <div class="stat-label">Published</div>
+          <div class="stat-value" style="font-size:19px">{formatDate(detail.date_published)}</div>
+          <div class="small muted">Assigned by {detail.assigner_short_name ?? 'unknown'}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {
+    detail.description && (
+      <section class="section">
+        <div class="card">
+          <h2>Description</h2>
+          <p class="muted" style="white-space:pre-wrap">{detail.description}</p>
+          {cwes.length > 0 && (
+            <p class="small muted">
+              Weakness: {cwes.map((cwe) => (
+                <span class="pill" style="margin-right:6px">{cwe}</span>
+              ))}
+            </p>
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  <section class="section">
+    <div class="card">
+      <h2>Affected products</h2>
+      <div class="table-scroll" style="margin-top:10px">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Vendor</th>
+              <th scope="col">Product</th>
+              <th scope="col">Category</th>
+              <th scope="col">Matched by</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              detail.products.map((row) => (
+                <tr>
+                  <td>
+                    <a href={`/vendors/${row.vendor_slug}`}>{row.vendor_name}</a>
+                  </td>
+                  <td>{row.product_name}</td>
+                  <td class="small muted">
+                    <a href={`/categories/${row.category_slug}`}>{row.category_name}</a>
+                  </td>
+                  {/* Surfaced so attribution is auditable rather than opaque. */}
+                  <td class="small muted">{row.match_signal}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        {detail.products.length === 0 && (
+          <p class="empty">No product mapping yet — this CVE is pending taxonomy review.</p>
+        )}
+      </div>
+
+      {
+        affected.length > 0 && (
+          <details style="margin-top:16px">
+            <summary class="small muted" style="cursor:pointer">
+              Vendor-reported affected versions ({affected.length})
+            </summary>
+            <ul class="small muted" style="margin-top:10px">
+              {affected.slice(0, 40).map((entry) => (
+                <li>
+                  {entry.vendor_raw ?? '—'} · {entry.product_raw ?? '—'}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )
+      }
+    </div>
+  </section>
+
+  {
+    detail.credit_text && (
+      <section class="section">
+        <div class="card">
+          <h2>Credit</h2>
+          {/* The vendor's own words. Shown verbatim so a reader can judge the
+              internal-vs-third-party call rather than take ours on faith. */}
+          <p class="muted" style="white-space:pre-wrap">{detail.credit_text}</p>
+        </div>
+      </section>
+    )
+  }
+
+  {
+    detail.solution && (
+      <section class="section">
+        <div class="card">
+          <h2>Vendor remediation</h2>
+          <p class="muted" style="white-space:pre-wrap">{detail.solution}</p>
+        </div>
+      </section>
+    )
+  }
+
+  <section class="section">
+    <div class="card">
+      <h2>References</h2>
+      <ul class="small">
+        {
+          refs.slice(0, 25).map((ref) => (
+            <li style="margin-bottom:4px">
+              <a href={ref.url} rel="nofollow noopener">{ref.name ?? ref.url}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <script
+    type="application/ld+json"
+    is:inline
+    set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'TechArticle',
+      headline: detail.cve_id,
+      description: summary,
+      datePublished: detail.date_published,
+      about: detail.products.map((p) => p.product_name),
+    })}
+  />
+</Base>

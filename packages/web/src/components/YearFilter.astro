@@ -1,0 +1,351 @@
+---
+interface CategoryOption {
+  slug: string;
+  name: string;
+  is_security: number;
+}
+
+interface Props {
+  years: number[];
+  selected: number;
+  /** Label describing what the filter scopes, e.g. "vendor totals". */
+  scope?: string;
+  /**
+   * Adds a product-category selector. Omit it on pages whose tables are already
+   * per-category — a category filter over a category breakdown filters a table
+   * down to the row it is named after, which tells you nothing.
+   */
+  categories?: CategoryOption[];
+  /** Server-rendered category, '' for all security categories. */
+  selectedCategory?: string;
+}
+
+const { years, selected, scope, categories, selectedCategory = '' } = Astro.props;
+const hasPrevious = years.includes(selected - 1);
+const security = (categories ?? []).filter((c) => c.is_security === 1);
+const nonSecurity = (categories ?? []).filter((c) => c.is_security !== 1);
+---
+
+{/*
+  One control row above the tables, per the interaction spec. Every control
+  writes to the URL so a filtered view is shareable and the back button works.
+*/}
+<div class="filters" data-year-filter role="group" aria-label="Time period">
+  <div>
+    <label for="stat-year">Year</label>
+    <select id="stat-year" data-stat-year data-server-year={selected}>
+      {years.map((y) => <option value={y} selected={y === selected}>{y}</option>)}
+    </select>
+  </div>
+  <div>
+    <label for="stat-compare">Compare</label>
+    <select id="stat-compare" data-stat-compare disabled={!hasPrevious}>
+      <option value="">No comparison</option>
+      <option value="prev">vs previous year</option>
+    </select>
+  </div>
+  {
+    categories && categories.length > 0 && (
+      <div>
+        <label for="stat-category">Product category</label>
+        <select id="stat-category" data-stat-category data-server-category={selectedCategory}>
+          <option value="" selected={selectedCategory === ''}>
+            All security categories
+          </option>
+          <optgroup label="Security">
+            {security.map((c) => (
+              <option value={c.slug} selected={c.slug === selectedCategory}>
+                {c.name}
+              </option>
+            ))}
+          </optgroup>
+          {nonSecurity.length > 0 && (
+            <optgroup label="Outside the security portfolio">
+              {nonSecurity.map((c) => (
+                <option value={c.slug} selected={c.slug === selectedCategory}>
+                  {c.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </div>
+    )
+  }
+  {scope && <span class="filter-count" data-stat-scope data-original={scope}>{scope}</span>}
+</div>
+
+<script>
+  /**
+   * Drives every year-scoped table on the page.
+   *
+   * Tables opt in with `data-stat-table="<kind>"`; this script rewrites their
+   * rows from the prebuilt stats bundle. The server already rendered the current
+   * year, so a failed fetch leaves a correct — just non-switchable — page rather
+   * than an empty one.
+   */
+  type Row = Record<string, string | number>;
+  type YearBundle = {
+    vendors: Row[];
+    vendorsAll: Row[];
+    vendorsByCategory: Record<string, Row[]>;
+    categories: Row[];
+    categoriesByVendor: Record<string, Row[]>;
+    productsByVendor: Record<string, Row[]>;
+    discovery: Row[];
+  };
+
+  const yearSel = document.querySelector<HTMLSelectElement>('[data-stat-year]');
+  const compareSel = document.querySelector<HTMLSelectElement>('[data-stat-compare]');
+  const categorySel = document.querySelector<HTMLSelectElement>('[data-stat-category]');
+  const tables = Array.from(document.querySelectorAll<HTMLElement>('[data-stat-table]'));
+  const races = Array.from(document.querySelectorAll<HTMLElement>('[data-stat-race]'));
+  if (yearSel && (tables.length || races.length)) {
+    let bundle: { years: number[]; byYear: Record<string, YearBundle> } | null = null;
+
+    const num = (v: unknown) => (typeof v === 'number' ? v : Number(v ?? 0));
+    const fmt = (n: number) => n.toLocaleString();
+    const esc = (v: string) =>
+      v.replace(/[&<>"']/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
+      );
+
+    /**
+     * Signed delta against a named period.
+     *
+     * For vulnerability counts an increase is the bad direction, so the colour is
+     * inverted relative to a growth metric. The arrow and explicit sign carry the
+     * meaning; colour only reinforces it.
+     */
+    function delta(current: number, previous: number | null): string {
+      if (previous === null) return '';
+      const diff = current - previous;
+      if (diff === 0) return '<span class="delta delta-flat">±0</span>';
+      const pct = previous === 0 ? null : Math.round((diff / previous) * 100);
+      const cls = diff > 0 ? 'delta-worse' : 'delta-better';
+      const arrow = diff > 0 ? '▲' : '▼';
+      const pctText = pct === null ? '' : ` ${Math.abs(pct)}%`;
+      return `<span class="delta ${cls}" title="vs previous year: ${fmt(previous)}">${arrow} ${
+        diff > 0 ? '+' : '−'
+      }${fmt(Math.abs(diff))}${pctText}</span>`;
+    }
+
+    function prevRow(rows: Row[] | undefined, key: string, value: string): Row | null {
+      return rows?.find((r) => String(r[key]) === value) ?? null;
+    }
+
+    /**
+     * The vendor rollup for the selected category, or all security categories.
+     *
+     * A category with no CVEs that year is absent from the bundle rather than
+     * present-and-empty, so the fallback is an empty list — which renders the
+     * "nothing here" row instead of silently showing the unfiltered totals.
+     */
+    function vendorRows(bundle: YearBundle | null, category: string): Row[] {
+      if (!bundle) return [];
+      if (!category) return bundle.vendors;
+      return bundle.vendorsByCategory?.[category] ?? [];
+    }
+
+    function renderVendors(
+      el: HTMLElement,
+      cur: YearBundle,
+      prev: YearBundle | null,
+      category: string,
+    ) {
+      const allBy = new Map(cur.vendorsAll.map((r) => [String(r.vendor_slug), r]));
+      const rows = vendorRows(cur, category);
+      const prevRows = vendorRows(prev, category);
+
+      if (!rows.length) {
+        el.innerHTML =
+          '<tr><td colspan="6" class="empty">No CVEs in this category for the selected year.</td></tr>';
+        return;
+      }
+
+      el.innerHTML = rows
+        .map((r) => {
+          const slug = String(r.vendor_slug);
+          const p = prev ? prevRow(prevRows, 'vendor_slug', slug) : null;
+          return `<tr>
+            <td><a href="/vendors/${encodeURIComponent(slug)}">${esc(String(r.name))}</a></td>
+            <td class="num">${num(r.risk).toFixed(1)}${delta(Math.round(num(r.risk)), p ? Math.round(num(p.risk)) : null)}</td>
+            <td class="num">${fmt(num(r.cve_count))}${delta(num(r.cve_count), p ? num(p.cve_count) : null)}</td>
+            <td class="num">${fmt(num(r.critical_count))}</td>
+            <td class="num">${fmt(num(r.kev_count))}${delta(num(r.kev_count), p ? num(p.kev_count) : null)}</td>
+            <td class="num muted">${fmt(num(allBy.get(slug)?.cve_count ?? 0))}</td>
+          </tr>`;
+        })
+        .join('');
+    }
+
+    /**
+     * Rebuilds a vendor race in place.
+     *
+     * The markup mirrors VendorRace.astro — keep the two in step. A single
+     * measure across nominal categories, so every bar wears the one series hue;
+     * colouring by rank would double-encode length and repaint the survivors
+     * every time the filter reorders them.
+     */
+    function renderRace(el: HTMLElement, cur: YearBundle, category: string) {
+      const metric = el.dataset.statRace === 'risk' ? 'risk' : 'cve_count';
+      const unit = el.dataset.statRaceUnit ?? (metric === 'risk' ? 'risk' : 'CVEs');
+      const rows = vendorRows(cur, category)
+        .map((r) => ({ slug: String(r.vendor_slug), name: String(r.name), value: num(r[metric]) }))
+        .sort((a, b) => b.value - a.value);
+
+      if (!rows.length) {
+        el.innerHTML = '<p class="empty">No CVEs in this category for the selected year.</p>';
+        return;
+      }
+
+      const max = Math.max(1, ...rows.map((r) => r.value));
+      const show = (n: number) => (Number.isInteger(n) ? fmt(n) : n.toFixed(1));
+      el.innerHTML = rows
+        .map((r) => {
+          const label = `${esc(r.name)}: ${show(r.value)} ${esc(unit)}`;
+          return `<div class="race-row" data-vendor="${esc(r.slug)}">
+            <a class="race-name" href="/vendors/${encodeURIComponent(r.slug)}" title="${esc(r.name)}">${esc(r.name)}</a>
+            <div class="race-track" role="img" aria-label="${label}" title="${label}">
+              <div class="race-bar" style="width: ${Math.max((r.value / max) * 100, 1)}%"></div>
+            </div>
+            <span class="race-value">${show(r.value)}</span>
+          </div>`;
+        })
+        .join('');
+    }
+
+    function renderCategories(el: HTMLElement, cur: YearBundle, prev: YearBundle | null) {
+      const vendor = el.dataset.statVendor;
+      const rows = vendor ? (cur.categoriesByVendor[vendor] ?? []) : cur.categories;
+      const prevRows = vendor ? prev?.categoriesByVendor[vendor] : prev?.categories;
+
+      el.innerHTML = rows
+        .map((r) => {
+          const slug = String(r.category_slug);
+          const p = prevRow(prevRows, 'category_slug', slug);
+          const scopeCell = vendor
+            ? `<td class="small muted">${num(r.is_security) === 1 ? 'Yes' : 'No — non-security line'}</td>`
+            : `<td class="small muted">${num(r.is_security) === 1 ? 'Security' : 'Non-security'}</td>`;
+          return `<tr>
+            <td><a href="/categories/${encodeURIComponent(slug)}">${esc(String(r.name))}</a></td>
+            <td class="num">${num(r.risk).toFixed(1)}${delta(Math.round(num(r.risk)), p ? Math.round(num(p.risk)) : null)}</td>
+            <td class="num">${fmt(num(r.cve_count))}${delta(num(r.cve_count), p ? num(p.cve_count) : null)}</td>
+            <td class="num">${fmt(num(r.kev_count))}${delta(num(r.kev_count), p ? num(p.kev_count) : null)}</td>
+            ${scopeCell}
+          </tr>`;
+        })
+        .join('');
+    }
+
+    function renderProducts(el: HTMLElement, cur: YearBundle, prev: YearBundle | null) {
+      const vendor = el.dataset.statVendor ?? '';
+      const rows = cur.productsByVendor[vendor] ?? [];
+      const prevRows = prev?.productsByVendor[vendor];
+
+      el.innerHTML = rows.length
+        ? rows
+            .map((r) => {
+              const p = prevRow(prevRows, 'product_slug', String(r.product_slug));
+              return `<tr>
+                <td>${esc(String(r.name))}</td>
+                <td class="small muted"><a href="/categories/${encodeURIComponent(String(r.category_slug))}">${esc(String(r.category_name))}</a></td>
+                <td class="num">${fmt(num(r.cve_count))}${delta(num(r.cve_count), p ? num(p.cve_count) : null)}</td>
+                <td class="num">${fmt(num(r.kev_count))}</td>
+              </tr>`;
+            })
+            .join('')
+        : '<tr><td colspan="4" class="empty">No products with CVEs in this year.</td></tr>';
+    }
+
+    function apply() {
+      if (!bundle) return;
+      const year = yearSel!.value;
+      const cur = bundle.byYear[year];
+      if (!cur) return;
+
+      const wantsCompare = compareSel?.value === 'prev';
+      const prevYear = String(Number(year) - 1);
+      const prev = wantsCompare ? (bundle.byYear[prevYear] ?? null) : null;
+      const category = categorySel?.value ?? '';
+      const categoryLabel =
+        categorySel?.selectedOptions[0]?.textContent?.trim() ?? 'All security categories';
+
+      // Say so when the comparison cannot be made. The oldest tracked year has no
+      // predecessor, and silently rendering no deltas is indistinguishable from
+      // "nothing changed".
+      const note = document.querySelector<HTMLElement>('[data-stat-scope]');
+      if (note) {
+        if (wantsCompare && !prev) {
+          note.textContent = `${prevYear} is not tracked — no comparison available`;
+        } else if (note.dataset.original) {
+          note.textContent = note.dataset.original;
+        }
+      }
+
+      for (const el of tables) {
+        const kind = el.dataset.statTable;
+        if (kind === 'vendors') renderVendors(el, cur, prev, category);
+        else if (kind === 'categories') renderCategories(el, cur, prev);
+        else if (kind === 'products') renderProducts(el, cur, prev);
+      }
+      for (const el of races) renderRace(el, cur, category);
+
+      for (const label of document.querySelectorAll<HTMLElement>('[data-stat-year-label]')) {
+        label.textContent = year;
+      }
+      for (const label of document.querySelectorAll<HTMLElement>('[data-stat-category-label]')) {
+        label.textContent = categoryLabel;
+      }
+
+      const params = new URLSearchParams(location.search);
+      params.set('year', year);
+      if (wantsCompare) params.set('compare', 'prev');
+      else params.delete('compare');
+      if (category) params.set('category', category);
+      else params.delete('category');
+      history.replaceState(null, '', `?${params.toString()}`);
+    }
+
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const wanted = params.get('year');
+      if (wanted && yearSel.querySelector(`option[value="${CSS.escape(wanted)}"]`)) {
+        yearSel.value = wanted;
+      }
+      if (compareSel && params.get('compare') === 'prev' && !compareSel.disabled) {
+        compareSel.value = 'prev';
+      }
+      const wantedCategory = params.get('category');
+      if (
+        categorySel &&
+        wantedCategory !== null &&
+        categorySel.querySelector(`option[value="${CSS.escape(wantedCategory)}"]`)
+      ) {
+        categorySel.value = wantedCategory;
+      }
+
+      try {
+        const res = await fetch('/data/stats.json');
+        if (!res.ok) return;
+        bundle = await res.json();
+      } catch {
+        return; // Server-rendered current year stays on screen.
+      }
+
+      yearSel.addEventListener('change', apply);
+      compareSel?.addEventListener('change', apply);
+      categorySel?.addEventListener('change', apply);
+      // Only re-render if the view differs from what the server already sent.
+      if (
+        yearSel.value !== yearSel.dataset.serverYear ||
+        compareSel?.value === 'prev' ||
+        (categorySel && categorySel.value !== categorySel.dataset.serverCategory)
+      ) {
+        apply();
+      } else if (params.get('year') || params.get('compare') || params.get('category')) {
+        apply();
+      }
+    })();
+  }
+</script>

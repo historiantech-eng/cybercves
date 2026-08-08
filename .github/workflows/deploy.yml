@@ -1,0 +1,109 @@
+name: Build and deploy
+
+# The nightly rebuild runs here rather than on Cloudflare Pages: Actions is free
+# for public repos, so the 500-builds-per-month Pages limit never applies.
+#
+# SECURITY — read before adding a trigger.
+#
+# The `deploy` job holds CLOUDFLARE_API_TOKEN, which can deploy Workers and
+# rewrite D1. This repository is public, so anyone can open a pull request
+# against it. The triggers below are deliberately limited to events that only a
+# collaborator can cause. Do NOT add `pull_request` or, above all,
+# `pull_request_target` to this file: fork pull requests would then run
+# contributor-authored code in a job holding a deploy credential, which is the
+# single most common way public repositories leak production access.
+on:
+  schedule:
+    - cron: '0 7 * * *' # after the Worker's 06:00 UTC enrichment run
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+# Third-party actions are pinned to commit SHAs, not moving tags. A tag can be
+# repointed at new code by whoever controls the action; a SHA cannot. That
+# matters more than usual in a job that holds a deploy token.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Sparse checkout: only the years we track. `--from` below must match, or
+      # the runner spends its disk and time on years nothing reads.
+      - name: Fetch CVE List
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/CVEProject/cvelistV5.git ../cvelistV5
+          cd ../cvelistV5
+          git sparse-checkout set $(for y in $(seq 2024 $(date -u +%Y)); do echo -n "cves/$y "; done)
+
+      - name: Backfill and enrich
+        run: npm run backfill -- --clone ../cvelistV5 --from 2024 --db "$PWD/cybercves.sqlite"
+
+      # ---------------------------------------------------------------------
+      # Discovery attribution — MUST run before the D1 push.
+      #
+      # `push:d1` truncates every table and reinserts, and the runner starts with
+      # no database, so whatever is not in SQLite at this point is destroyed in
+      # D1. Fortinet publishes no discovery data in the CVE List — it exists only
+      # on their PSIRT advisory pages — so omitting this step would silently
+      # reset Fortinet to 100% "not disclosed" every single night, which is a
+      # false claim about a named company rather than a missing feature.
+      #
+      # This reads data/discovery/*.yaml and makes no network requests. Refreshing
+      # that file is a deliberate act (`npm run discovery`) reviewed in a pull
+      # request — a deploy must be a pure function of what is committed, not of
+      # whether fortiguard.com was reachable at 07:00 UTC.
+      # ---------------------------------------------------------------------
+      - name: Apply committed discovery attribution
+        run: npm run discovery:apply -- --db "$PWD/cybercves.sqlite"
+
+      - name: Push to D1
+        run: npm run push:d1 -- --db "$PWD/cybercves.sqlite" --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Build site
+        run: npm run build:web
+        env:
+          CYBERCVE_DB: ${{ github.workspace }}/cybercves.sqlite
+
+      - name: Deploy Worker
+        run: npx wrangler deploy
+        working-directory: packages/worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # The taxonomy review queue is the health signal for coverage: unmapped
+      # product strings mean CVEs we hold but cannot categorize.
+      - name: Report taxonomy gaps
+        if: always()
+        run: npm run taxonomy:review -- --db "$PWD/cybercves.sqlite" --limit 25

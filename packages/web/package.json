@@ -1,0 +1,18 @@
+{
+  "name": "@cybercves/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Astro static site for cybercve.com — prerendered pages plus client-side filtering.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@cybercves/core": "*",
+    "@cybercves/db": "*",
+    "astro": "^5.1.1"
+  }
+}

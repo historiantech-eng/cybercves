@@ -1,0 +1,28 @@
+---
+import Base from '../layouts/Base.astro';
+import CveTable from '../components/CveTable.astro';
+import { db } from '../lib/data';
+
+const repo = db();
+const rows = repo ? await repo.listKevCves(300) : [];
+const ransomware = rows.filter((r) => r.ransomware_known === 1).length;
+---
+
+<Base
+  title="Known exploited"
+  description="Tracked cybersecurity vendor CVEs listed in the CISA Known Exploited Vulnerabilities catalog — confirmed exploitation in the wild, not just high severity."
+>
+  <h1>Known exploited</h1>
+  <p class="lede">
+    CVEs affecting tracked vendors that appear in the CISA KEV catalog. This is the strongest
+    available signal: confirmed exploitation in the wild, rather than a severity score that
+    predicts it. {rows.length.toLocaleString()} tracked, {ransomware.toLocaleString()} with known
+    ransomware campaign use.
+  </p>
+
+  <section class="section">
+    <div class="card">
+      <CveTable rows={rows} caption="Known exploited CVEs" />
+    </div>
+  </section>
+</Base>

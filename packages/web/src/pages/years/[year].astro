@@ -1,0 +1,289 @@
+---
+import Base from '../../layouts/Base.astro';
+import CveTable from '../../components/CveTable.astro';
+import { db } from '../../lib/data';
+
+export async function getStaticPaths() {
+  const repo = db();
+  if (!repo) return [];
+
+  const years = await repo.listYears();
+  const vendors = await repo.listVendors();
+  const categories = await repo.listCategories();
+
+  return Promise.all(
+    years.map(async (year) => {
+      const rows = await repo.listCveIndex(year);
+      return {
+        params: { year: String(year) },
+        props: { year, years, vendors, categories, rows: rows.slice(0, 100), total: rows.length },
+      };
+    }),
+  );
+}
+
+const { year, years, vendors, categories, rows, total } = Astro.props;
+---
+
+<Base
+  title={`${year} CVEs`}
+  description={`Browse and filter every ${year} CVE affecting tracked cybersecurity vendors by vendor, product category, severity and exploitation status.`}
+  path={`/years/${year}`}
+>
+  <h1>{year} disclosures</h1>
+  <p class="lede">
+    {total.toLocaleString()} tracked CVEs. Filtering runs entirely in your browser — the whole
+    year loads once, then every combination is instant.
+  </p>
+
+  {/* Filters sit in one row above the results, per the interaction spec. */}
+  <div class="filters" role="group" aria-label="Filter CVEs">
+    <div>
+      <label for="f-year">Year</label>
+      <select id="f-year" data-filter-year>
+        {years.map((y) => <option value={y} selected={y === year}>{y}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="f-vendor">Vendor</label>
+      <select id="f-vendor" data-filter-vendor>
+        <option value="">All vendors</option>
+        {vendors.map((v) => <option value={v.slug}>{v.name}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="f-category">Category</label>
+      <select id="f-category" data-filter-category>
+        <option value="">All categories</option>
+        {categories.map((c) => <option value={c.slug}>{c.name}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="f-severity">Severity</label>
+      <select id="f-severity" data-filter-severity>
+        <option value="">Any severity</option>
+        <option value="CRITICAL">Critical</option>
+        <option value="HIGH">High</option>
+        <option value="MEDIUM">Medium</option>
+        <option value="LOW">Low</option>
+      </select>
+    </div>
+    <div>
+      <label for="f-discovery">Discovered by</label>
+      <select id="f-discovery" data-filter-discovery>
+        <option value="">Anyone</option>
+        <option value="INTERNAL">Vendor</option>
+        <option value="EXTERNAL">Third party</option>
+        <option value="USER">Customer</option>
+        <option value="__none">Not disclosed</option>
+      </select>
+    </div>
+    <div>
+      <label for="f-kev">Exploitation</label>
+      <select id="f-kev" data-filter-kev>
+        <option value="">All</option>
+        <option value="1">Known exploited only</option>
+      </select>
+    </div>
+    <div>
+      <label for="f-q">Search</label>
+      <input id="f-q" type="search" placeholder="CVE-2025-…" data-filter-q />
+    </div>
+    <span class="filter-count" data-filter-count></span>
+  </div>
+
+  <div class="card">
+    {/* Prerendered first page keeps the route indexable; the script replaces the
+        body once the shard loads. */}
+    <div data-results>
+      <CveTable rows={rows} caption={`${year} CVEs`} />
+    </div>
+  </div>
+
+  <p class="small muted" style="margin-top:14px">
+    Showing the {Math.min(100, total).toLocaleString()} most recent by default. Filters search
+    the full year.
+  </p>
+</Base>
+
+<script>
+  type Row = {
+    i: string;
+    d: string | null;
+    s: string | null;
+    c: number | null;
+    k: number;
+    e: number | null;
+    w: string | null;
+    v: string[];
+    p: string[];
+    g: string[];
+  };
+
+  const PAGE_SIZE = 200;
+  const results = document.querySelector<HTMLElement>('[data-results]');
+  const countEl = document.querySelector<HTMLElement>('[data-filter-count]');
+  const controls = {
+    year: document.querySelector<HTMLSelectElement>('[data-filter-year]'),
+    vendor: document.querySelector<HTMLSelectElement>('[data-filter-vendor]'),
+    category: document.querySelector<HTMLSelectElement>('[data-filter-category]'),
+    severity: document.querySelector<HTMLSelectElement>('[data-filter-severity]'),
+    kev: document.querySelector<HTMLSelectElement>('[data-filter-kev]'),
+    discovery: document.querySelector<HTMLSelectElement>('[data-filter-discovery]'),
+    q: document.querySelector<HTMLInputElement>('[data-filter-q]'),
+  };
+
+  let rows: Row[] = [];
+
+  const SEV_CLASS: Record<string, string> = {
+    CRITICAL: 'critical',
+    HIGH: 'serious',
+    MEDIUM: 'warning',
+    LOW: 'good',
+  };
+
+  const escapeHtml = (value: string) =>
+    value.replace(/[&<>"']/g, (ch) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] as string,
+    );
+
+  function severityCell(row: Row) {
+    const token = row.s ? (SEV_CLASS[row.s] ?? 'unknown') : 'unknown';
+    const label = row.s ? row.s.charAt(0) + row.s.slice(1).toLowerCase() : 'Unscored';
+    // Dot plus word — the label is the accessible channel, never colour alone.
+    return `<span class="sev sev-${token}">${label}${row.c != null ? ` ${row.c}` : ''}</span>`;
+  }
+
+  function render(list: Row[]) {
+    if (!results) return;
+
+    if (!list.length) {
+      results.innerHTML = '<p class="empty">No CVEs match these filters.</p>';
+      return;
+    }
+
+    const body = list
+      .slice(0, PAGE_SIZE)
+      .map((row) => {
+        const date = row.d
+          ? new Date(`${row.d}T00:00:00Z`).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'UTC',
+            })
+          : '—';
+        const vendors = row.v
+          .map((slug) => `<a href="/vendors/${encodeURIComponent(slug)}">${escapeHtml(slug)}</a>`)
+          .join(', ');
+        const foundBy =
+          row.w === 'INTERNAL' ? 'Vendor'
+          : row.w === 'EXTERNAL' ? 'Third party'
+          : row.w === 'USER' ? 'Customer'
+          : row.w === 'UNKNOWN' ? 'Unknown'
+          : '—';
+        const kev = row.k === 1 ? ' <span class="kev-flag">KEV</span>' : '';
+
+        return `<tr>
+          <td><a class="cve-id" href="/cve/${encodeURIComponent(row.i)}">${escapeHtml(row.i)}</a>${kev}</td>
+          <td class="muted small">${date}</td>
+          <td>${severityCell(row)}</td>
+          <td class="small">${vendors}</td>
+          <td class="small muted">${foundBy}</td>
+          <td class="num small muted">${row.e != null ? row.e.toFixed(3) : '—'}</td>
+        </tr>`;
+      })
+      .join('');
+
+    results.innerHTML = `<div class="table-scroll"><table>
+      <thead><tr>
+        <th scope="col">CVE</th><th scope="col">Published</th><th scope="col">Severity</th>
+        <th scope="col">Vendor</th><th scope="col">Found by</th><th scope="col" class="num">EPSS</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`;
+  }
+
+  function apply() {
+    const vendor = controls.vendor?.value ?? '';
+    const category = controls.category?.value ?? '';
+    const severity = controls.severity?.value ?? '';
+    const kevOnly = controls.kev?.value === '1';
+    const discovery = controls.discovery?.value ?? '';
+    const q = (controls.q?.value ?? '').trim().toUpperCase();
+
+    const filtered = rows.filter((row) => {
+      if (vendor && !row.v.includes(vendor)) return false;
+      if (category && !row.g.includes(category)) return false;
+      if (severity && row.s !== severity) return false;
+      if (kevOnly && row.k !== 1) return false;
+      // "__none" is a real filter value, not an empty one: "the vendor published
+      // no attribution" is a distinct answer from "any attribution".
+      if (discovery === '__none' && row.w !== null) return false;
+      if (discovery && discovery !== '__none' && row.w !== discovery) return false;
+      if (q && !row.i.includes(q)) return false;
+      return true;
+    });
+
+    if (countEl) {
+      const shown = Math.min(filtered.length, PAGE_SIZE);
+      countEl.textContent =
+        filtered.length > PAGE_SIZE
+          ? `${shown.toLocaleString()} of ${filtered.length.toLocaleString()} matches`
+          : `${filtered.length.toLocaleString()} matches`;
+    }
+    render(filtered);
+
+    // Reflect state in the URL so a filtered view is shareable and back works.
+    const params = new URLSearchParams();
+    if (vendor) params.set('vendor', vendor);
+    if (category) params.set('category', category);
+    if (severity) params.set('severity', severity);
+    if (kevOnly) params.set('kev', '1');
+    if (discovery) params.set('discovery', discovery);
+    if (q) params.set('q', q);
+    const query = params.toString();
+    history.replaceState(null, '', query ? `?${query}` : location.pathname);
+  }
+
+  function hydrateFromUrl() {
+    const params = new URLSearchParams(location.search);
+    if (controls.vendor) controls.vendor.value = params.get('vendor') ?? '';
+    if (controls.category) controls.category.value = params.get('category') ?? '';
+    if (controls.severity) controls.severity.value = params.get('severity') ?? '';
+    if (controls.kev) controls.kev.value = params.get('kev') ?? '';
+    if (controls.discovery) controls.discovery.value = params.get('discovery') ?? '';
+    if (controls.q) controls.q.value = params.get('q') ?? '';
+  }
+
+  async function load(year: string) {
+    try {
+      const res = await fetch(`/data/${year}.json`);
+      if (!res.ok) return;
+      const payload = (await res.json()) as { rows: Row[] };
+      rows = payload.rows ?? [];
+      apply();
+    } catch {
+      // Leave the prerendered table in place rather than blanking the page.
+    }
+  }
+
+  controls.year?.addEventListener('change', () => {
+    const year = controls.year?.value;
+    if (year) location.href = `/years/${year}`;
+  });
+
+  for (const key of ['vendor', 'category', 'severity', 'kev', 'discovery'] as const) {
+    controls[key]?.addEventListener('change', apply);
+  }
+
+  let debounce: ReturnType<typeof setTimeout>;
+  controls.q?.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(apply, 150);
+  });
+
+  hydrateFromUrl();
+  const initialYear = controls.year?.value;
+  if (initialYear) load(initialYear);
+</script>

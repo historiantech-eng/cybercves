@@ -1,0 +1,645 @@
+/*
+ * Design tokens.
+ *
+ * Values come from the validated reference palette. Both modes are *selected* —
+ * the dark column is the same hues re-stepped for the dark surface, not an
+ * automatic inversion. Dark is declared under two scopes: the media query covers
+ * the OS setting, the [data-theme] scope covers the in-page toggle, which must
+ * win in both directions.
+ */
+
+:root {
+  color-scheme: light;
+
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+
+  /* Categorical slot 1. The vendor race plots ONE measure across nominal
+     categories, so every bar wears this single hue — coloring bars by rank
+     would double-encode length as color and say nothing new. */
+  --series-1: #2a78d6;
+  /* Categorical slots for cross-vendor comparison, in the validated fixed order.
+     Colour follows the vendor, never its rank — assigned from the full vendor
+     list so toggling one off never repaints the others. The first three clear
+     every all-pairs gate in both modes; past three, identity leans on the legend,
+     the tip values, and the table view. */
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+  --cat-6: #008300;
+  --cat-7: #4a3aa7;
+  --cat-8: #e34948;
+
+  /* Status palette — reserved for severity, never reused as a series color. */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --status-unknown: #898781;
+
+  --success-text: #006300;
+  /* Year-over-year delta text. For vulnerability counts an increase is the bad
+     direction, so these are inverted relative to a growth metric. The arrow and
+     explicit sign carry the meaning; colour only reinforces. */
+  --delta-worse: #b3312f;
+  --delta-better: #006300;
+  /* Discovery attribution ramp — sequential: one hue, light to dark.
+     Discovery is an ordered scale (vendor found it → third party → customer →
+     unknown), not unrelated categories, so a categorical palette would misstate
+     the relationship between steps. */
+  --disc-internal: #0d366b;
+  --disc-external: #2a78d6;
+  --disc-user: #86b6ef;
+  --disc-unknown: #cde2fb;
+
+  --radius: 10px;
+  --maxw: 1120px;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --series-1: #3987e5;
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
+    --cat-5: #d55181;
+    --cat-6: #008300;
+    --cat-7: #9085e9;
+    --cat-8: #e66767;
+    --success-text: #0ca30c;
+    /* Lighter steps so delta text clears contrast on the dark surface. */
+    --delta-worse: #e66767;
+    --delta-better: #0ca30c;
+    /* Re-stepped for the dark surface, not inverted. */
+    --disc-internal: #9ec5f4;
+    --disc-external: #3987e5;
+    --disc-user: #256abf;
+    --disc-unknown: #184f95;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --series-1: #3987e5;
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
+  --cat-6: #008300;
+  --cat-7: #9085e9;
+  --cat-8: #e66767;
+  --success-text: #0ca30c;
+  /* Lighter steps so delta text clears contrast on the dark surface. */
+  --delta-worse: #e66767;
+  --delta-better: #0ca30c;
+  /* Re-stepped for the dark surface, not inverted. */
+  --disc-internal: #9ec5f4;
+  --disc-external: #3987e5;
+  --disc-user: #256abf;
+  --disc-unknown: #184f95;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+.wrap {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.site-header .wrap {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 56px;
+}
+.brand {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.brand span {
+  color: var(--series-1);
+}
+.site-nav {
+  display: flex;
+  gap: 18px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  flex: 1;
+}
+.site-nav a {
+  text-decoration: none;
+  white-space: nowrap;
+}
+.site-nav a:hover,
+.site-nav a[aria-current='page'] {
+  color: var(--text-primary);
+}
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 9px;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+
+.grid {
+  display: grid;
+  gap: 18px;
+}
+@media (min-width: 860px) {
+  .grid-2 {
+    grid-template-columns: 1.15fr 1fr;
+  }
+}
+
+h1 {
+  font-size: clamp(26px, 4vw, 34px);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 8px;
+}
+h2 {
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+.lede {
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+  max-width: 68ch;
+}
+.section {
+  margin: 34px 0;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-head p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 2px 0 0;
+}
+
+/* ------------------------------------------------------------ hero figure */
+
+/* Exactly one hero figure per view. Proportional figures, not tabular —
+   tabular-nums gives every digit the width of a zero, which reads loose at
+   display sizes. Tabular is reserved for columns that must align. */
+.hero-number {
+  font-size: clamp(52px, 11vw, 88px);
+  font-weight: 680;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  margin: 0;
+  font-variant-numeric: proportional-nums;
+}
+.hero-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 10px;
+}
+.hero-sub {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 12px 0 0;
+}
+.delta-up {
+  color: var(--success-text);
+  font-weight: 600;
+}
+
+/* Odometer digits roll; each digit is its own column of 0-9. */
+.odo {
+  display: inline-flex;
+  gap: 2px;
+}
+.odo-digit {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  position: relative;
+  width: 0.62em;
+}
+.odo-strip {
+  display: block;
+  transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.odo-strip > span {
+  display: block;
+  height: 1em;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .odo-strip {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------- severity dots */
+
+/* A dot NEVER carries severity alone — it always sits beside its text label.
+   The HIGH and MEDIUM hues are only ΔE 13.6 apart in normal vision, so the
+   word is the reliable channel and the color is reinforcement. */
+.sev {
+  align-items: center;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 6px;
+  white-space: nowrap;
+}
+.sev::before {
+  border-radius: 50%;
+  content: '';
+  flex: none;
+  height: 9px;
+  width: 9px;
+}
+.sev-critical::before { background: var(--status-critical); }
+.sev-serious::before  { background: var(--status-serious); }
+.sev-warning::before  { background: var(--status-warning); }
+.sev-good::before     { background: var(--status-good); }
+.sev-unknown::before  { background: var(--status-unknown); }
+
+.kev-flag {
+  border: 1px solid var(--status-critical);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ vendor race */
+
+.race {
+  display: grid;
+  gap: 10px;
+}
+.race-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(96px, 150px) 1fr auto;
+}
+.race-name {
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.race-track {
+  background: var(--gridline);
+  border-radius: 2px;
+  height: 3px;
+  position: relative;
+}
+/* Bar caps at 18px, well under the 24px ceiling; 4px rounded at the data end,
+   square against the baseline it grows from. */
+.race-bar {
+  background: var(--series-1);
+  border-radius: 0 4px 4px 0;
+  height: 18px;
+  left: 0;
+  position: absolute;
+  top: -7.5px;
+  transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  min-width: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .race-bar {
+    transition: none;
+  }
+}
+.race-value {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  min-width: 46px;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- tables */
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table {
+  border-collapse: collapse;
+  font-size: 14px;
+  width: 100%;
+}
+th {
+  border-bottom: 1px solid var(--baseline);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+td {
+  border-bottom: 1px solid var(--gridline);
+  padding: 9px 10px;
+  vertical-align: top;
+}
+tbody tr:hover {
+  background: color-mix(in srgb, var(--series-1) 5%, transparent);
+}
+td.num,
+th.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.cve-id {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- filters */
+
+.filters {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.filters label {
+  color: var(--text-muted);
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.filters select,
+.filters input {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 9px;
+}
+.filter-count {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ misc */
+
+.pill {
+  background: color-mix(in srgb, var(--series-1) 10%, transparent);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+}
+.stat-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.stat-value {
+  font-size: 25px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+}
+.muted {
+  color: var(--text-secondary);
+}
+.small {
+  font-size: 13px;
+}
+.empty {
+  color: var(--text-secondary);
+  padding: 28px;
+  text-align: center;
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-top: 56px;
+  padding: 26px 0 44px;
+}
+.site-footer p {
+  margin: 0 0 8px;
+}
+
+/* Ad slots are reserved as empty fixed-height containers so adding a network
+   later cannot reflow the page or damage Core Web Vitals. */
+.ad-slot {
+  align-items: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  display: flex;
+  font-size: 12px;
+  justify-content: center;
+  margin: 28px 0;
+  min-height: 90px;
+}
+
+.skip-link {
+  background: var(--surface-1);
+  left: 8px;
+  padding: 8px 12px;
+  position: absolute;
+  top: -60px;
+  transition: top 120ms;
+  z-index: 20;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+/* ------------------------------------------------------- year-over-year delta */
+
+/* Never colour alone: every delta carries an arrow and a signed number, so the
+   direction survives colour-blindness, greyscale print, and forced-colors. */
+.delta {
+  display: block;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 1px;
+  white-space: nowrap;
+}
+.delta-worse { color: var(--delta-worse); }
+.delta-better { color: var(--delta-better); }
+.delta-flat { color: var(--text-muted); font-weight: 500; }
+
+/* ------------------------------------------------- cross-vendor comparison */
+
+.cmp-group { border-bottom: 1px solid var(--gridline); padding: 11px 0; }
+.cmp-group:last-child { border-bottom: 0; }
+.cmp-label {
+  align-items: baseline;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+.cmp-total { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.cmp-rows { display: grid; gap: 2px; }        /* 2px surface gap between bars */
+/* The whole row is the hit target, not just the bar — a 14px bar is far too
+   small to aim at, and the interaction spec wants targets bigger than the mark. */
+.cmp-row {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 10px;
+  grid-template-columns: minmax(84px, 132px) 1fr auto;
+  padding: 3px 4px;
+  text-align: left;
+  width: 100%;
+}
+.cmp-row:hover:not(:disabled) { background: color-mix(in srgb, var(--series-1) 7%, transparent); }
+.cmp-row:focus-visible { outline: 2px solid var(--series-1); outline-offset: 1px; }
+.cmp-row:disabled { cursor: default; opacity: 0.55; }
+/* A caret marks the open row so the panel below is clearly attached to it. */
+.cmp-row[aria-expanded='true'] { background: color-mix(in srgb, var(--series-1) 10%, transparent); }
+.cmp-row[aria-expanded='true'] .cmp-name::before { content: '▾ '; }
+.cmp-row[aria-expanded='false']:not(:disabled) .cmp-name::before { content: '▸ '; color: var(--text-muted); }
+
+.cmp-drill {
+  border-left: 2px solid var(--series-1);
+  margin: 8px 0 4px;
+  padding-left: 12px;
+}
+.cmp-drill-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 8px;
+}
+.cmp-name {
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp-track { height: 14px; position: relative; }
+/* 4px rounded at the data end, square against the baseline it grows from. */
+.cmp-bar { border-radius: 0 4px 4px 0; height: 14px; left: 0; min-width: 2px; position: absolute; top: 0; }
+.cmp-value { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 62px; text-align: right; }
+
+.cmp-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0 0 16px; padding: 0; }
+.cmp-legend li { align-items: center; display: flex; font-size: 13px; gap: 7px; }
+.cmp-key { border-radius: 2px; display: inline-block; height: 11px; width: 11px; }
+
+.vendor-toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 14px; }
+.vendor-toggles label { align-items: center; cursor: pointer; display: flex; font-size: 14px; gap: 7px; }

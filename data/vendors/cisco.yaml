@@ -1,0 +1,37 @@
+slug: cisco
+name: Cisco
+homepage: https://www.cisco.com
+psirtUrl: https://sec.cloudapps.cisco.com/security/center/publicationListing.x
+
+# Verified against CVE-2023-20198, whose assignerShortName is "cisco".
+cnaShortNames:
+  - cisco
+
+aliases:
+  - Cisco
+  - Cisco Systems
+  - Cisco Systems, Inc.
+
+psirtHosts:
+  - sec.cloudapps.cisco.com
+  - tools.cisco.com
+
+# Cisco's openVuln API returns CSAF and is the richest source, but requires a free
+# cisco.com account plus OAuth app registration. Until those credentials are
+# supplied the CVE List path works unaided; the adapter degrades to `cvelist`
+# when no client ID is configured.
+adapter: csaf
+openVulnTokenUrl: https://id.cisco.com/oauth2/default/v1/token
+openVulnBaseUrl: https://apix.cisco.com/security/advisories/v2
+advisoryIdPattern: 'cisco-sa-[a-zA-Z0-9-]+'
+
+# Cisco's portfolio is far broader than its security line. Routing, switching, and
+# collaboration CVEs are mapped to non-security categories so they do not distort
+# comparisons against pure-play security vendors.
+notes: >-
+  Broad portfolio vendor. Expect a high share of CVEs in routing-switching and
+  other, which are excluded from default security comparisons.
+
+# Cisco's in-house research organisation.
+internalBrandMarkers:
+  - Talos

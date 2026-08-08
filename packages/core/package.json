@@ -1,0 +1,14 @@
+{
+  "name": "@cybercves/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Portable domain logic: CVE types, CVSS extraction, risk scoring, taxonomy resolution. No platform dependencies.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --build"
+  }
+}

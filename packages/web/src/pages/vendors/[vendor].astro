@@ -1,0 +1,193 @@
+---
+import Base from '../../layouts/Base.astro';
+import CveTable from '../../components/CveTable.astro';
+import DiscoveryBar from '../../components/DiscoveryBar.astro';
+import YearFilter from '../../components/YearFilter.astro';
+import { CURRENT_YEAR, db } from '../../lib/data';
+
+export async function getStaticPaths() {
+  const repo = db();
+  if (!repo) return [];
+
+  const vendors = await repo.listVendors();
+  const years = await repo.listYears();
+
+  // Hoisted out of the per-vendor loop on purpose: doing this inside the map
+  // would re-scan every year's full index once per vendor — at 20 vendors and a
+  // decade of history that is 200 full scans per build instead of 10.
+  const allRows = (await Promise.all(years.map((year) => repo.listCveIndex(year)))).flat();
+  const discoveryByVendor = new Map(
+    (await repo.getDiscoveryBreakdown()).map((row) => [row.vendor_slug, row]),
+  );
+
+  const byVendor = new Map<string, typeof allRows>();
+  for (const row of allRows) {
+    for (const slug of new Set((row.vendors ?? '').split(',').filter(Boolean))) {
+      const bucket = byVendor.get(slug);
+      if (bucket) bucket.push(row);
+      else byVendor.set(slug, [row]);
+    }
+  }
+
+  return Promise.all(
+    vendors.map(async (vendor) => {
+      // Year-scoped to match the filter default; the client swaps in other years
+      // from the prebuilt stats bundle.
+      const products = await repo.getProductRollup(vendor.slug, CURRENT_YEAR);
+      const discovery = discoveryByVendor.get(vendor.slug) ?? null;
+      const categories = await repo.getCategoryBreakdown(CURRENT_YEAR, vendor.slug);
+      const cves = (byVendor.get(vendor.slug) ?? []).slice(0, 300);
+
+      return { params: { vendor: vendor.slug }, props: { vendor, products, categories, cves, discovery, years } };
+    }),
+  );
+}
+
+const { vendor, products, categories, cves, discovery, years } = Astro.props;
+// Discovery is the only all-years figure on this page, so the lede uses it.
+const totalCves = discovery?.total ?? 0;
+const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
+---
+
+<Base
+  title={vendor.name}
+  description={`Every tracked CVE affecting ${vendor.name} products, broken down by product and category, with known-exploited and EPSS enrichment.`}
+  path={`/vendors/${vendor.slug}`}
+>
+  <h1>{vendor.name}</h1>
+  <p class="lede">
+    {totalCves.toLocaleString()} tracked CVEs, all years.
+    {
+      vendor.psirt_url && (
+        <>
+          {' '}
+          <a href={vendor.psirt_url} rel="nofollow noopener">
+            Vendor advisories →
+          </a>
+        </>
+      )
+    }
+  </p>
+
+  {
+    discovery && (
+      <section class="section">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>Who found these</h2>
+              <p>
+                All years. Vulnerabilities the vendor's own security team found, versus those
+                reported by outsiders.
+              </p>
+            </div>
+          </div>
+          <DiscoveryBar
+            internal={discovery.internal}
+            external={discovery.external}
+            user={discovery.user}
+            unknown={discovery.unknown}
+            undisclosed={discovery.undisclosed}
+          />
+          {discovery.undisclosed > 0 && (
+            <p class="small muted" style="margin-top:12px">
+              {discovery.undisclosed.toLocaleString()} of {discovery.total.toLocaleString()} carry no
+              attribution and are excluded from the percentage.
+              {/* Without this, a vendor with no machine-readable attribution reads
+                  as less transparent than its peers, which is not what the data
+                  says — only that they publish it somewhere else. */}
+              {vendor.discovery_note && ` ${vendor.discovery_note}`}{' '}
+              <a href="/methodology">Methodology</a>.
+            </p>
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  <YearFilter years={years} selected={CURRENT_YEAR} scope={vendor.name} />
+
+  <section class="section">
+    <div class="card">
+      <div class="section-head">
+        <div>
+          <h2>By product category, <span data-stat-year-label>{CURRENT_YEAR}</span></h2>
+          <p>Compare firewall against endpoint exposure, and against last year.</p>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Category</th>
+              <th scope="col" class="num">Risk</th>
+              <th scope="col" class="num">CVEs</th>
+              <th scope="col" class="num">Exploited</th>
+              <th scope="col">Counts toward risk</th>
+            </tr>
+          </thead>
+          <tbody data-stat-table="categories" data-stat-vendor={vendor.slug}>
+            {
+              categories.map((row) => (
+                <tr>
+                  <td>
+                    <a href={`/categories/${row.category_slug}`}>{row.name}</a>
+                  </td>
+                  <td class="num">{row.risk.toFixed(1)}</td>
+                  <td class="num">{row.cve_count.toLocaleString()}</td>
+                  <td class="num">{row.kev_count.toLocaleString()}</td>
+                  <td class="small muted">{row.is_security === 1 ? 'Yes' : 'No — non-security line'}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        {categories.length === 0 && <p class="empty">No categorized CVEs for this year yet.</p>}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <div class="section-head">
+        <div><h2>Products</h2><p><span data-stat-year-label>{CURRENT_YEAR}</span></p></div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Product</th>
+              <th scope="col">Category</th>
+              <th scope="col" class="num">CVEs</th>
+              <th scope="col" class="num">Exploited</th>
+            </tr>
+          </thead>
+          <tbody data-stat-table="products" data-stat-vendor={vendor.slug}>
+            {
+              products.map((row) => (
+                <tr>
+                  <td>{row.name}</td>
+                  <td class="small muted">
+                    <a href={`/categories/${row.category_slug}`}>{row.category_name}</a>
+                  </td>
+                  <td class="num">{row.cve_count.toLocaleString()}</td>
+                  <td class="num">{row.kev_count.toLocaleString()}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div><h2>CVEs</h2><p>Most recent first, up to 300.</p></div>
+    </div>
+    <div class="card">
+      <CveTable rows={cves} showVendor={false} caption={`${vendor.name} CVEs`} />
+    </div>
+  </section>
+</Base>

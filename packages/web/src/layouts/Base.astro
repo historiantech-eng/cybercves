@@ -1,0 +1,120 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  path?: string;
+}
+
+const { title, description, path = Astro.url.pathname } = Astro.props;
+const canonical = new URL(path, Astro.site ?? 'https://cybercve.com').toString();
+const fullTitle = title === 'CyberCVE' ? title : `${title} — CyberCVE`;
+
+const nav = [
+  { href: '/', label: 'Overview' },
+  { href: '/vendors', label: 'Vendors' },
+  { href: '/categories', label: 'Categories' },
+  { href: '/compare', label: 'Compare' },
+  { href: '/kev', label: 'Exploited' },
+  { href: '/methodology', label: 'Methodology' },
+];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="CyberCVE" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap.xml" />
+    <link rel="alternate" type="application/rss+xml" title="CyberCVE" href="/rss.xml" />
+
+    <!-- Applied before first paint so a dark-mode visitor never sees a light flash. -->
+    <script is:inline>
+      (() => {
+        try {
+          const saved = localStorage.getItem('cybercve-theme');
+          if (saved === 'dark' || saved === 'light') {
+            document.documentElement.dataset.theme = saved;
+          }
+        } catch {}
+      })();
+    </script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="/">Cyber<span>CVE</span></a>
+        <nav class="site-nav" aria-label="Main">
+          {
+            nav.map((item) => (
+              <a
+                href={item.href}
+                aria-current={
+                  item.href === '/' ? (path === '/' ? 'page' : undefined)
+                  : path.startsWith(item.href) ? 'page'
+                  : undefined
+                }
+              >
+                {item.label}
+              </a>
+            ))
+          }
+        </nav>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle color theme">
+          Theme
+        </button>
+      </div>
+    </header>
+
+    <main id="main" class="wrap">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p>
+          <strong>CyberCVE</strong> tracks published vulnerabilities across leading security
+          vendors, by product category.
+        </p>
+        <p>
+          Data: the <a href="https://www.cve.org/">CVE Program</a> · <a
+            href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a
+          > · EPSS data courtesy of <a href="https://first.org/epss">FIRST</a>.
+        </p>
+        <p class="small">
+          CVE® is a registered trademark of MITRE. Vendor names and trademarks are used
+          nominatively to identify affected products. CVE counts reflect disclosure practice as
+          much as product quality — see <a href="/methodology">methodology</a>.
+        </p>
+      </div>
+    </footer>
+
+    <script is:inline>
+      document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+        const root = document.documentElement;
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const current = root.dataset.theme || (prefersDark ? 'dark' : 'light');
+        const next = current === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = next;
+        try {
+          localStorage.setItem('cybercve-theme', next);
+        } catch {}
+      });
+    </script>
+  </body>
+</html>

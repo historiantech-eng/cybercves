@@ -1,0 +1,23 @@
+{
+  "name": "@cybercves/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker: cron ingest, JSON API, and static asset serving for cybercve.com",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cybercves/core": "*",
+    "@cybercves/db": "*",
+    "@cybercves/ingest": "*",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241230.0",
+    "wrangler": "^4.119.0"
+  }
+}

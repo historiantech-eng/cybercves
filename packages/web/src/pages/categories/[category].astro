@@ -1,0 +1,79 @@
+---
+import Base from '../../layouts/Base.astro';
+import CveTable from '../../components/CveTable.astro';
+import VendorRace from '../../components/VendorRace.astro';
+import { CURRENT_YEAR } from '../../lib/data';
+import { db } from '../../lib/data';
+
+export async function getStaticPaths() {
+  const repo = db();
+  if (!repo) return [];
+
+  const categories = await repo.listCategories();
+  const vendors = await repo.listVendors();
+  const vendorNames = new Map(vendors.map((v) => [v.slug, v.name]));
+  const years = await repo.listYears();
+  const allRows = (await Promise.all(years.map((year) => repo.listCveIndex(year)))).flat();
+
+  return categories.map((category) => {
+    const rows = allRows.filter((row) => (row.categories ?? '').split(',').includes(category.slug));
+
+    // Count distinct CVEs per vendor within this category.
+    const perVendor = new Map<string, number>();
+    for (const row of rows) {
+      for (const slug of new Set((row.vendors ?? '').split(',').filter(Boolean))) {
+        perVendor.set(slug, (perVendor.get(slug) ?? 0) + 1);
+      }
+    }
+    const race = [...perVendor.entries()]
+      .map(([slug, value]) => ({ vendor_slug: slug, name: vendorNames.get(slug) ?? slug, value }))
+      .sort((a, b) => b.value - a.value);
+
+    return {
+      params: { category: category.slug },
+      props: {
+        category,
+        race,
+        rows: rows.slice(0, 300),
+        totalCves: rows.length,
+        kevCount: rows.filter((r) => r.in_kev === 1).length,
+        years,
+      },
+    };
+  });
+}
+
+const { category, race, rows, totalCves, kevCount, years } = Astro.props;
+---
+
+<Base
+  title={category.name}
+  description={`${category.description} CVE counts by vendor across ${category.name.toLowerCase()} products.`}
+  path={`/categories/${category.slug}`}
+>
+  <h1>{category.name}</h1>
+  <p class="lede">
+    {category.description}
+    {' '}{totalCves.toLocaleString()} tracked CVEs, {kevCount.toLocaleString()} confirmed exploited.
+    {category.is_security !== 1 && ' This category sits outside vendors’ security portfolios and is excluded from risk rankings.'}
+  </p>
+
+  <section class="section">
+    <div class="card">
+      <div class="section-head">
+        <div><h2>CVEs by vendor</h2><p>All years, distinct CVEs.</p></div>
+        <a class="small" href={`/compare?year=${CURRENT_YEAR}`}>Compare by year →</a>
+      </div>
+      <VendorRace rows={race} unit="CVEs" />
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div><h2>CVEs</h2><p>Most recent first, up to 300.</p></div>
+    </div>
+    <div class="card">
+      <CveTable rows={rows} caption={`${category.name} CVEs`} />
+    </div>
+  </section>
+</Base>
