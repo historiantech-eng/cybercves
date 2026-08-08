@@ -23,7 +23,8 @@
     "build:web": "npm run build -w @cybercves/web",
     "deploy": "npm run deploy -w @cybercves/worker",
     "discovery": "npm run discovery -w @cybercves/ingest --",
-    "discovery:apply": "npm run discovery:apply -w @cybercves/ingest --"
+    "discovery:apply": "npm run discovery:apply -w @cybercves/ingest --",
+    "discovery:fetch": "npm run discovery:fetch -w @cybercves/ingest --"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

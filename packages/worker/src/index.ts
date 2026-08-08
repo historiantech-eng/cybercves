@@ -7,6 +7,7 @@ import type { D1Database as D1Shape } from '@cybercves/db/drivers/d1';
 import { changedEntries, fetchDelta, fetchRecords } from '@cybercves/ingest';
 import { fetchEpss, fetchKev } from '@cybercves/ingest';
 import { ingestRecords } from '@cybercves/ingest';
+import { advisoryUrlFromRefs } from '@cybercves/ingest';
 
 /**
  * cybercve.com Worker.
@@ -226,6 +227,44 @@ api.get('/api/v1/cve/:id', async (c) => {
     [id],
   );
   return c.json({ cve, products }, 200, { 'cache-control': API_CACHE });
+});
+
+/**
+ * CVEs whose discovery attribution is still missing, with the advisory to read.
+ *
+ * Exists so the refresh job can answer "is there anything to do?" with one HTTP
+ * request instead of cloning the CVE List and rebuilding a database to find out.
+ * That is the difference between a check that can run hourly and one that
+ * cannot.
+ *
+ * Returning the advisory URL as well as the id means the scraper needs no
+ * database at all — it reads this, fetches those pages, and writes the YAML.
+ */
+api.get('/api/v1/discovery/pending', async (c) => {
+  const vendor = c.req.query('vendor') ?? 'fortinet';
+  const limit = Math.min(Number.parseInt(c.req.query('limit') ?? '', 10) || 500, 1000);
+  const rows = await repoFor(c.env).listCvesNeedingAcknowledgement(vendor, limit);
+
+  const pending = rows.flatMap((row) => {
+    const url = advisoryUrlFromRefs(row.refs);
+    return url ? [{ cveId: row.cve_id, url }] : [];
+  });
+
+  return c.json(
+    {
+      vendor,
+      // Split deliberately: a CVE with no advisory link is permanently
+      // unresolvable this way, and lumping it in would make the refresh job
+      // look like it is failing to make progress every single run.
+      pending,
+      count: pending.length,
+      withoutAdvisory: rows.length - pending.length,
+    },
+    200,
+    // Short cache: a refresh job polling this wants a fresh answer, and the
+    // underlying query is cheap.
+    { 'cache-control': 'public, max-age=60' },
+  );
 });
 
 api.get('/api/v1/health', async (c) => {

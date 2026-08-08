@@ -17,7 +17,8 @@
     "verify": "tsx src/bin/verify.ts",
     "push:d1": "tsx src/bin/push-d1.ts",
     "discovery": "tsx src/bin/discovery.ts",
-    "discovery:apply": "tsx src/bin/discovery-apply.ts"
+    "discovery:apply": "tsx src/bin/discovery-apply.ts",
+    "discovery:fetch": "tsx src/bin/discovery-fetch.ts"
   },
   "dependencies": {
     "@cybercves/core": "*",
