@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util';
 import { fetchJson } from '../http.js';
 import { fetchAcknowledgements } from '../sources/psirt-fortinet.js';
 import { loadConfig } from '../node/config-loader.js';
-import { mergeDiscoveryFile } from '../node/discovery-store.js';
+import { mergeDiscoveryFile, readDiscoveryFile } from '../node/discovery-store.js';
 import { discoveryDir } from '../node/paths.js';
 
 /**
@@ -38,6 +38,12 @@ const { values } = parseArgs({
      * remainder is simply picked up by the next run — the job is idempotent.
      */
     max: { type: 'string', default: '40' },
+    /**
+     * Days before re-reading an advisory that previously carried nothing.
+     * Some are withdrawn and will never answer; without a backoff an hourly job
+     * re-fetches them every hour forever.
+     */
+    'retry-after-days': { type: 'string', default: '7' },
   },
 });
 
@@ -55,17 +61,34 @@ const payload: Pending = /^https?:\/\//.test(source)
   ? await fetchJson<Pending>(source, { timeoutMs: 30_000, retries: 3 })
   : (JSON.parse(readFileSync(source, 'utf8')) as Pending);
 
-const all = payload.pending ?? [];
+const OUT = values.out ?? join(discoveryDir(), `${values.vendor}.yaml`);
+
+// Drop anything read recently that had nothing to say. Suppression is a
+// backoff, not a blocklist — an advisory published late still gets picked up
+// once its entry ages past the window.
+const retryAfterMs = Number.parseFloat(values['retry-after-days']) * 86_400_000;
+const suppressed = readDiscoveryFile(OUT)?.unresolved ?? {};
+const now = Date.now();
+
+const all = (payload.pending ?? []).filter((t) => {
+  const prior = suppressed[t.cveId];
+  return !prior || now - Date.parse(prior.lastChecked) > retryAfterMs;
+});
+const heldBack = (payload.pending ?? []).length - all.length;
 const targets = all.slice(0, Number.parseInt(values.max, 10));
 
 if (targets.length === 0) {
-  console.log(`${values.vendor}: nothing pending — no requests made`);
+  console.log(
+    `${values.vendor}: nothing to fetch — no requests made` +
+      (heldBack ? ` (${heldBack} held back by the retry backoff)` : ''),
+  );
   process.exit(0);
 }
 
 console.log(
-  `${values.vendor}: ${all.length} pending, fetching ${targets.length} ` +
-    `at ${Number.parseInt(values.delay, 10) / 1000}s intervals`,
+  `${values.vendor}: ${all.length} due, fetching ${targets.length} ` +
+    `at ${Number.parseInt(values.delay, 10) / 1000}s intervals` +
+    (heldBack ? ` · ${heldBack} held back by the retry backoff` : ''),
 );
 
 const vendor = loadConfig().vendors.find((v) => v.slug === values.vendor);
@@ -79,8 +102,13 @@ const run = await fetchAcknowledgements(targets, {
 });
 
 const advisoryId = (url: string) => url.split('/').pop() ?? '';
+// Only advisories we actually read count toward the backoff. A request that
+// never returned tells us nothing about the page, and suppressing it for a week
+// on that basis would turn one bad afternoon into a silent gap.
+const resolved = new Set(run.results.map((r) => r.cveId));
+const unreachable = new Set(run.failedCveIds);
 const merged = mergeDiscoveryFile(
-  values.out ?? join(discoveryDir(), `${values.vendor}.yaml`),
+  OUT,
   values.vendor,
   Object.fromEntries(
     run.results.map((r) => [
@@ -93,11 +121,17 @@ const merged = mergeDiscoveryFile(
       },
     ]),
   ),
+  new Date(),
+  targets.filter((t) => !resolved.has(t.cveId) && !unreachable.has(t.cveId)).map((t) => ({
+    cveId: t.cveId,
+    advisory: t.url.split('/').pop(),
+  })),
 );
 
 console.log(
   `resolved ${run.results.length} · ${run.missing} with no usable attribution · ` +
-    `${run.failed} failed · file now holds ${merged.total} (+${merged.added} new, ${merged.changed} changed)`,
+    `${run.failed} failed · file now holds ${merged.total} attributed, ` +
+    `${merged.unresolved} on backoff (+${merged.added} new, ${merged.changed} changed)`,
 );
 
 // A run where most requests failed is a blocked scrape, not a finding. Exit

@@ -258,6 +258,45 @@ describe('discovery store', () => {
     ]);
   });
 
+  it('records advisories that were read and said nothing', () => {
+    // Without this, a withdrawn advisory is re-fetched every hour forever by the
+    // refresh job — rude to the origin, and indistinguishable from progress.
+    const path = tmp();
+    const r = mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [
+      { cveId: 'CVE-2025-59921', advisory: 'FG-IR-23-434' },
+    ]);
+    expect(r.unresolved).toBe(1);
+    const back = readDiscoveryFile(path);
+    expect(back?.unresolved?.['CVE-2025-59921']).toMatchObject({
+      advisory: 'FG-IR-23-434',
+      attempts: 1,
+    });
+  });
+
+  it('counts repeat attempts instead of resetting them', () => {
+    const path = tmp();
+    const target = [{ cveId: 'CVE-2025-59921', advisory: 'FG-IR-23-434' }];
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), target);
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), target);
+    expect(readDiscoveryFile(path)?.unresolved?.['CVE-2025-59921']?.attempts).toBe(2);
+  });
+
+  it('clears the backoff once an advisory finally answers', () => {
+    // Suppression is a backoff, not a blocklist. An advisory published late must
+    // be able to graduate out of it, or a transient gap becomes permanent.
+    const path = tmp();
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [
+      { cveId: 'CVE-2025-59921', advisory: 'FG-IR-23-434' },
+    ]);
+    const r = mergeDiscoveryFile(path, 'fortinet', {
+      'CVE-2025-59921': { discovery: 'EXTERNAL', source: 'psirt-field' },
+    });
+    expect(r.unresolved).toBe(0);
+    const back = readDiscoveryFile(path);
+    expect(back?.unresolved?.['CVE-2025-59921']).toBeUndefined();
+    expect(back?.cves['CVE-2025-59921']?.discovery).toBe('EXTERNAL');
+  });
+
   it('treats a missing file as empty rather than throwing', () => {
     expect(readDiscoveryFile(join(tmpdir(), 'cybercve-does-not-exist.yaml'))).toBeNull();
   });

@@ -121,6 +121,15 @@ export interface AcknowledgementRun {
   missing: number;
   /** Requests that never returned. Counted separately — see below. */
   failed: number;
+  /**
+   * CVEs whose advisory could not be fetched at all.
+   *
+   * Exposed, not just counted, because callers must tell "we read it and it said
+   * nothing" apart from "we never got the page". Backing the second case off on
+   * the same schedule as the first would let one bad afternoon silently suppress
+   * a real advisory for a week.
+   */
+  failedCveIds: string[];
 }
 
 /**
@@ -181,6 +190,7 @@ export async function fetchAcknowledgements(
 
   let missing = 0;
   let failed = 0;
+  const failedCveIds: string[] = [];
 
   // One fetch per advisory, not per CVE. A Fortinet advisory routinely covers
   // several CVEs, and refetching the same page once per CVE would add ~15
@@ -214,9 +224,10 @@ export async function fetchAcknowledgements(
       // nothing about the advisory, and treating it as an answer would bias every
       // aggregate built on top.
       failed += page.cveIds.length;
+      failedCveIds.push(...page.cveIds);
       return [];
     }
   });
 
-  return { results: settled.flat(), missing, failed };
+  return { results: settled.flat(), missing, failed, failedCveIds };
 }
