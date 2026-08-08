@@ -25,6 +25,12 @@ const { values } = parseArgs({
     database: { type: 'string', default: 'cybercve' },
     /** Rows per statement file. D1 caps how much one execute call accepts. */
     chunk: { type: 'string', default: '400' },
+    /** Skip the regression guard below. Say why in the commit or the PR. */
+    force: { type: 'boolean', default: false },
+    /** Tolerated shrink in CVE count, as a fraction. */
+    'max-shrink': { type: 'string', default: '0.002' },
+    /** Tolerated staleness of the local snapshot, in hours. */
+    'max-lag-hours': { type: 'string', default: '36' },
   },
 });
 
@@ -84,7 +90,111 @@ function runWrangler(sqlFile: string) {
   });
 }
 
+/**
+ * Read the live CVE count and high-water mark straight from D1.
+ *
+ * Returns null when the question cannot be answered — an empty database, a
+ * missing table on a first-ever push, a wrangler that will not run. A guard that
+ * cannot get a baseline must not become a guard that blocks every deploy.
+ */
+async function remoteBaseline(): Promise<{ count: number; newest: string | null } | null> {
+  try {
+    const out = execFileSync(
+      'npx',
+      [
+        'wrangler',
+        'd1',
+        'execute',
+        values.database,
+        '--remote',
+        '--yes',
+        '--json',
+        '--command',
+        'SELECT COUNT(*) AS n, MAX(date_published) AS newest FROM cve',
+      ],
+      { cwd: new URL('../../../worker/', import.meta.url).pathname, encoding: 'utf8' },
+    );
+    // wrangler prefixes human-readable noise before the JSON on some versions.
+    const json = out.slice(out.indexOf('['));
+    const parsed = JSON.parse(json) as Array<{ results?: Array<{ n?: number; newest?: string }> }>;
+    const row = parsed[0]?.results?.[0];
+    if (!row || typeof row.n !== 'number') return null;
+    return { count: row.n, newest: row.newest ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refuse to overwrite production with a worse snapshot.
+ *
+ * This script truncates every table before reinserting, so the local database
+ * wholly replaces D1 — and a stale or half-built local copy silently deletes
+ * whatever production learned in the meantime. That is not hypothetical: a push
+ * from a three-day-old snapshot took D1 from 1,351 CVEs to 1,342, and nothing
+ * complained, because 1,342 rows is a perfectly healthy-looking number.
+ *
+ * Two checks, because either alone misses real cases:
+ *
+ *   - **Count.** Catches a failed backfill or an empty database outright. On its
+ *     own it is too blunt: the incident above was a 0.7% shrink, well inside any
+ *     tolerance loose enough to permit ordinary CVE withdrawals.
+ *   - **Freshness.** Compares high-water marks. This is the check that would
+ *     have caught it — local topped out three days behind production. The
+ *     tolerance is generous because the CVE List clone legitimately lags D1's
+ *     15-minute delta cron by a few hours.
+ */
+async function assertNotARegression(): Promise<void> {
+  if (!values.remote || values.force || values['dry-run']) return;
+
+  const remote = await remoteBaseline();
+  if (!remote || remote.count === 0) {
+    console.log('no usable D1 baseline — skipping the regression guard');
+    return;
+  }
+
+  const local = await driver.first<{ n: number; newest: string | null }>(
+    'SELECT COUNT(*) AS n, MAX(date_published) AS newest FROM cve',
+  );
+  const localCount = local?.n ?? 0;
+  const shrink = (remote.count - localCount) / remote.count;
+  const maxShrink = Number.parseFloat(values['max-shrink']);
+
+  const problems: string[] = [];
+  if (shrink > maxShrink) {
+    problems.push(
+      `local holds ${localCount.toLocaleString()} CVEs, D1 holds ${remote.count.toLocaleString()} ` +
+        `— a ${(shrink * 100).toFixed(1)}% loss, over the ${(maxShrink * 100).toFixed(1)}% tolerance`,
+    );
+  }
+
+  if (remote.newest && local?.newest) {
+    const lagHours = (Date.parse(remote.newest) - Date.parse(local.newest)) / 3_600_000;
+    const maxLag = Number.parseFloat(values['max-lag-hours']);
+    if (lagHours > maxLag) {
+      problems.push(
+        `local's newest CVE is ${lagHours.toFixed(1)}h behind D1's ` +
+          `(${local.newest} vs ${remote.newest}) — over the ${maxLag}h tolerance`,
+      );
+    }
+  }
+
+  if (problems.length) {
+    throw new Error(
+      `refusing to push — this would overwrite production with a worse snapshot:\n` +
+        problems.map((p) => `  · ${p}`).join('\n') +
+        `\n\nBring the local database up to date first:\n` +
+        `  npm run backfill -- --clone <absolute path to cvelistV5> --from 2024 --db "$PWD/cybercves.sqlite"\n` +
+        `\nThe delta feed carries only very recent changes, so \`npm run sync\` cannot\n` +
+        `recover a snapshot that is days behind. Override with --force only when the\n` +
+        `shrink is intentional.`,
+    );
+  }
+}
+
 try {
+  await assertNotARegression();
+
   const workdir = mkdtempSync(join(tmpdir(), 'cybercve-d1-'));
   let fileIndex = 0;
   let totalRows = 0;

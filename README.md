@@ -50,8 +50,20 @@ npm run build:web                                        # prerender the site
 npm run deploy                                           # wrangler deploy
 ```
 
-Pass an **absolute** `--db` path: `npm run -w` executes with its cwd inside the package
-directory, so a relative path lands somewhere you did not intend.
+**Pass every path argument as an absolute path** — `--db`, `--clone`, `--cache`, `--out`,
+`--dir`. `npm run -w` executes with its cwd inside the package directory, so
+`--clone ../cvelistV5` resolves to `packages/cvelistV5` and `--out data/discovery/x.yaml`
+writes `packages/ingest/data/discovery/x.yaml`. Two of those fail loudly; the write ones do
+not — they create a real file in a directory nothing reads and exit zero. `$PWD/…` is the
+habit to build. This has cost four separate debugging sessions, one of them a failed deploy.
+
+`push:d1` **truncates every table** before reinserting, so the local database wholly
+replaces D1. It refuses to run when local holds materially fewer CVEs than production, or
+when local's newest CVE lags D1's by more than 36 hours — a stale snapshot silently deletes
+whatever the 15-minute cron ingested in the meantime, and the resulting row count looks
+perfectly healthy. `--force` overrides. Note that `npm run sync` cannot repair a snapshot
+that is days behind: the delta feed carries only very recent changes, so the fix is a
+`backfill` from a CVE List clone.
 
 The backfill needs a local clone of the CVE List. Sparse-checkout only the years you track:
 

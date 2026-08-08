@@ -56,15 +56,24 @@ jobs:
 
       # Sparse checkout: only the years we track. `--from` below must match, or
       # the runner spends its disk and time on years nothing reads.
+      #
+      # Cloned to an absolute path, and passed as one. `npm run -w` executes with
+      # cwd inside packages/ingest, so `--clone ../cvelistV5` resolves to
+      # packages/cvelistV5 and the backfill finds nothing — which is exactly how
+      # this job failed on its first run.
       - name: Fetch CVE List
         run: |
           git clone --depth 1 --filter=blob:none --sparse \
-            https://github.com/CVEProject/cvelistV5.git ../cvelistV5
-          cd ../cvelistV5
+            https://github.com/CVEProject/cvelistV5.git "$RUNNER_TEMP/cvelistV5"
+          cd "$RUNNER_TEMP/cvelistV5"
           git sparse-checkout set $(for y in $(seq 2024 $(date -u +%Y)); do echo -n "cves/$y "; done)
 
       - name: Backfill and enrich
-        run: npm run backfill -- --clone ../cvelistV5 --from 2024 --db "$PWD/cybercves.sqlite"
+        run: |
+          npm run backfill -- \
+            --clone "$RUNNER_TEMP/cvelistV5" \
+            --from 2024 \
+            --db "$PWD/cybercves.sqlite"
 
       # ---------------------------------------------------------------------
       # Discovery attribution — MUST run before the D1 push.
