@@ -112,6 +112,37 @@ async function syncEnrichment(env: Env): Promise<void> {
   }
 }
 
+/** The shape of the KV snapshot that matters for the plausibility check. */
+export interface LiveShape {
+  year: number;
+  total: number;
+  rollup?: unknown[];
+}
+
+/**
+ * Does this snapshot look like it was taken of a database mid-reload?
+ *
+ * `push:d1` truncates every table and reinserts, which leaves roughly a
+ * 75-second window per deploy where D1 answers honestly but wrongly. The cron
+ * runs every 15 minutes, so it lands inside that window about 8% of the time —
+ * and when it does it writes a near-zero total into KV, where the hero odometer
+ * shows it to visitors until the next run.
+ *
+ * **The year check is load-bearing, not a nicety.** The counter is a query over
+ * the current year, so at midnight on 1 January the total legitimately collapses
+ * to near zero and the vendor rollup legitimately empties. Comparing across a
+ * rollover would freeze the counter at last year's figure on the one day the
+ * reset is the entire point of the feature.
+ */
+export function looksTruncated(prev: LiveShape | null, next: LiveShape): boolean {
+  if (!prev || prev.year !== next.year) return false;
+  if (!prev.total) return false;
+  // A tenth is well outside normal movement: the counter grows by a handful of
+  // CVEs a day and never shrinks except by withdrawal.
+  if (next.total < prev.total * 0.9) return true;
+  return Boolean(prev.rollup?.length) && !next.rollup?.length;
+}
+
 async function refreshLiveSnapshot(env: Env, repo: Repository): Promise<unknown> {
   const year = currentYear();
   const [snapshot, pace, rollup] = await Promise.all([
@@ -121,6 +152,22 @@ async function refreshLiveSnapshot(env: Env, repo: Repository): Promise<unknown>
   ]);
 
   const payload = { ...snapshot, pace, rollup };
+
+  // Keep the last good snapshot rather than publishing a wrong one. A stale
+  // counter is invisible for fifteen minutes; a counter that reads 0 during a
+  // deploy is the most prominent number on the site being obviously broken.
+  const previousRaw = await env.LIVE.get(LIVE_KEY);
+  if (previousRaw) {
+    const previous = JSON.parse(previousRaw) as LiveShape;
+    if (looksTruncated(previous, payload)) {
+      console.warn(
+        `live snapshot looks truncated (${payload.total} vs ${previous.total}) — ` +
+          'keeping the previous one; D1 is probably mid-reload',
+      );
+      return previous;
+    }
+  }
+
   await env.LIVE.put(LIVE_KEY, JSON.stringify(payload));
   return payload;
 }
