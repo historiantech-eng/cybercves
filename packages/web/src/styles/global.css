@@ -643,3 +643,163 @@ th.num {
 
 .vendor-toggles { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 14px; }
 .vendor-toggles label { align-items: center; cursor: pointer; display: flex; font-size: 14px; gap: 7px; }
+
+/* ---------------------------------------------------------------------------
+   Severity chart.
+
+   Global, not scoped to the component, for the same reason .race-* is: the
+   chart re-renders itself client-side when a toggle or filter changes, and
+   markup created by script never carries Astro's data-astro-cid attribute. A
+   scoped rule matches the server's first paint and nothing after it — which
+   looks exactly like the bars disappearing the moment the page finishes
+   loading.
+   --------------------------------------------------------------------------- */
+  .svc-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .svc-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .svc-seg {
+    background: var(--gridline);
+    border-radius: 6px;
+    display: inline-flex;
+    padding: 2px;
+  }
+  .svc-seg button {
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12.5px;
+    padding: 4px 10px;
+  }
+  .svc-seg button[aria-pressed='true'] {
+    background: var(--surface-1);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  /* Stacked bar — 2px of surface between fills, never a border. */
+  .svc-track {
+    background: var(--gridline);
+    border-radius: 3px;
+    display: flex;
+    gap: 2px;
+    height: 16px;
+    overflow: hidden;
+    width: 100%;
+  }
+  .svc-seg-fill {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+  }
+
+  .svc-critical { background: var(--status-critical); }
+  .svc-serious  { background: var(--status-serious); }
+  .svc-warning  { background: var(--status-warning); }
+  .svc-good     { background: var(--status-good); }
+  .svc-unknown  { background: var(--status-unknown); }
+
+  /* Donut arcs paint with stroke="currentColor", so the same tokens have to
+     arrive on `color` rather than `background`. One source of truth per bucket,
+     two properties, because SVG strokes and HTML fills read different ones. */
+  .svc-donut .svc-critical { background: none; color: var(--status-critical); }
+  .svc-donut .svc-serious  { background: none; color: var(--status-serious); }
+  .svc-donut .svc-warning  { background: none; color: var(--status-warning); }
+  .svc-donut .svc-good     { background: none; color: var(--status-good); }
+  .svc-donut .svc-unknown  { background: none; color: var(--status-unknown); }
+
+  .svc-legend {
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    gap: 4px 16px;
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+  }
+  .svc-legend li {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+  }
+  .svc-key {
+    border-radius: 2px;
+    display: inline-block;
+    height: 10px;
+    width: 10px;
+  }
+  .svc-pct {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Grouped view: one row per vendor/category, label and total outside the bar
+     so nothing is ever clipped by a short segment. */
+  .svc-rows {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+  }
+  .svc-row-head {
+    display: flex;
+    font-size: 12.5px;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .svc-row-total {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Donut small-multiples grid. */
+  .svc-donuts {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+  .svc-donut-cell {
+    text-align: center;
+  }
+  .svc-donut-cell figcaption {
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    margin-top: 4px;
+  }
+  .svc-donut {
+    display: block;
+    margin: 0 auto;
+    max-width: 190px;
+    width: 100%;
+  }
+  .svc-donut text {
+    fill: var(--text-primary);
+  }
+  .svc-donut .svc-donut-total {
+    font-size: 7px;
+    font-weight: 650;
+  }
+  .svc-donut .svc-donut-unit {
+    fill: var(--text-secondary);
+    font-size: 3px;
+  }
+
+  .svc-table {
+    margin-top: 14px;
+  }
+  .svc-table summary {
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12.5px;
+  }
+  .svc-table > .table-scroll {
+    margin-top: 10px;
+  }
