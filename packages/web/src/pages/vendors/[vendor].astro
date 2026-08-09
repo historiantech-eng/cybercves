@@ -3,7 +3,9 @@ import Base from '../../layouts/Base.astro';
 import CveTable from '../../components/CveTable.astro';
 import DiscoveryBar from '../../components/DiscoveryBar.astro';
 import YearFilter from '../../components/YearFilter.astro';
+import SeverityChart from '../../components/SeverityChart.astro';
 import { CURRENT_YEAR, db } from '../../lib/data';
+import { toCompactRows } from '../../lib/cve-rows';
 
 export async function getStaticPaths() {
   const repo = db();
@@ -16,6 +18,12 @@ export async function getStaticPaths() {
   // would re-scan every year's full index once per vendor — at 20 vendors and a
   // decade of history that is 200 full scans per build instead of 10.
   const allRows = (await Promise.all(years.map((year) => repo.listCveIndex(year)))).flat();
+  // Current year only — the chart's year follows YearFilter, like every other
+  // year-scoped figure on this page.
+  const currentYearRows = toCompactRows(await repo.listCveIndex(CURRENT_YEAR));
+  const categoryNames = Object.fromEntries(
+    (await repo.listCategories()).map((c) => [c.slug, c.name]),
+  );
   const discoveryByVendor = new Map(
     (await repo.getDiscoveryBreakdown()).map((row) => [row.vendor_slug, row]),
   );
@@ -38,12 +46,25 @@ export async function getStaticPaths() {
       const categories = await repo.getCategoryBreakdown(CURRENT_YEAR, vendor.slug);
       const cves = (byVendor.get(vendor.slug) ?? []).slice(0, 300);
 
-      return { params: { vendor: vendor.slug }, props: { vendor, products, categories, cves, discovery, years } };
+      return {
+        params: { vendor: vendor.slug },
+        props: {
+          vendor,
+          products,
+          categories,
+          cves,
+          discovery,
+          years,
+          categoryNames,
+          severityRows: currentYearRows.filter((r) => r.v.includes(vendor.slug)),
+        },
+      };
     }),
   );
 }
 
-const { vendor, products, categories, cves, discovery, years } = Astro.props;
+const { vendor, products, categories, cves, discovery, years, categoryNames, severityRows } =
+  Astro.props;
 // Discovery is the only all-years figure on this page, so the lede uses it.
 const totalCves = discovery?.total ?? 0;
 const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
@@ -104,6 +125,17 @@ const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
       </section>
     )
   }
+
+  {/* Grouped by category, not vendor: on a vendor page "by vendor" is one bar. */}
+  <SeverityChart
+    rows={severityRows}
+    groupBy="category"
+    groupLabels={categoryNames}
+    year={CURRENT_YEAR}
+    scopeField="vendor"
+    scopeSlug={vendor.slug}
+    caption={`How severe ${vendor.name}'s disclosures are, and where they land.`}
+  />
 
   <YearFilter years={years} selected={CURRENT_YEAR} scope={vendor.name} />
 

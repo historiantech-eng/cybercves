@@ -3,13 +3,19 @@ import Base from '../layouts/Base.astro';
 import Odometer from '../components/Odometer.astro';
 import VendorRace from '../components/VendorRace.astro';
 import CveTable from '../components/CveTable.astro';
+import SeverityChart from '../components/SeverityChart.astro';
 import { CURRENT_YEAR, db, formatDate } from '../lib/data';
+import { toCompactRows } from '../lib/cve-rows';
 
 const repo = db();
 
 const snapshot = repo ? await repo.getLiveSnapshot(CURRENT_YEAR) : null;
 const pace = repo ? await repo.getYearOverYearPace(CURRENT_YEAR) : null;
 const recent = repo ? await repo.listRecentCves(15) : [];
+const severityRows = repo ? toCompactRows(await repo.listCveIndex(CURRENT_YEAR)) : [];
+const vendorLabels = Object.fromEntries(
+  (repo ? await repo.listVendors() : []).map((v) => [v.slug, v.name]),
+);
 const kevRecent = repo ? await repo.listKevCves(5) : [];
 
 // The hero counter is deliberately current-year — it resets on 1 January, which
@@ -117,6 +123,15 @@ const paceDelta =
       </section>
     )
   }
+
+  <SeverityChart
+    rows={severityRows}
+    groupBy="vendor"
+    groupLabels={vendorLabels}
+    year={CURRENT_YEAR}
+    title={`Severity, ${CURRENT_YEAR}`}
+    caption="How serious this year's disclosures are."
+  />
 
   <div class="ad-slot" aria-hidden="true">Reserved</div>
 

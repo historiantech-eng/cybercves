@@ -2,8 +2,10 @@
 import Base from '../../layouts/Base.astro';
 import CveTable from '../../components/CveTable.astro';
 import VendorRace from '../../components/VendorRace.astro';
+import SeverityChart from '../../components/SeverityChart.astro';
 import { CURRENT_YEAR } from '../../lib/data';
 import { db } from '../../lib/data';
+import { toCompactRows } from '../../lib/cve-rows';
 
 export async function getStaticPaths() {
   const repo = db();
@@ -14,6 +16,9 @@ export async function getStaticPaths() {
   const vendorNames = new Map(vendors.map((v) => [v.slug, v.name]));
   const years = await repo.listYears();
   const allRows = (await Promise.all(years.map((year) => repo.listCveIndex(year)))).flat();
+  // Current year only, to match the shard the client re-reads.
+  const currentYearRows = toCompactRows(await repo.listCveIndex(CURRENT_YEAR));
+  const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
 
   return categories.map((category) => {
     const rows = allRows.filter((row) => (row.categories ?? '').split(',').includes(category.slug));
@@ -38,12 +43,15 @@ export async function getStaticPaths() {
         totalCves: rows.length,
         kevCount: rows.filter((r) => r.in_kev === 1).length,
         years,
+        vendorLabels,
+        severityRows: currentYearRows.filter((r) => r.g.includes(category.slug)),
       },
     };
   });
 }
 
-const { category, race, rows, totalCves, kevCount, years } = Astro.props;
+const { category, race, rows, totalCves, kevCount, years, vendorLabels, severityRows } =
+  Astro.props;
 ---
 
 <Base
@@ -57,6 +65,16 @@ const { category, race, rows, totalCves, kevCount, years } = Astro.props;
     {' '}{totalCves.toLocaleString()} tracked CVEs, {kevCount.toLocaleString()} confirmed exploited.
     {category.is_security !== 1 && ' This category sits outside vendors’ security portfolios and is excluded from risk rankings.'}
   </p>
+
+  <SeverityChart
+    rows={severityRows}
+    groupBy="vendor"
+    groupLabels={vendorLabels}
+    year={CURRENT_YEAR}
+    scopeField="category"
+    scopeSlug={category.slug}
+    caption={`${CURRENT_YEAR} disclosures in ${category.name}.`}
+  />
 
   <section class="section">
     <div class="card">

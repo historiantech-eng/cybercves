@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db } from '../../lib/data';
+import { toCompactRows } from '../../lib/cve-rows';
 
 /**
  * Year-sharded CVE index, emitted as a static JSON file at build time.
@@ -27,20 +28,9 @@ export const GET: APIRoute = async ({ params }) => {
 
   const rows = await repo.listCveIndex(year);
 
-  // Short keys, arrays instead of comma strings: at tens of thousands of rows
-  // the key names themselves are a meaningful share of the payload.
-  const compact = rows.map((row) => ({
-    i: row.cve_id,
-    d: row.date_published?.slice(0, 10) ?? null,
-    s: row.severity ?? null,
-    c: row.score ?? null,
-    w: row.discovery ?? null,
-    k: row.in_kev,
-    e: row.epss ?? null,
-    v: (row.vendors ?? '').split(',').filter(Boolean),
-    p: (row.products ?? '').split(',').filter(Boolean),
-    g: (row.categories ?? '').split(',').filter(Boolean),
-  }));
+  // Shape shared with the severity chart via lib/cve-rows, so the chart and the
+  // table it sits above cannot aggregate subtly different rows.
+  const compact = toCompactRows(rows);
 
   return new Response(JSON.stringify({ year, count: compact.length, rows: compact }), {
     headers: {

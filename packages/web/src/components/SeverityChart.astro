@@ -1,0 +1,586 @@
+---
+import type { CveRow } from '../lib/cve-rows';
+import {
+  aggregateSeverity,
+  aggregateSeverityBy,
+  segmentsOf,
+  type SeverityGroup,
+} from '../lib/severity';
+
+interface Props {
+  /** Rows for the default view. The client re-aggregates from the year shard. */
+  rows: CveRow[];
+  /** What the grouped view splits by. "by vendor" is degenerate on a vendor page. */
+  groupBy: 'vendor' | 'category';
+  groupLabels?: Record<string, string>;
+  title?: string;
+  caption?: string;
+  /** Year whose shard the client should load when re-rendering. */
+  year: number | string;
+  /**
+   * Restrict the shard to one vendor or category.
+   *
+   * `rows` arrives already scoped from the page's own query, but the shard the
+   * client loads holds the whole year — without this a vendor page would silently
+   * widen to every vendor the moment the script ran.
+   */
+  scopeField?: 'vendor' | 'category';
+  scopeSlug?: string;
+  /**
+   * The browse page drives this chart from its own filter row instead of the
+   * year shard. Set so the script does not fetch or bind its own year.
+   */
+  driven?: boolean;
+}
+
+const {
+  rows,
+  groupBy,
+  groupLabels = {},
+  title = 'Severity',
+  caption,
+  year,
+  scopeField,
+  scopeSlug,
+  driven = false,
+} = Astro.props;
+
+const overall = aggregateSeverity(rows);
+const segments = segmentsOf(overall.counts);
+const pct = (n: number) => (overall.total > 0 ? (n / overall.total) * 100 : 0);
+
+// Server-rendered table twin, so the values exist without JS and for anyone who
+// cannot use the plot at all.
+const grouped: SeverityGroup[] = aggregateSeverityBy(rows, groupBy, groupLabels);
+const groupNoun = groupBy === 'vendor' ? 'vendor' : 'category';
+---
+
+{/*
+  Severity is a status scale: the fills are the reserved status tokens and are
+  deliberately not re-stepped. High and Medium sit ~ΔE 13.6 apart in normal
+  vision, which is under the categorical floor — so the label beside every
+  segment is the identification channel, not decoration, and the legend and
+  table view are required rather than optional.
+
+  The toggles below change how the same slice is drawn. They are NOT filters:
+  the data shown is whatever the page's own filter row or year control selected.
+*/}
+<section class="section">
+  <div
+    class="card svc"
+    data-sev-chart
+    data-group-by={groupBy}
+    data-group-noun={groupNoun}
+    data-year={String(year)}
+    data-scope-field={scopeField}
+    data-scope-slug={scopeSlug}
+    data-driven={driven ? '' : undefined}
+    data-labels={JSON.stringify(groupLabels)}
+  >
+    <div class="section-head svc-head">
+      <div>
+        <h2>{title}</h2>
+        {caption && <p>{caption}</p>}
+      </div>
+      <div class="svc-controls">
+        <div class="svc-seg" role="group" aria-label="Chart type">
+          <button type="button" data-sev-type="bar" aria-pressed="true">Bar</button>
+          <button type="button" data-sev-type="donut" aria-pressed="false">Donut</button>
+        </div>
+        <div class="svc-seg" role="group" aria-label="Breakdown">
+          <button type="button" data-sev-mode="overall" aria-pressed="true">Overall</button>
+          <button type="button" data-sev-mode="grouped" aria-pressed="false">
+            By {groupNoun}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div data-sev-body>
+      {
+        overall.total === 0 ? (
+          <p class="empty">No CVEs match these filters.</p>
+        ) : (
+          <>
+            <div
+              class="svc-track"
+              role="img"
+              aria-label={`Severity of ${overall.total} CVEs — ${segments
+                .map((s) => `${s.label}: ${s.n}`)
+                .join(', ')}`}
+            >
+              {segments.map((s) => (
+                <span
+                  class={`svc-seg-fill svc-${s.token}`}
+                  style={`width: ${pct(s.n)}%`}
+                  title={`${s.label}: ${s.n.toLocaleString()} (${pct(s.n).toFixed(1)}%)`}
+                />
+              ))}
+            </div>
+            <ul class="svc-legend">
+              {segments.map((s) => (
+                <li>
+                  <span class={`svc-key svc-${s.token}`} aria-hidden="true" />
+                  {s.label} <span class="muted">{s.n.toLocaleString()}</span>
+                  <span class="muted svc-pct">{pct(s.n).toFixed(1)}%</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      }
+    </div>
+
+    {/* Required twin: every value reachable without reading the plot. */}
+    <details class="svc-table">
+      <summary>Table view</summary>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{groupNoun === 'vendor' ? 'Vendor' : 'Category'}</th>
+              <th scope="col" class="num">Critical</th>
+              <th scope="col" class="num">High</th>
+              <th scope="col" class="num">Medium</th>
+              <th scope="col" class="num">Low</th>
+              <th scope="col" class="num">Unscored</th>
+              <th scope="col" class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody data-sev-table>
+            {grouped.map((g) => (
+              <tr>
+                <td>{g.label}</td>
+                <td class="num">{g.counts.CRITICAL.toLocaleString()}</td>
+                <td class="num">{g.counts.HIGH.toLocaleString()}</td>
+                <td class="num">{g.counts.MEDIUM.toLocaleString()}</td>
+                <td class="num">{g.counts.LOW.toLocaleString()}</td>
+                <td class="num">{g.counts.UNSCORED.toLocaleString()}</td>
+                <td class="num">{g.total.toLocaleString()}</td>
+              </tr>
+            ))}
+            <tr>
+              <td><strong>All</strong></td>
+              <td class="num">{overall.counts.CRITICAL.toLocaleString()}</td>
+              <td class="num">{overall.counts.HIGH.toLocaleString()}</td>
+              <td class="num">{overall.counts.MEDIUM.toLocaleString()}</td>
+              <td class="num">{overall.counts.LOW.toLocaleString()}</td>
+              <td class="num">{overall.counts.UNSCORED.toLocaleString()}</td>
+              <td class="num">{overall.total.toLocaleString()}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin:8px 0 0">
+        A CVE affecting two {groupNoun === 'vendor' ? 'vendors' : 'categories'} counts once
+        under each, so the rows sum to more than the total.
+      </p>
+    </details>
+  </div>
+</section>
+
+<style>
+  .svc-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .svc-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .svc-seg {
+    background: var(--gridline);
+    border-radius: 6px;
+    display: inline-flex;
+    padding: 2px;
+  }
+  .svc-seg button {
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12.5px;
+    padding: 4px 10px;
+  }
+  .svc-seg button[aria-pressed='true'] {
+    background: var(--surface-1);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  /* Stacked bar — 2px of surface between fills, never a border. */
+  .svc-track {
+    background: var(--gridline);
+    border-radius: 3px;
+    display: flex;
+    gap: 2px;
+    height: 16px;
+    overflow: hidden;
+    width: 100%;
+  }
+  .svc-seg-fill {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+  }
+
+  .svc-critical { background: var(--status-critical); }
+  .svc-serious  { background: var(--status-serious); }
+  .svc-warning  { background: var(--status-warning); }
+  .svc-good     { background: var(--status-good); }
+  .svc-unknown  { background: var(--status-unknown); }
+
+  /* Donut arcs paint with stroke="currentColor", so the same tokens have to
+     arrive on `color` rather than `background`. One source of truth per bucket,
+     two properties, because SVG strokes and HTML fills read different ones. */
+  .svc-donut .svc-critical { background: none; color: var(--status-critical); }
+  .svc-donut .svc-serious  { background: none; color: var(--status-serious); }
+  .svc-donut .svc-warning  { background: none; color: var(--status-warning); }
+  .svc-donut .svc-good     { background: none; color: var(--status-good); }
+  .svc-donut .svc-unknown  { background: none; color: var(--status-unknown); }
+
+  .svc-legend {
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    gap: 4px 16px;
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+  }
+  .svc-legend li {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+  }
+  .svc-key {
+    border-radius: 2px;
+    display: inline-block;
+    height: 10px;
+    width: 10px;
+  }
+  .svc-pct {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Grouped view: one row per vendor/category, label and total outside the bar
+     so nothing is ever clipped by a short segment. */
+  .svc-rows {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+  }
+  .svc-row-head {
+    display: flex;
+    font-size: 12.5px;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .svc-row-total {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Donut small-multiples grid. */
+  .svc-donuts {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+  .svc-donut-cell {
+    text-align: center;
+  }
+  .svc-donut-cell figcaption {
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    margin-top: 4px;
+  }
+  .svc-donut {
+    display: block;
+    margin: 0 auto;
+    max-width: 190px;
+    width: 100%;
+  }
+  .svc-donut text {
+    fill: var(--text-primary);
+  }
+  .svc-donut .svc-donut-total {
+    font-size: 7px;
+    font-weight: 650;
+  }
+  .svc-donut .svc-donut-unit {
+    fill: var(--text-secondary);
+    font-size: 3px;
+  }
+
+  .svc-table {
+    margin-top: 14px;
+  }
+  .svc-table summary {
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12.5px;
+  }
+  .svc-table > .table-scroll {
+    margin-top: 10px;
+  }
+</style>
+
+<script>
+  import { createShardLoader, type CveRow } from '../lib/cve-rows';
+  import {
+    aggregateSeverity,
+    aggregateSeverityBy,
+    segmentsOf,
+    type SeverityBucket,
+  } from '../lib/severity';
+
+  /**
+   * Re-renders the chart in place.
+   *
+   * The markup here mirrors the Astro template above — the usual cost of
+   * server-rendering a default and then re-rendering client-side. Changing one
+   * without the other is how the view silently shifts the moment the script
+   * loads, so they are edited together.
+   */
+  const root = document.querySelector<HTMLElement>('[data-sev-chart]');
+
+  if (root) {
+    const body = root.querySelector<HTMLElement>('[data-sev-body]');
+    const tableBody = root.querySelector<HTMLElement>('[data-sev-table]');
+    const groupBy = (root.dataset.groupBy === 'category' ? 'category' : 'vendor') as
+      | 'vendor'
+      | 'category';
+    const groupNoun = root.dataset.groupNoun ?? 'vendor';
+    const labels = JSON.parse(root.dataset.labels || '{}') as Record<string, string>;
+    const loadShard = createShardLoader();
+
+    // The shard holds the whole year; a vendor or category page shows one slice
+    // of it. Scoping here rather than at fetch time keeps one cached shard
+    // serving every consumer on the page.
+    const scopeField = root.dataset.scopeField === 'category' ? 'g' : 'v';
+    const scopeSlug = root.dataset.scopeSlug;
+    const scoped = (all: CveRow[]): CveRow[] =>
+      scopeSlug ? all.filter((r) => r[scopeField].includes(scopeSlug)) : all;
+
+    // Presentation choices persist; the data slice never does. Keyed per
+    // grouping so a vendor page and the browse page do not fight over one value.
+    const STORE = `cybercve:sev:${groupBy}`;
+    let type: 'bar' | 'donut' = 'bar';
+    let mode: 'overall' | 'grouped' = 'overall';
+    let rows: CveRow[] | null = null;
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE) || '{}') as Record<string, string>;
+      if (saved.type === 'donut') type = 'donut';
+      if (saved.mode === 'grouped') mode = 'grouped';
+    } catch {
+      /* a corrupt preference must not stop the chart rendering */
+    }
+
+    const esc = (s: string) =>
+      s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
+    const num = (n: number) => n.toLocaleString();
+
+    function barFor(counts: Record<SeverityBucket, number>, total: number): string {
+      const segs = segmentsOf(counts);
+      const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
+      const aria = `Severity of ${total} CVEs — ${segs.map((s) => `${s.label}: ${s.n}`).join(', ')}`;
+      return `<div class="svc-track" role="img" aria-label="${esc(aria)}">${segs
+        .map(
+          (s) =>
+            `<span class="svc-seg-fill svc-${s.token}" style="width:${pct(s.n)}%" ` +
+            `title="${esc(s.label)}: ${num(s.n)} (${pct(s.n).toFixed(1)}%)"></span>`,
+        )
+        .join('')}</div>`;
+    }
+
+    function legendFor(counts: Record<SeverityBucket, number>, total: number): string {
+      const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
+      return `<ul class="svc-legend">${segmentsOf(counts)
+        .map(
+          (s) =>
+            `<li><span class="svc-key svc-${s.token}" aria-hidden="true"></span>` +
+            `${esc(s.label)} <span class="muted">${num(s.n)}</span>` +
+            `<span class="muted svc-pct">${pct(s.n).toFixed(1)}%</span></li>`,
+        )
+        .join('')}</ul>`;
+    }
+
+    /**
+     * Donut as inline SVG.
+     *
+     * r = 15.9155 makes the circumference 100, so dash lengths are percentages
+     * directly. A 0.6-unit gap renders as ~2px of surface at the sizes used
+     * here, matching the stacked bar; segments too small to survive the gap keep
+     * their full length rather than vanishing.
+     */
+    function donutFor(counts: Record<SeverityBucket, number>, total: number): string {
+      const segs = segmentsOf(counts);
+      const aria = `Severity of ${total} CVEs — ${segs.map((s) => `${s.label}: ${s.n}`).join(', ')}`;
+      let offset = 25; // start at 12 o'clock
+      const arcs = segs
+        .map((s) => {
+          const p = total > 0 ? (s.n / total) * 100 : 0;
+          const gap = p > 2 ? 0.6 : 0;
+          const arc =
+            `<circle class="svc-${s.token}" cx="21" cy="21" r="15.9155" fill="none" ` +
+            `stroke="currentColor" stroke-width="5" ` +
+            `stroke-dasharray="${Math.max(p - gap, 0.4)} ${100 - Math.max(p - gap, 0.4)}" ` +
+            `stroke-dashoffset="${offset}"><title>${esc(s.label)}: ${num(s.n)} (${p.toFixed(1)}%)</title></circle>`;
+          offset -= p;
+          return arc;
+        })
+        .join('');
+      return (
+        `<svg class="svc-donut" viewBox="0 0 42 42" role="img" aria-label="${esc(aria)}">` +
+        `<circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--gridline)" stroke-width="5"></circle>` +
+        `${arcs}` +
+        `<text class="svc-donut-total" x="21" y="21" text-anchor="middle">${num(total)}</text>` +
+        `<text class="svc-donut-unit" x="21" y="25.5" text-anchor="middle">CVEs</text>` +
+        `</svg>`
+      );
+    }
+
+    function render(): void {
+      if (!body || !rows) return;
+
+      if (rows.length === 0) {
+        body.innerHTML = '<p class="empty">No CVEs match these filters.</p>';
+        if (tableBody) tableBody.innerHTML = '';
+        return;
+      }
+
+      if (mode === 'overall') {
+        const { total, counts } = aggregateSeverity(rows);
+        body.innerHTML =
+          (type === 'bar' ? barFor(counts, total) : donutFor(counts, total)) +
+          legendFor(counts, total);
+      } else {
+        const groups = aggregateSeverityBy(rows, groupBy, labels);
+        if (groups.length === 0) {
+          body.innerHTML = `<p class="empty">No ${esc(groupNoun)} data for this slice.</p>`;
+        } else if (type === 'bar') {
+          // Label and total sit above the bar, never inside a segment that may
+          // be too narrow to hold them.
+          body.innerHTML =
+            `<div class="svc-rows">${groups
+              .map(
+                (g) =>
+                  `<div><div class="svc-row-head"><span>${esc(g.label)}</span>` +
+                  `<span class="svc-row-total">${num(g.total)}</span></div>` +
+                  barFor(g.counts, g.total) +
+                  `</div>`,
+              )
+              .join('')}</div>` +
+            legendFor(aggregateSeverity(rows).counts, aggregateSeverity(rows).total);
+        } else {
+          body.innerHTML =
+            `<div class="svc-donuts">${groups
+              .map(
+                (g) =>
+                  `<figure class="svc-donut-cell">${donutFor(g.counts, g.total)}` +
+                  `<figcaption>${esc(g.label)}</figcaption></figure>`,
+              )
+              .join('')}</div>` +
+            legendFor(aggregateSeverity(rows).counts, aggregateSeverity(rows).total);
+        }
+      }
+
+      if (tableBody) {
+        const groups = aggregateSeverityBy(rows, groupBy, labels);
+        const all = aggregateSeverity(rows);
+        const cells = (c: Record<SeverityBucket, number>, t: number) =>
+          `<td class="num">${num(c.CRITICAL)}</td><td class="num">${num(c.HIGH)}</td>` +
+          `<td class="num">${num(c.MEDIUM)}</td><td class="num">${num(c.LOW)}</td>` +
+          `<td class="num">${num(c.UNSCORED)}</td><td class="num">${num(t)}</td>`;
+        tableBody.innerHTML =
+          groups
+            .map((g) => `<tr><td>${esc(g.label)}</td>${cells(g.counts, g.total)}</tr>`)
+            .join('') + `<tr><td><strong>All</strong></td>${cells(all.counts, all.total)}</tr>`;
+      }
+    }
+
+    function syncButtons(): void {
+      for (const b of root!.querySelectorAll<HTMLButtonElement>('[data-sev-type]')) {
+        b.setAttribute('aria-pressed', String(b.dataset.sevType === type));
+      }
+      for (const b of root!.querySelectorAll<HTMLButtonElement>('[data-sev-mode]')) {
+        b.setAttribute('aria-pressed', String(b.dataset.sevMode === mode));
+      }
+    }
+
+    function persist(): void {
+      try {
+        localStorage.setItem(STORE, JSON.stringify({ type, mode }));
+      } catch {
+        /* private browsing — the chart still works, the choice just won't stick */
+      }
+    }
+
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-sev-type]')) {
+      b.addEventListener('click', () => {
+        type = b.dataset.sevType === 'donut' ? 'donut' : 'bar';
+        syncButtons();
+        persist();
+        render();
+      });
+    }
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-sev-mode]')) {
+      b.addEventListener('click', () => {
+        mode = b.dataset.sevMode === 'grouped' ? 'grouped' : 'overall';
+        syncButtons();
+        persist();
+        render();
+      });
+    }
+
+    /**
+     * The browse page owns the filter state, so it pushes rows in rather than
+     * this chart fetching its own. Anything else would be a second filter on the
+     * page disagreeing with the first.
+     */
+    root.addEventListener('sev:rows', (event) => {
+      rows = (event as CustomEvent<{ rows: CveRow[] }>).detail.rows;
+      render();
+    });
+
+    if (!('driven' in root.dataset)) {
+      // Only re-render once the shard is in; the server already drew the default
+      // so there is nothing to show in the meantime.
+      loadShard(root.dataset.year ?? '')
+        .then((loaded) => {
+          rows = scoped(loaded);
+          syncButtons();
+          // Skip the repaint when the stored view already matches the server's.
+          if (type !== 'bar' || mode !== 'overall') render();
+          else if (tableBody) render();
+        })
+        .catch(() => {
+          /* keep the server-rendered view */
+        });
+
+      // Vendor/category pages change year through YearFilter; follow it.
+      document.querySelector<HTMLSelectElement>('[data-stat-year]')?.addEventListener(
+        'change',
+        (e) => {
+          const y = (e.target as HTMLSelectElement).value;
+          root.dataset.year = y;
+          loadShard(y)
+            .then((loaded) => {
+              rows = scoped(loaded);
+              render();
+            })
+            .catch(() => {});
+        },
+      );
+    } else {
+      syncButtons();
+    }
+  }
+</script>

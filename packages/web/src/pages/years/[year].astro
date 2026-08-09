@@ -1,7 +1,9 @@
 ---
 import Base from '../../layouts/Base.astro';
 import CveTable from '../../components/CveTable.astro';
+import SeverityChart from '../../components/SeverityChart.astro';
 import { db } from '../../lib/data';
+import { toCompactRows } from '../../lib/cve-rows';
 
 export async function getStaticPaths() {
   const repo = db();
@@ -16,13 +18,24 @@ export async function getStaticPaths() {
       const rows = await repo.listCveIndex(year);
       return {
         params: { year: String(year) },
-        props: { year, years, vendors, categories, rows: rows.slice(0, 100), total: rows.length },
+        props: {
+          year,
+          years,
+          vendors,
+          categories,
+          rows: rows.slice(0, 100),
+          total: rows.length,
+          // Full year, for the severity chart's server-rendered default. The
+          // client re-aggregates the same rows from the shard as filters change.
+          severityRows: toCompactRows(rows),
+        },
       };
     }),
   );
 }
 
-const { year, years, vendors, categories, rows, total } = Astro.props;
+const { year, years, vendors, categories, rows, total, severityRows } = Astro.props;
+const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
 ---
 
 <Base
@@ -91,6 +104,17 @@ const { year, years, vendors, categories, rows, total } = Astro.props;
     </div>
     <span class="filter-count" data-filter-count></span>
   </div>
+
+  {/* Sits under the one filter row that scopes it, per the interaction spec —
+      it summarises exactly the slice in the table below, and owns no filters. */}
+  <SeverityChart
+    rows={severityRows}
+    groupBy="vendor"
+    groupLabels={vendorLabels}
+    year={year}
+    driven
+    caption="Of the CVEs matching your filters."
+  />
 
   <div class="card">
     {/* Prerendered first page keeps the route indexable; the script replaces the
@@ -233,6 +257,13 @@ const { year, years, vendors, categories, rows, total } = Astro.props;
           : `${filtered.length.toLocaleString()} matches`;
     }
     render(filtered);
+
+    // Hand the same slice to the severity chart. It deliberately does not read
+    // the filter controls itself — one filter row, one source of truth, so the
+    // chart and the table below it can never describe different sets.
+    document
+      .querySelector('[data-sev-chart]')
+      ?.dispatchEvent(new CustomEvent('sev:rows', { detail: { rows: filtered } }));
 
     // Reflect state in the URL so a filtered view is shareable and back works.
     const params = new URLSearchParams();
