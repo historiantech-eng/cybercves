@@ -45,6 +45,8 @@ const digits = String(value).split('');
 </style>
 
 <script>
+  import { latestLinkState } from '../lib/latest-link';
+
   // The counter is a query over the current year, so it rolls over on 1 January
   // by itself — there is no scheduled reset job to fail.
   const root = document.querySelector<HTMLElement>('[data-odometer]');
@@ -92,6 +94,7 @@ const digits = String(value).split('');
         addedToday?: number;
         byVendor?: Array<{ vendor_slug: string; n: number }>;
         pace?: { current?: number; previousYearToDate?: number };
+        latest?: Array<{ cve_id: string }>;
       };
 
       if (typeof live.total === 'number' && live.total !== Number(root.dataset.value)) {
@@ -103,6 +106,26 @@ const digits = String(value).split('');
       if (todayEl && typeof live.addedToday === 'number') {
         todayEl.textContent =
           live.addedToday > 0 ? `▲ ${live.addedToday} today` : 'No new CVEs today';
+      }
+
+      // "last: CVE-…" names the newest CVE the counter is counting, so it has to
+      // move with the counter. Whether it links is decided by latestLinkState —
+      // see there for why an unbuilt CVE deliberately renders without a link.
+      const latestEl = document.querySelector<HTMLElement>('[data-latest-cve]');
+      if (latestEl) {
+        const next = latestLinkState(
+          live.latest?.[0]?.cve_id,
+          latestEl.dataset.serverCve,
+          latestEl.textContent,
+        );
+        if (next.kind === 'link') {
+          const link = document.createElement('a');
+          link.href = next.href;
+          link.textContent = next.id;
+          latestEl.replaceChildren(link);
+        } else if (next.kind === 'text') {
+          latestEl.replaceChildren(document.createTextNode(next.id));
+        }
       }
 
       // The pace row answers the same question as the hero number and is fed by

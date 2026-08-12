@@ -61,7 +61,18 @@ const paceDelta =
           {
             latestOverall && (
               <>
-                {' · '}last: <a href={`/cve/${latestOverall.cve_id}`}>{latestOverall.cve_id}</a>
+                {/*
+                  Live, for the same reason the pace row below is: this sits
+                  beside a counter that polls KV every two minutes, so left at
+                  the build-time value it names one CVE while the number next to
+                  it counts a newer one. `data-server-cve` records what the build
+                  drew, so the script can tell whether a static page exists for
+                  the live answer — see the script in Odometer.astro.
+                */}
+                {' · '}last:{' '}
+                <span data-latest-cve data-server-cve={latestOverall.cve_id}>
+                  <a href={`/cve/${latestOverall.cve_id}`}>{latestOverall.cve_id}</a>
+                </span>
               </>
             )
           }

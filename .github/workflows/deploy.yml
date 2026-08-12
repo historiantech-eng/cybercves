@@ -12,9 +12,23 @@ name: Build and deploy
 # `pull_request_target` to this file: fork pull requests would then run
 # contributor-authored code in a job holding a deploy credential, which is the
 # single most common way public repositories leak production access.
+# TWO SCHEDULES, AND THEY DO DIFFERENT AMOUNTS OF WORK.
+#
+# The static site is what goes stale: "Latest disclosures", the severity chart
+# and every /cve/ page are HTML baked at build time, while the odometer polls KV
+# and moves within 15 minutes. Left on a nightly build the homepage counts a CVE
+# it cannot yet show — which is exactly the report that prompted this.
+#
+# So the site rebuilds every 3 hours. The full D1 push does NOT, because it costs
+# ~19,300 row-writes (it DELETEs every table then reinserts ~9,600 rows) against
+# a 100,000/day free-plan budget. Eight of those is ~154,000 — over the limit,
+# and it would starve the Worker's own delta writes. D1 does not need it anyway:
+# the Worker's 15-minute cron already keeps D1 current, and the nightly push is
+# a reconciliation against drift, not the means of getting new CVEs in.
 on:
   schedule:
-    - cron: '0 7 * * *' # after the Worker's 06:00 UTC enrichment run
+    - cron: '0 7 * * *' # nightly: rebuild + full D1 reconciliation
+    - cron: '0 */3 * * *' # every 3h: rebuild the static site only
   push:
     branches: [main]
   workflow_dispatch:
@@ -93,7 +107,11 @@ jobs:
       - name: Apply committed discovery attribution
         run: npm run discovery:apply -- --db "$PWD/cybercves.sqlite"
 
+      # Skipped on the 3-hourly refresh — see the note on the triggers above.
+      # A push to main and a manual dispatch both DO push, because either can
+      # carry a taxonomy or discovery change that has to reach D1 to take effect.
       - name: Push to D1
+        if: github.event.schedule != '0 */3 * * *'
         run: npm run push:d1 -- --db "$PWD/cybercves.sqlite" --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
