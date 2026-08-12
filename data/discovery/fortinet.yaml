@@ -13,7 +13,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-08-08T13:23:07.122Z
+generated: 2026-08-12T14:37:05.475Z
 cves:
   CVE-2024-21753:
     discovery: INTERNAL
@@ -1808,6 +1808,11 @@ cves:
     source: psirt-field
     advisory: FG-IR-26-077
     credit: Discovered during an independent audit commissioned by Fortinet
+  CVE-2026-26035:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-158
+    credit: Internally discovered as part of a Fortinet audit.
   CVE-2026-26083:
     discovery: INTERNAL
     source: psirt-field
@@ -1931,6 +1936,40 @@ cves:
     advisory: FG-IR-26-154
     credit: Fortinet is pleased to thank Vang3lis and Cyth from VARAS@IIE for reporting this
       vulnerability under responsible disclosure.
+  CVE-2026-70465:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-156
+    credit: Fortinet is pleased to thank Nir Chako from Pentera for reporting this vulnerability under
+      responsible disclosure.
+  CVE-2026-70466:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-157
+    credit: Fortinet is pleased to thank Rui Xi (@Cycloctane) from Beijing University of Posts and
+      Telecommunications for reporting this vulnerability under responsible disclosure.
+  CVE-2026-70467:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-159
+    credit: Discovered and Responsibly reported by external researcher khalooda0x - Khaled ibn Al-Walid.
+  CVE-2026-70468:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-160
+    credit: Internal
+  CVE-2026-71407:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-161
+    credit: Fortinet is pleased to thank The UK's National Cyber Security Centre (NCSC) for reporting
+      this vulnerability under responsible disclosure.
+  CVE-2026-71408:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-162
+    credit: Fortinet is pleased to thank Iván Domínguez from Zerolynx for reporting this vulnerability
+      under responsible disclosure.
 unresolved:
   CVE-2025-59921:
     advisory: FG-IR-23-434
