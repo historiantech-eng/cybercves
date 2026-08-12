@@ -32,8 +32,11 @@ products:
   - slug: palo-alto-prisma-cloud
     name: Prisma Cloud
     categorySlug: cloud-security
-    aliases: [Prisma Cloud, Prisma Cloud Compute, Twistlock]
-    patterns: ['^prisma cloud\b']
+    aliases: [Prisma Cloud, Prisma Cloud Compute, Twistlock, Checkov by Prisma Cloud]
+    # Unanchored on purpose. PAN names components before the platform —
+    # "Checkov by Prisma Cloud", "Compute in Prisma Cloud Enterprise Edition" —
+    # and an anchored pattern drops both on the floor.
+    patterns: ['prisma cloud\b', '^checkov\b']
 
   - slug: palo-alto-cortex-xdr
     name: Cortex XDR
@@ -44,13 +47,27 @@ products:
   - slug: palo-alto-cortex-xsoar
     name: Cortex XSOAR
     categorySlug: siem-logging
-    aliases: [Cortex XSOAR, Demisto]
-    patterns: ['^cortex xsoar\b']
+    # Content packs are shipped and versioned as XSOAR components, and their CVEs
+    # are XSOAR advisories, so they belong to the product rather than a category
+    # of their own.
+    aliases: [Cortex XSOAR, Demisto, ActiveMQ Content Pack]
+    patterns: ['^cortex xsoar\b', 'content pack$']
 
   - slug: palo-alto-cortex-xsiam
     name: Cortex XSIAM
     categorySlug: siem-logging
     aliases: [Cortex XSIAM]
+    # Marketplace integrations carry the platform name plus a partner suffix
+    # ("Cortex XSIAM Microsoft Teams Marketplace"), which an alias alone misses.
+    patterns: ['^cortex xsiam\b']
+
+  - slug: palo-alto-broker-vm
+    name: Broker VM
+    categorySlug: siem-logging
+    # The Cortex data-collection appliance — it feeds XSIAM/XDR, so it sits with
+    # the platform it collects for.
+    aliases: [Broker VM, Cortex Broker VM]
+    patterns: ['^broker vm\b']
 
   - slug: palo-alto-globalprotect
     name: GlobalProtect
@@ -60,7 +77,12 @@ products:
       - GlobalProtect App
       - GlobalProtect Agent
       - GlobalProtect Clientless VPN
-    patterns: ['^globalprotect\b']
+      - Global Protect App
+      - Global Protect UWP App
+    # PAN writes the name both ways in affected[] — "GlobalProtect App" and
+    # "Global Protect App" — and the one-word pattern silently dropped the
+    # spaced spelling.
+    patterns: ['^global ?protect\b']
 
   - slug: palo-alto-panorama
     name: Panorama
@@ -76,7 +98,12 @@ products:
   - slug: palo-alto-user-id-agent
     name: User-ID Agent
     categorySlug: identity
-    aliases: [User-ID Agent, Terminal Server Agent, Windows User-ID Agent]
+    aliases:
+      - User-ID Agent
+      - Terminal Server Agent
+      - Windows User-ID Agent
+      - User-ID Credential Agent
+    patterns: ['^user.?id\b']
 
   - slug: palo-alto-iot-security
     name: IoT Security
@@ -96,3 +123,89 @@ products:
     categorySlug: sase-sse
     aliases: [Prisma Browser]
     patterns: ['^prisma browser\b']
+
+  # WildFire is PAN's malware sandbox — the same job FortiSandbox does for
+  # Fortinet, which is already threat-detection. Its absence is why Palo Alto
+  # showed no Threat Detection & Sandbox CVEs at all.
+  - slug: palo-alto-wildfire
+    name: WildFire
+    categorySlug: threat-detection
+    aliases:
+      - WildFire
+      - WildFire Appliance
+      - WildFire WF-500 and WF-500-B
+      - WF-500
+      - WF-500-B
+    patterns: ['^wildfire\b', '^wf-500\b']
+
+  # Venafi, acquired 2024. Machine-identity certificate management — identity,
+  # not network-management: the thing it protects is credentials.
+  - slug: palo-alto-venafi
+    name: Venafi Trust Protection Platform
+    categorySlug: identity
+    aliases:
+      - Trust Protection Foundation
+      - Venafi Trust Protection Platform
+      - Venafi
+    patterns: ['^trust protection\b', '^venafi\b']
+
+  # Chronosphere, acquired 2026. Observability collector — grouped with log
+  # analytics for the same reason Splunk's forwarders are.
+  - slug: palo-alto-chronosphere
+    name: Chronosphere
+    categorySlug: siem-logging
+    aliases: [Chronosphere, Chronosphere Chronocollector, Chronocollector]
+    patterns: ['^chrono(sphere|collector)\b']
+
+  # --- CyberArk, acquired 2026 (see the vendor aliases in vendors/palo-alto.yaml) ---
+  #
+  # ORDER MATTERS: patterns are evaluated top-down, so the narrower Endpoint
+  # Privilege Manager rule must sit above the general PAM rule, or "Idira
+  # Endpoint Privilege Manager" is swallowed by it.
+
+  - slug: cyberark-epm
+    name: CyberArk Endpoint Privilege Manager
+    categorySlug: endpoint
+    aliases:
+      - Endpoint Privilege Manager
+      - Endpoint Privilege Manager Agent
+      - Idira Endpoint Privilege Manager
+    patterns: ['endpoint privilege manager']
+
+  - slug: cyberark-conjur
+    name: CyberArk Conjur
+    categorySlug: identity
+    aliases:
+      - Conjur
+      - Conjur Enterprise
+      - Conjur Cloud
+      - Conjur Cloud (Edge Finding only)
+      - Secrets Manager
+    patterns: ['^conjur\b', 'secrets manager']
+
+  - slug: cyberark-pam
+    name: CyberArk Privileged Access Manager
+    categorySlug: identity
+    aliases:
+      - PAM Self-Hosted, Privilege Cloud
+      - PAM SH Vault
+      - Privileged Session Manager, Vault
+      - Privileged Session Manager
+      - Privilege Cloud
+      - Vendor PAM
+    patterns: ['privileged? (access|session) manager', '\bpam\b', '\bvault\b']
+
+  - slug: cyberark-identity
+    name: CyberArk Identity
+    categorySlug: identity
+    # Covers the pre-acquisition CVEs too: these were filed by other CNAs (INCD,
+    # GovTech CSG) against "CyberArk Identity Management" years before Palo Alto
+    # bought the company, and they only became visible once CyberArk was a known
+    # vendor alias. Same precedent as counting Splunk's back catalogue as Cisco.
+    aliases:
+      - Identity Browser Extensions
+      - CyberArk Identity
+      - CyberArk Identity Management
+      - CyberArk Secure Web Sessions Extension
+      - IDP
+    patterns: ['^identity browser\b', '^(cyberark )?identity\b', 'secure web sessions', '^idp$']

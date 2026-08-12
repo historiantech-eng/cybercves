@@ -13,6 +13,8 @@ import type { Repository, UpsertResult } from '@cybercves/db';
 export interface IngestSummary extends UpsertResult {
   processed: number;
   unmappedCount: number;
+  /** Queue entries retired because the taxonomy now maps them. */
+  retiredUnmapped: number;
   /** Records that matched no tracked vendor. Expected and large — most CVEs are not ours. */
   unmatched: number;
   /** Withdrawn assignments, skipped before normalization. */
@@ -77,10 +79,19 @@ export async function ingestRecords(
   const result = await repo.upsertCves(entries, now, { reresolve: options.reresolve });
   await repo.recordUnmapped([...unmapped.values()], now);
 
+  // Retire gaps the taxonomy now answers. Resolution is a pure function of the
+  // config, not of this batch, so the whole pending queue can be re-tested here
+  // and a delta sync retires a mapping added since the last full backfill.
+  const stale = (await repo.listPendingUnmapped())
+    .filter((row) => resolver.resolveProductName(row.vendor_slug, row.product_raw))
+    .map((row) => ({ vendorSlug: row.vendor_slug, productKey: row.product_key }));
+  const retired = await repo.clearResolvedUnmapped(stale);
+
   return {
     ...result,
     processed: entries.length,
     unmappedCount: unmapped.size,
+    retiredUnmapped: retired,
     unmatched,
     rejected,
   };

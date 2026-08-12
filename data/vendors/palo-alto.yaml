@@ -16,6 +16,14 @@ aliases:
   # (one word), which differs from the CNA's "Palo Alto Networks". Without this
   # alias, CPE-signal matching silently fails for PAN CVEs filed by third parties.
   - paloaltonetworks
+  # CyberArk, acquired 2026 — the same situation as Splunk under Cisco. PAN files
+  # these through its own CNA but writes the acquired company in vendor[], so
+  # without these aliases every CyberArk CVE resolves to no vendor and is counted
+  # nowhere. Their advisory titles are migrating to the "Idira" brand.
+  - CyberArk
+  - CyberArk Software
+  - CyberArk Software, a Palo Alto Networks Company
+  - Idira
 
 psirtHosts:
   - security.paloaltonetworks.com

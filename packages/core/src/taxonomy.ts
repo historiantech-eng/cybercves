@@ -165,6 +165,9 @@ export class TaxonomyResolver {
     const vendorMatches = this.matchVendors(cve);
     const resolved = new Map<string, ResolvedProduct>();
     const unmapped = new Map<string, UnmappedProduct>();
+    // Entries naming a company we do not know, held back until we know whether
+    // this CVE was attributed by some other entry — see below.
+    const foreign = new Map<string, UnmappedProduct>();
 
     for (const [vendorSlug, matchSignal] of vendorMatches) {
       for (const affected of cve.affected) {
@@ -195,7 +198,7 @@ export class TaxonomyResolver {
             affected.productRaw &&
             !this.#byAlias.has(normalizeKey(affected.vendorRaw))
           ) {
-            unmapped.set(`${vendorSlug}::${normalizeKey(affected.productRaw)}`, {
+            foreign.set(`${vendorSlug}::${normalizeKey(affected.productRaw)}`, {
               vendorRaw: affected.vendorRaw,
               productRaw: affected.productRaw,
               vendorSlug,
@@ -230,6 +233,21 @@ export class TaxonomyResolver {
         }
       }
     }
+
+    // A foreign-vendor entry only matters when nothing else claimed this CVE.
+    //
+    // If the CVE is already attributed, the foreign entry is a re-listing, not a
+    // gap: Siemens ships RUGGEDCOM APE1808 running FortiOS, so 41 Fortinet CVEs
+    // carry a second affected[] entry naming Siemens. All 41 are already counted
+    // via their FortiOS entry, yet "RUGGEDCOM APE1808" sat at the top of the
+    // review queue at 40 hits — the single largest item, and permanently
+    // unactionable, because Siemens is a genuine third party rather than an
+    // acquisition waiting for an alias.
+    //
+    // When nothing claimed the CVE the entry still queues, which is what caught
+    // Splunk under Cisco and CyberArk under Palo Alto. That is the case worth a
+    // human's attention: a CVE we hold and count nowhere.
+    if (!resolved.size) for (const [key, entry] of foreign) unmapped.set(key, entry);
 
     return {
       resolved: [...resolved.values()],

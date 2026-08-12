@@ -223,6 +223,34 @@ describe('unrecognised vendor on a CNA-assigned CVE', () => {
     [],
   );
 
+  // Same vendor, but with one product defined, so a CVE can actually resolve.
+  const resolverWithProducts = new TaxonomyResolver(
+    [
+      {
+        slug: 'cisco',
+        name: 'Cisco',
+        cnaShortNames: ['cisco'],
+        aliases: ['Cisco'],
+        psirtHosts: [],
+        psirtUrl: null,
+        homepage: null,
+        adapter: 'cvelist',
+        discoveryNote: null,
+        internalBrandMarkers: [],
+      },
+    ],
+    [
+      {
+        slug: 'cisco-secure-firewall',
+        name: 'Cisco Secure Firewall',
+        vendorSlug: 'cisco',
+        categorySlug: 'firewall',
+        aliases: ['Cisco Secure Firewall'],
+        patterns: [],
+      },
+    ],
+  );
+
   const cve = {
     cveId: 'CVE-2026-20298',
     assignerShortName: 'cisco',
@@ -244,5 +272,25 @@ describe('unrecognised vendor on a CNA-assigned CVE', () => {
     // A CNA does occasionally assign for a genuine third party, so surfacing the
     // gap must not become a licence to claim the product.
     expect(resolver.resolve(cve).resolved).toHaveLength(0);
+  });
+
+  it('stays quiet when another entry already attributed the CVE', () => {
+    // Siemens ships RUGGEDCOM APE1808 running FortiOS, so 41 Fortinet CVEs carry
+    // a second affected[] entry naming Siemens. All 41 are counted via their
+    // FortiOS entry, but "RUGGEDCOM APE1808" still reached the queue at 40 hits
+    // — its largest item, and unactionable forever, because Siemens is a real
+    // third party rather than an acquisition waiting for an alias. A queue whose
+    // top entry can never be resolved is a queue people stop reading.
+    const withKnownProduct = {
+      ...cve,
+      affected: [
+        { vendorRaw: 'Cisco', productRaw: 'Cisco Secure Firewall', cpes: [], versions: [] },
+        ...cve.affected,
+      ],
+    } as typeof cve;
+
+    const { resolved, unmapped } = resolverWithProducts.resolve(withKnownProduct);
+    expect(resolved.map((r) => r.productSlug)).toEqual(['cisco-secure-firewall']);
+    expect(unmapped).toHaveLength(0);
   });
 });

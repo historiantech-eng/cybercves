@@ -127,7 +127,7 @@ products:
     name: Cisco Catalyst Center (DNA Center)
     categorySlug: network-management
     aliases: [Cisco DNA Center, Cisco Catalyst Center]
-    patterns: ['\bdna center\b', '\bcatalyst center\b']
+    patterns: ['\bdna center\b', '\bcatalyst center\b', '\bdigital network architecture\b']
 
   - slug: cisco-prime-infrastructure
     name: Cisco Prime Infrastructure
@@ -179,7 +179,7 @@ products:
     name: ClamAV
     categorySlug: endpoint
     aliases: [ClamAV, clamav]
-    patterns: ['^clamav\b']
+    patterns: ['^clamav\b', '^clam antivirus\b']
 
   - slug: cisco-cyber-vision
     name: Cisco Cyber Vision
@@ -191,7 +191,7 @@ products:
     name: Cisco Meraki MX
     categorySlug: firewall
     aliases: [Cisco Meraki MX Firmware, Meraki MX]
-    patterns: ['\bmeraki mx\b']
+    patterns: ['\bmeraki mx\b', '^meraki z\d\b']
 
   - slug: cisco-fxos
     name: Cisco Firepower Extensible OS (FXOS)
@@ -203,7 +203,7 @@ products:
     name: Cisco UTD SNORT IPS Engine
     categorySlug: threat-detection
     aliases: [Cisco UTD SNORT IPS Engine Software]
-    patterns: ['\butd snort\b', '\bsnort ips engine\b']
+    patterns: ['\butd snort\b', '\bsnort ips engine\b', '^snort\b']
 
   - slug: cisco-ise-pic
     name: Cisco ISE Passive Identity Connector
@@ -228,7 +228,7 @@ products:
     name: Cisco Catalyst SD-WAN Manager
     categorySlug: network-management
     aliases: [Cisco Catalyst SD-WAN Manager, Cisco SD-WAN vManage]
-    patterns: ['\bsd.?wan manager\b', '\bvmanage\b']
+    patterns: ['\bsd.?wan manager\b', '\bvmanage\b', '\bsd.?wan controller\b']
 
   - slug: cisco-dcnm
     name: Cisco Data Center Network Manager
@@ -279,7 +279,7 @@ products:
     aliases:
       - Cisco Small Business RV Series Router Firmware
       - Cisco Small Business Smart and Managed Switches
-    patterns: ['^(cisco )?small business\b']
+    patterns: ['^(cisco )?small business\b', '^rv\d{3}[a-z]?[ -]']
 
   # Collaboration, telephony and observability — non-security portfolio.
   - slug: cisco-contact-center
@@ -292,7 +292,7 @@ products:
       - Cisco Finesse
       - Cisco Unified Intelligence Center
       - Cisco Enterprise Chat and Email
-    patterns: ['\bcontact center\b', '^(cisco )?finesse\b', '\bunified intelligence center\b']
+    patterns: ['\bcontact center\b', '^(cisco )?finesse\b', '\bunified intelligence center\b', '\bcontact management\b', '\bchat and email\b', '^(cisco )?socialminer\b']
 
   - slug: cisco-telepresence
     name: Cisco TelePresence
@@ -302,7 +302,7 @@ products:
       - Cisco TelePresence Management Suite (TMS)
       - Cisco Meeting Management
       - Cisco RoomOS Software
-    patterns: ['\btelepresence\b', '^(cisco )?roomos\b', '\bmeeting management\b']
+    patterns: ['\btele ?presence\b', '^(cisco )?roomos\b', '\bmeeting management\b']
 
   - slug: cisco-ip-phone
     name: Cisco IP Phones
@@ -310,7 +310,7 @@ products:
     aliases: [Cisco IP Phones with Multiplatform Firmware, Cisco PhoneOS]
     # One pattern covers the whole ip_phone_NNNN_with_multiplatform_firmware family
     # rather than an entry per handset model.
-    patterns: ['^(cisco )?ip phone', '^(cisco )?phoneos\b']
+    patterns: ['^(cisco )?ip phone', '^(cisco )?phoneos\b', '^(cisco )?video phone']
 
   - slug: cisco-unity-connection
     name: Cisco Unity Connection
@@ -334,7 +334,7 @@ products:
     name: Cisco SIP Software
     categorySlug: other
     aliases: [Cisco Session Initiation Protocol (SIP) Software]
-    patterns: ['\bsession initiation protocol\b']
+    patterns: ['\bsession initiation protocol\b', '^sip ip phone\b']
 
   - slug: cisco-broadworks
     name: Cisco BroadWorks
@@ -390,13 +390,23 @@ products:
     name: Splunk Cloud Platform
     categorySlug: siem-logging
     aliases: [Splunk Cloud Platform, Splunk Enterprise Cloud, Splunk Cloud]
-    patterns: ['^splunk (cloud platform|enterprise cloud)\b', '^splunk cloud\b']
+    patterns: ['^splunk (cloud platform|enterprise cloud)\b', '^splunk cloud\b', '^cloud$']
 
   - slug: splunk-enterprise
     name: Splunk Enterprise
     categorySlug: siem-logging
     aliases: [Splunk Enterprise]
     patterns: ['^splunk enterprise\b']
+
+  - slug: splunk-enterprise-security
+    name: Splunk Enterprise Security
+    categorySlug: siem-logging
+    aliases: [Splunk Enterprise Security]
+    # Exact-anchored because these two arrive as bare CPE product components —
+    # the vendor half of the CPE carries "splunk", so the product half is just
+    # "enterprise_security". Anchored so they cannot swallow a Cisco product
+    # whose name merely contains the words.
+    patterns: ['^enterprise security$']
 
   # Catch-all for the long tail of first-party apps, add-ons and toolkits that
   # ship on the Splunk platform. Anchored on "splunk" so that, for example,
@@ -407,3 +417,122 @@ products:
     categorySlug: siem-logging
     aliases: []
     patterns: ['^splunk\b']
+
+  # --- added from the review queue, 2026-08 backfill ---
+  #
+  # Every entry below was an affected[] product string that resolved to nothing,
+  # so its CVEs were held but counted under no vendor and no category. Cisco
+  # writes the same product two ways — an advisory form ("Cisco Smart License
+  # Utility") and a CPE form ("cisco_smart_license_utility") — and normalizeKey
+  # turns underscores into spaces, so one pattern covers both.
+
+  - slug: cisco-thousandeyes
+    name: Cisco ThousandEyes
+    categorySlug: network-management
+    aliases:
+      - Cisco ThousandEyes Endpoint Agent
+      - Cisco ThousandEyes Enterprise Agent
+      - Cisco ThousandEyes Recorder Application
+    patterns: ['\bthousandeyes\b']
+
+  - slug: cisco-intersight
+    name: Cisco Intersight
+    categorySlug: network-management
+    aliases: [Cisco Intersight Virtual Appliance]
+    patterns: ['\bintersight\b']
+
+  - slug: cisco-smart-license-utility
+    name: Cisco Smart License Utility
+    categorySlug: network-management
+    aliases: [Cisco Smart License Utility]
+    patterns: ['\bsmart (software )?licen[cs]e\b']
+
+  - slug: cisco-cspc
+    name: Cisco Common Services Platform Collector
+    categorySlug: network-management
+    aliases: [Cisco Common Services Platform Collector Software]
+    patterns: ['\bcommon services platform\b']
+
+  - slug: cisco-dna-spaces
+    name: Cisco Spaces Connector
+    categorySlug: network-management
+    aliases: [Cisco DNA Spaces Connector, Cisco Spaces Connector]
+    patterns: ['\b(dna )?spaces connector\b']
+
+  - slug: cisco-iot-fnd
+    name: Cisco IoT Field Network Director
+    categorySlug: network-management
+    aliases: [Cisco IoT Field Network Director (IoT-FND)]
+    patterns: ['\bfield network director\b', '\biot-?fnd\b']
+
+  - slug: cisco-meraki-systems-manager
+    name: Cisco Meraki Systems Manager
+    categorySlug: network-management
+    aliases: [Cisco Meraki Systems Manager Agent]
+    patterns: ['\bmeraki systems manager\b']
+
+  - slug: cisco-terminal-services-agent
+    name: Cisco Terminal Services Agent
+    categorySlug: identity
+    # Maps logged-in users to sessions for Firepower policy — the same job PAN's
+    # Terminal Server Agent does, which is already filed under identity.
+    aliases: [Cisco Terminal Services Agent]
+    patterns: ['\bterminal services agent\b']
+
+  - slug: cisco-wlc
+    name: Cisco Wireless LAN Controller
+    categorySlug: routing-switching
+    aliases: [Cisco Wireless LAN Controller (WLC)]
+    patterns: ['\bwireless lan controller\b']
+
+  - slug: cisco-business-wireless
+    name: Cisco Business Wireless Access Points
+    categorySlug: routing-switching
+    aliases:
+      - Cisco Business Wireless Access Point Software
+      - Cisco Business Access Points
+    patterns: ['\bbusiness (wireless )?access point']
+
+  - slug: cisco-urwb
+    name: Cisco Ultra-Reliable Wireless Backhaul
+    categorySlug: routing-switching
+    aliases: [Cisco Ultra-Reliable Wireless Backhaul]
+    patterns: ['\bultra.?reliable wireless\b']
+
+  - slug: cisco-nexus-3550
+    name: Cisco Nexus 3550
+    categorySlug: routing-switching
+    aliases: [Cisco Nexus 3550 System Software]
+    patterns: ['\bnexus 3550\b']
+
+  - slug: cisco-nfvis
+    name: Cisco Enterprise NFV Infrastructure Software
+    categorySlug: routing-switching
+    aliases: [Cisco Enterprise NFV Infrastructure Software]
+    patterns: ['\benterprise nfv\b', '\bnfvis\b']
+
+  - slug: cisco-intelligent-node
+    name: Cisco Intelligent Node
+    categorySlug: routing-switching
+    aliases: [Cisco Intelligent Node Manager, Cisco Intelligent Node Software]
+    patterns: ['\bintelligent node\b']
+
+  - slug: cisco-ata
+    name: Cisco Analog Telephone Adaptor
+    categorySlug: other
+    aliases: [Cisco Analog Telephone Adaptor (ATA) Software]
+    patterns: ['\banalog telephone adapt', '^ata[ -]?\d{3}\b']
+
+  - slug: cisco-slido
+    name: Cisco Slido
+    categorySlug: other
+    aliases: [Cisco Slido]
+    patterns: ['^(cisco )?slido\b']
+
+  - slug: cisco-openh264
+    name: OpenH264
+    categorySlug: other
+    # A codec library Cisco maintains and assigns CVEs for. Not a security
+    # product, so it stays out of the vendor comparison.
+    aliases: [openh264]
+    patterns: ['^openh264\b']

@@ -461,6 +461,37 @@ export class Repository {
     );
   }
 
+  /** Every pending gap, for re-testing against the current taxonomy. */
+  async listPendingUnmapped() {
+    return this.#db.all<{ vendor_slug: string; product_key: string; product_raw: string }>(
+      `SELECT vendor_slug, product_key, product_raw
+         FROM unmapped_product
+        WHERE status = 'pending'`,
+    );
+  }
+
+  /**
+   * Drop gaps that the taxonomy now answers.
+   *
+   * Without this the queue is append-only: a product mapped today keeps its
+   * `pending` row forever, so the list people are meant to act on fills with
+   * things already done and stops being read. Deleted rather than marked
+   * resolved — if the mapping is later removed, the string simply reappears on
+   * the next run, which is the honest state.
+   */
+  async clearResolvedUnmapped(
+    keys: ReadonlyArray<{ vendorSlug: string; productKey: string }>,
+  ): Promise<number> {
+    if (!keys.length) return 0;
+    await this.#db.batch(
+      keys.map((k) => ({
+        sql: `DELETE FROM unmapped_product WHERE vendor_slug = ? AND product_key = ?`,
+        params: [k.vendorSlug, k.productKey] as SqlValue[],
+      })),
+    );
+    return keys.length;
+  }
+
   /** Review queue, most frequently seen first — the highest-leverage gaps. */
   async getUnmappedForReview(limit = 100) {
     return this.#db.all<{
