@@ -13,7 +13,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-08-12T14:37:05.475Z
+generated: 2026-08-12T23:26:27.921Z
 cves:
   CVE-2024-21753:
     discovery: INTERNAL
@@ -1211,6 +1211,11 @@ cves:
     advisory: FG-IR-25-112
     credit: Fortinet is pleased to thank Alex of HackerHood Research Group for reporting this
       vulnerability under responsible disclosure.
+  CVE-2025-47855:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-25-260
+    credit: Internally discovered and reported by Théo Leleu from Fortinet Product Security team.
   CVE-2025-47856:
     discovery: INTERNAL
     source: psirt-field
@@ -1724,6 +1729,16 @@ cves:
     source: psirt-field
     advisory: FG-IR-26-104
     credit: Internally discovered and reported by Shripal Rawal of Fortinet PSIRT team.
+  CVE-2026-22627:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-086
+    credit: Internally discovered and reported by Yonghui Han of Fortinet Product Security team.
+  CVE-2026-22628:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-085
+    credit: Internally discovered and reported by Yonghui Han of Fortinet Product Security team.
   CVE-2026-22629:
     discovery: INTERNAL
     source: psirt-field
@@ -1896,6 +1911,11 @@ cves:
     advisory: FG-IR-26-129
     credit: Fortinet is pleased to thank Alex Ghiotto of HackerHood Research Group for reporting this
       vulnerability under responsible disclosure.
+  CVE-2026-44279:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-130
+    credit: Fortinet is pleased to thank Renan Dias for reporting this vulnerability
   CVE-2026-49938:
     discovery: EXTERNAL
     source: psirt-field
@@ -1936,6 +1956,12 @@ cves:
     advisory: FG-IR-26-154
     credit: Fortinet is pleased to thank Vang3lis and Cyth from VARAS@IIE for reporting this
       vulnerability under responsible disclosure.
+  CVE-2026-59841:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-155
+    credit: Fortinet is pleased to thank Nicola Scremin (@ScreSys) for reporting this vulnerability
+      under responsible disclosure.
   CVE-2026-70465:
     discovery: EXTERNAL
     source: psirt-field
