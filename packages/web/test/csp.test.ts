@@ -37,7 +37,42 @@ function cspOf(html: string): string {
   return match?.[1] ?? '';
 }
 
-describe.skipIf(!existsSync(DIST))('Content-Security-Policy', () => {
+const built = existsSync(`${DIST}index.html`);
+const cspEnabled = built && cspOf(readFileSync(`${DIST}index.html`, 'utf8')) !== '';
+
+/**
+ * The check that would have caught the outage.
+ *
+ * Inline style ATTRIBUTES carry all the chart geometry on this site — bar widths
+ * and odometer digit offsets. CSP blocks them unless style-src allows
+ * 'unsafe-inline', and per spec a style-src containing any hash-source ignores
+ * 'unsafe-inline' entirely. So "has unsafe-inline" is not the question; "has
+ * unsafe-inline AND no hash" is. Shipping a style-src with both looked correct
+ * in every build artefact and silently flattened every chart in the browser.
+ */
+describe.skipIf(!cspEnabled)('CSP style-src (guards chart geometry)', () => {
+  it('permits inline style attributes, which means unsafe-inline AND no hash', () => {
+    const html = readFileSync(`${DIST}index.html`, 'utf8');
+    const styleSrc = cspOf(html)
+      .split(';')
+      .map((d) => d.trim())
+      .find((d) => d.startsWith('style-src'));
+
+    expect(styleSrc, 'no style-src in the CSP').toBeDefined();
+    expect(html, 'fixture page should contain inline style attributes').toMatch(/style="/);
+
+    expect(styleSrc).toContain("'unsafe-inline'");
+    expect(
+      styleSrc,
+      'style-src contains a hash, which makes the browser ignore ' +
+        "'unsafe-inline' — every inline style attribute is then blocked and all " +
+        'bar widths and odometer offsets are lost. Remove the remaining <style> ' +
+        'blocks (move them to global.css) so Astro emits no style hashes.',
+    ).not.toMatch(/'sha(256|384|512)-/);
+  });
+});
+
+describe.skipIf(!cspEnabled)('Content-Security-Policy', () => {
   for (const page of PAGES) {
     const path = `${DIST}${page}`;
 
