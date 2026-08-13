@@ -134,14 +134,25 @@ describe('product resolution', () => {
     expect(resolved.every((r) => r.vendorSlug === 'fortinet')).toBe(true);
   });
 
-  it('maps PAN-OS to firewall and Prisma Access to SASE from free text alone', () => {
+  it('maps PAN-OS to firewall from free text alone', () => {
     const { resolved, unmapped } = resolver.resolve(fixture('CVE-2024-3400'));
     const byProduct = new Map(resolved.map((r) => [r.productSlug, r]));
 
     expect(byProduct.get('palo-alto-pan-os')?.categorySlug).toBe('firewall');
-    expect(byProduct.get('palo-alto-cloud-ngfw')?.categorySlug).toBe('firewall');
-    expect(byProduct.get('palo-alto-prisma-access')?.categorySlug).toBe('sase-sse');
     expect(unmapped).toHaveLength(0);
+  });
+
+  it('honours the advisory when it says a listed product is NOT affected', () => {
+    // This assertion used to demand the opposite, and was wrong. CVE-2024-3400
+    // names Cloud NGFW and Prisma Access in `affected[]` only to mark them
+    // `unaffected` — Palo Alto's advisory states plainly that neither is
+    // impacted. Reading array membership as vulnerability put both on the
+    // firewall and SASE pages for a bug they never had.
+    const { resolved } = resolver.resolve(fixture('CVE-2024-3400'));
+    const slugs = resolved.map((r) => r.productSlug);
+
+    expect(slugs).not.toContain('palo-alto-cloud-ngfw');
+    expect(slugs).not.toContain('palo-alto-prisma-access');
   });
 
   it('maps Cisco IOS XE into routing-switching via pattern match', () => {

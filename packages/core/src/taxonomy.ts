@@ -1,3 +1,4 @@
+import { resolvableEntries } from './affected.js';
 import { parseCpe } from './cpe.js';
 import type {
   MatchSignal,
@@ -104,6 +105,10 @@ export class TaxonomyResolver {
    */
   matchVendors(cve: NormalizedCve): Map<string, MatchSignal> {
     const matches = new Map<string, MatchSignal>();
+    // A product the vendor says is unaffected is not evidence that the CVE is
+    // theirs, so it must not raise the vendor either — otherwise a CVE excluded
+    // from every one of our products still counts against the vendor's total.
+    const entries = resolvableEntries(cve.affected);
 
     const record = (slug: string | undefined, signal: MatchSignal) => {
       if (!slug) return;
@@ -117,7 +122,7 @@ export class TaxonomyResolver {
       record(this.#byCna.get(cve.assignerShortName), 'cna-assigner');
     }
 
-    for (const affected of cve.affected) {
+    for (const affected of entries) {
       if (affected.vendorRaw) {
         record(this.#byAlias.get(normalizeKey(affected.vendorRaw)), 'affected-vendor');
       }
@@ -163,6 +168,10 @@ export class TaxonomyResolver {
     vendors: Map<string, MatchSignal>;
   } {
     const vendorMatches = this.matchVendors(cve);
+    // Entries the vendor's own record marks unaffected are excluded here, so a
+    // published product matrix cannot credit a product with a bug the advisory
+    // says it does not have. See resolvableEntries for the corroboration rule.
+    const entries = resolvableEntries(cve.affected);
     const resolved = new Map<string, ResolvedProduct>();
     const unmapped = new Map<string, UnmappedProduct>();
     // Entries naming a company we do not know, held back until we know whether
@@ -170,7 +179,7 @@ export class TaxonomyResolver {
     const foreign = new Map<string, UnmappedProduct>();
 
     for (const [vendorSlug, matchSignal] of vendorMatches) {
-      for (const affected of cve.affected) {
+      for (const affected of entries) {
         // Candidate product names for this affected entry: the free-text product
         // plus any CPE product components, which are often cleaner.
         const candidates: string[] = [];

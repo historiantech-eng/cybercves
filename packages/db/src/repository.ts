@@ -823,8 +823,19 @@ export class Repository {
       [cveId],
     );
 
-    const affected = await this.#db.all<{ vendor_raw: string | null; product_raw: string | null; versions: string }>(
-      'SELECT vendor_raw, product_raw, versions FROM cve_affected WHERE cve_id = ?',
+    // default_status and versions_truncated come along so the page can say which
+    // of these the vendor marked NOT affected. Listing an unaffected product
+    // under a heading about affected versions is how Cloud NGFW looked
+    // vulnerable on advisories that exist partly to say it is not.
+    const affected = await this.#db.all<{
+      vendor_raw: string | null;
+      product_raw: string | null;
+      versions: string;
+      versions_truncated: number;
+      default_status: string | null;
+    }>(
+      `SELECT vendor_raw, product_raw, versions, versions_truncated, default_status
+       FROM cve_affected WHERE cve_id = ?`,
       [cveId],
     );
 

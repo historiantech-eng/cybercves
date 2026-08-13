@@ -2,7 +2,7 @@
 import Base from '../../layouts/Base.astro';
 import Severity from '../../components/Severity.astro';
 import { db, formatDate } from '../../lib/data';
-import { discoverySourceLabel } from '@cybercves/core';
+import { affectedStatus, discoverySourceLabel } from '@cybercves/core';
 import ReportIssue from '../../components/ReportIssue.astro';
 
 export async function getStaticPaths() {
@@ -24,7 +24,18 @@ export async function getStaticPaths() {
 const { detail } = Astro.props;
 const refs = JSON.parse(detail.refs || '[]') as Array<{ url: string; name: string | null }>;
 const cwes = JSON.parse(detail.cwe_ids || '[]') as string[];
-const affected = detail.affected ?? [];
+// A CVE record's affected[] array is a set of statements about products, not a
+// list of victims: Palo Alto publish their whole matrix on every advisory and
+// mark most of it unaffected. Carry that status through so the page says which
+// is which rather than implying all of them are vulnerable.
+const affected = (detail.affected ?? []).map((entry) => ({
+  ...entry,
+  status: affectedStatus({
+    versions: JSON.parse(entry.versions || '[]'),
+    versionsTruncated: Boolean(entry.versions_truncated),
+    defaultStatus: entry.default_status,
+  }),
+}));
 
 const summary =
   detail.description?.slice(0, 155) ??
@@ -159,12 +170,15 @@ const summary =
         affected.length > 0 && (
           <details style="margin-top:16px">
             <summary class="small muted" style="cursor:pointer">
-              Vendor-reported affected versions ({affected.length})
+              Vendor-reported products ({affected.length})
             </summary>
             <ul class="small muted" style="margin-top:10px">
               {affected.slice(0, 40).map((entry) => (
                 <li>
                   {entry.vendor_raw ?? '—'} · {entry.product_raw ?? '—'}
+                  {entry.status === 'unaffected' && (
+                    <span class="small" style="margin-left:6px">— vendor states not affected</span>
+                  )}
                 </li>
               ))}
             </ul>
