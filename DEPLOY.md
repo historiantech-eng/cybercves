@@ -47,13 +47,57 @@ on the site and must not spend a database read per visitor.
 npx wrangler d1 migrations apply cybercve --remote
 ```
 
+The deploy workflow now runs this on every deploy too, so a new migration reaches
+production without anyone remembering to. This step is only needed for the first
+manual bring-up.
+
 ### 5. Set the admin token
 
-Lets you trigger a cron job on demand instead of waiting 15 minutes after a deploy.
+Lets you trigger a cron job on demand instead of waiting 15 minutes after a deploy,
+and guards the feedback triage endpoints.
 
 ```bash
 npx wrangler secret put ADMIN_TOKEN     # paste any long random string
 ```
+
+Keep the same value in `~/.cybercve_admin_token` (mode 600) — that is where
+`npm run feedback` reads it from.
+
+### 6. Corrections form
+
+The form at `/feedback` needs four secrets and two public values. Set the secrets
+with `wrangler secret put`; **never paste any of them into a chat or a shared
+terminal.**
+
+```bash
+npx wrangler secret put TURNSTILE_SECRET   # Turnstile widget's secret key
+npx wrangler secret put FEEDBACK_SALT      # any long random string
+npx wrangler secret put ALERT_FROM         # e.g. alerts@cybercve.com
+npx wrangler secret put ALERT_TO           # where alerts land; kept secret so
+                                           # the address stays out of this repo
+```
+
+The two public values are GitHub Actions **repository variables**, because they are
+baked into the HTML and are not secret:
+
+| Variable | Where it comes from |
+|---|---|
+| `PUBLIC_TURNSTILE_SITE_KEY` | Turnstile widget's site key |
+| `PUBLIC_CF_ANALYTICS_TOKEN` | Cloudflare Web Analytics site token |
+
+Then, in the Cloudflare dashboard:
+
+1. **Email Routing** on `cybercve.com` — create `contact@` and `security@` forwarding
+   to your real inbox, and **verify the destination address**. The Worker's
+   `send_email` binding can only deliver to a verified address, which is what makes
+   it safe to use without an API key.
+2. **Turnstile** — create a widget for `cybercve.com`.
+3. **Web Analytics** — enable for the site.
+
+Until these exist the form fails closed: `verifyTurnstile()` returns false without a
+secret, so submissions are rejected rather than accepted unverified. Alerts degrade
+more gently — a missing `ALERT_EMAIL` binding just means the correction is stored
+without emailing anyone, since the triage queue is the system of record.
 
 ---
 

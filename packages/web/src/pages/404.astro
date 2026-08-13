@@ -8,9 +8,12 @@ import Base from '../layouts/Base.astro';
       <h1>Not found</h1>
       <p class="muted">
         That page does not exist. A very recently published CVE may not have a page yet — the
-        site rebuilds nightly.
+        site rebuilds every three hours, and the counter on the front page knows about new
+        records before their pages are built.
       </p>
-      <p><a href="/">Back to the overview</a></p>
+      <p>
+        <a href="/">Back to the overview</a> · <a href="/feedback">Report a problem</a>
+      </p>
     </div>
   </section>
 </Base>

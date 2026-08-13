@@ -1,0 +1,29 @@
+# Dependency updates.
+#
+# This repository is public and its deploy job holds a Cloudflare token, so a
+# compromised transitive dependency is a credible path to production. Weekly
+# grouped PRs keep that surface current without a daily stream of noise.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR per ecosystem rather than per package: these move together and
+      # reviewing twenty separate bumps is how people stop reviewing them.
+      dev-dependencies:
+        dependency-type: development
+      production-dependencies:
+        dependency-type: production
+
+  # Actions are pinned to commit SHAs in the workflows (a tag can be repointed at
+  # new code by whoever controls the action; a SHA cannot). Dependabot updates
+  # the SHA and records the version in the PR, which is the only practical way to
+  # keep pinning honest.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

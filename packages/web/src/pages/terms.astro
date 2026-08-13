@@ -1,0 +1,110 @@
+---
+import Base from '../layouts/Base.astro';
+
+const updated = '13 August 2026';
+---
+
+<Base
+  title="Terms and disclaimer"
+  description="Terms of use for CyberCVE, including accuracy limits, data source attribution, and trademark use."
+>
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h1>Terms and disclaimer</h1>
+        <p>Last updated {updated}.</p>
+      </div>
+    </div>
+
+    <div class="card prose">
+      <h2>This is not security advice</h2>
+      <p>
+        CyberCVE reports published vulnerability data and counts it in various ways. It does
+        not tell you whether you are affected by anything, and it is not a substitute for your
+        vendor's advisories, your own asset inventory, or professional advice. Decisions about
+        patching your systems should be based on the vendor's advisory and your own
+        circumstances — not on a count on this site.
+      </p>
+
+      <h2>Accuracy, and its limits</h2>
+      <p>
+        The data here is assembled automatically from public sources and mapped to product
+        categories by rules we wrote. Both steps can be wrong. Known and specific limitations
+        are documented on the <a href="/methodology">methodology</a> page, including which years
+        are covered and which records are deliberately excluded.
+      </p>
+      <p>
+        <strong>CVE counts are not a product quality ranking.</strong> A vendor that publishes
+        thoroughly and assigns CVEs for its own findings will show more CVEs than one that does
+        neither. The methodology page explains this at length because it is the single most
+        common way this kind of data is misread.
+      </p>
+      <p>
+        If you find an error, please <a href="/feedback">report it</a> — corrections are the
+        point, and the fix history is public.
+      </p>
+
+      <h2>No warranty</h2>
+      <p>
+        This site is provided "as is", without warranty of any kind, express or implied,
+        including but not limited to warranties of merchantability, fitness for a particular
+        purpose, and non-infringement. To the fullest extent permitted by law, the operator is
+        not liable for any claim, damages, or other liability arising from your use of, or
+        reliance on, this site or its data.
+      </p>
+
+      <h2>Data sources and attribution</h2>
+      <p>The vulnerability data on this site comes from third parties and remains theirs:</p>
+      <ul>
+        <li>
+          <strong>CVE records</strong> — the <a href="https://www.cve.org/">CVE Program</a>. Use
+          is subject to the CVE Program Terms of Use. CVE® is a registered trademark of MITRE.
+        </li>
+        <li>
+          <strong>Known Exploited Vulnerabilities catalog</strong> — <a
+            href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA</a
+          >, a work of the U.S. Government.
+        </li>
+        <li>
+          <strong>EPSS scores</strong> — courtesy of <a href="https://first.org/epss">FIRST</a>.
+          Free to use with citation.
+        </li>
+      </ul>
+      <p>
+        None of these organisations endorse this site or have reviewed it. Any error in how
+        their data is presented here is ours.
+      </p>
+
+      <h2>Trademarks</h2>
+      <p>
+        Fortinet, Palo Alto Networks, Cisco, Splunk, CyberArk, and all other vendor and product
+        names are trademarks of their respective owners. They are used nominatively — that is,
+        to identify the products a vulnerability affects. No affiliation with, sponsorship by,
+        or endorsement from any of these companies is claimed or implied.
+      </p>
+
+      <h2>Using this site's content</h2>
+      <p>
+        The source code, including the product taxonomy, is open source under the MIT licence —
+        see the <a href="https://github.com/historiantech-eng/cybercves">repository</a>. The
+        underlying vulnerability data is not ours to license; take it from the sources above
+        under their terms. If you cite figures from this site, please link to the page you took
+        them from, since the numbers change as the data does.
+      </p>
+
+      <h2>Acceptable use</h2>
+      <p>
+        The site and its JSON API are free to use. Please do not scrape at a rate that degrades
+        it for others — there is an <a href="/rss.xml">RSS feed</a> and a JSON API precisely so
+        you do not have to. Abusive traffic may be rate-limited or blocked.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        <a href="mailto:contact@cybercve.com">contact@cybercve.com</a> · Security reports: <a
+          href="/.well-known/security.txt">security.txt</a
+        >
+      </p>
+    </div>
+  </section>
+</Base>

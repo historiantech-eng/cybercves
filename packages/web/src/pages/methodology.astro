@@ -241,9 +241,58 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
         <li>Vendor PSIRT feeds — used for advisory identifiers and freshness, not as a primary source.</li>
       </ul>
       <p class="small muted">
-        Corrections are welcome. If a CVE is attributed to the wrong product, the match signal
-        shown on its page is the place to start.
+        Corrections are welcome and there is a form for them: <a href="/feedback"
+          >report a correction</a
+        >. If a CVE is attributed to the wrong product, the match signal shown on its page is
+        the place to start.
       </p>
+    </div>
+  </section>
+
+  {/*
+    Publishing the gaps is what makes the rest of this page credible. A site that
+    ranks named companies and admits nothing about its own coverage is asking to
+    be trusted rather than checked.
+  */}
+  <section class="section">
+    <div class="card">
+      <h2>Known limitations</h2>
+      <p class="muted">
+        These are the things most likely to make a figure on this site misleading. They are
+        listed here rather than discovered by a reader.
+      </p>
+      <ul class="muted small">
+        <li>
+          <strong>Coverage begins in 2024.</strong> Comparisons "since 2024" are complete; anything
+          implying a longer history is not. Earlier years are intended but not yet loaded.
+        </li>
+        <li>
+          <strong>Three vendors.</strong> Fortinet, Palo Alto Networks and Cisco. A vendor absent
+          from a category ranking may simply not be tracked yet.
+        </li>
+        <li>
+          <strong>Some held records are counted nowhere.</strong> When one of these vendors acts
+          as CVE Numbering Authority for an unrelated company's product, we store the record but
+          attribute it to no vendor, because it is not their vulnerability. Those CVEs appear in
+          no count on this site.
+        </li>
+        <li>
+          <strong>Acquisitions lag.</strong> Splunk counts under Cisco, and CyberArk and Venafi
+          under Palo Alto, from the whole period we cover — not from the acquisition date. A
+          newly acquired brand is invisible until its name is added to the taxonomy.
+        </li>
+        <li>
+          <strong>Product categories are our judgement.</strong> Vendors do not publish a category
+          per CVE. Where a product plausibly belongs in two, it is filed in one. The category is
+          shown on every record so you can disagree — and
+          <a href="/feedback">say so</a>.
+        </li>
+        <li>
+          <strong>Discovery attribution is uneven.</strong> Cisco and Palo Alto publish a discovery
+          field; Fortinet does not, so theirs is read from published advisory pages. Records with
+          no attribution are reported separately and never silently counted as either.
+        </li>
+      </ul>
     </div>
   </section>
 </Base>

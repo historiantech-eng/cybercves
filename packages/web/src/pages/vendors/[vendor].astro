@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import ReportIssue from '../../components/ReportIssue.astro';
 import CveTable from '../../components/CveTable.astro';
 import DiscoveryBar from '../../components/DiscoveryBar.astro';
 import YearFilter from '../../components/YearFilter.astro';
@@ -222,4 +223,6 @@ const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
       <CveTable rows={cves} showVendor={false} caption={`${vendor.name} CVEs`} />
     </div>
   </section>
+
+  <ReportIssue kind="wrong-vendor" label="A product missing or wrongly attributed here?" />
 </Base>

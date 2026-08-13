@@ -18,6 +18,7 @@
     "backfill": "npm run backfill -w @cybercves/ingest --",
     "sync": "npm run sync -w @cybercves/ingest --",
     "taxonomy:review": "npm run taxonomy:review -w @cybercves/ingest --",
+    "feedback": "npm run feedback -w @cybercves/ingest --",
     "verify": "npm run verify -w @cybercves/ingest --",
     "push:d1": "npm run push:d1 -w @cybercves/ingest --",
     "build:web": "npm run build -w @cybercves/web",

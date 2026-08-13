@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import ReportIssue from '../../components/ReportIssue.astro';
 import CveTable from '../../components/CveTable.astro';
 import VendorRace from '../../components/VendorRace.astro';
 import SeverityChart from '../../components/SeverityChart.astro';
@@ -94,4 +95,6 @@ const { category, race, rows, totalCves, kevCount, years, vendorLabels, severity
       <CveTable rows={rows} caption={`${category.name} CVEs`} />
     </div>
   </section>
+
+  <ReportIssue kind="wrong-category" label="A product in the wrong category?" />
 </Base>

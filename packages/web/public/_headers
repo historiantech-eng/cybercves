@@ -1,0 +1,59 @@
+# Response headers for statically-served assets.
+#
+# WHY THIS FILE EXISTS RATHER THAN WORKER CODE
+#
+# Routing is assets-first (see packages/worker/wrangler.jsonc): a request that
+# matches a prerendered file is served at the edge and the Worker never runs. So
+# there is no code path in which index.ts could add a header to a page view.
+# This file is the only place those headers can come from.
+#
+# The Content-Security-Policy is NOT here. Astro generates it per page with the
+# hashes of its own inline scripts (experimental.csp in astro.config.mjs) and
+# emits it as a <meta> tag. Duplicating it here would mean maintaining those
+# hashes by hand, and the two copies would disagree the first time a script
+# changed. frame-ancestors cannot be expressed in a meta tag, so it lives below.
+
+/*
+  # Clickjacking. frame-ancestors supersedes X-Frame-Options in modern browsers,
+  # but the older header is still honoured by some, and both are cheap.
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+
+  # Stop browsers guessing a content type. The API returns JSON that must never
+  # be sniffed as HTML.
+  X-Content-Type-Options: nosniff
+
+  # Send the full path to ourselves, only the origin to third parties. A CVE page
+  # path is not secret, but it does say what a reader was looking at.
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # This site has no need for any of these. Denying them means an injected script
+  # cannot reach for them either.
+  Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()
+
+  # HSTS, deliberately starting SHORT.
+  #
+  # This header is a promise a browser will hold you to. Once it has seen a
+  # two-year max-age it will refuse plain HTTP for cybercve.com and every
+  # subdomain for two years, and there is no way to retract that early — serving
+  # max-age=0 only helps browsers that come back and ask.
+  #
+  # So: one day first. Confirm every hostname you care about works over HTTPS
+  # (apex, www, and any subdomain you might add later), then raise this to
+  # 63072000 in a follow-up commit. Do not add `preload` until after that, and
+  # only if you are certain: the preload list ships inside browsers and removal
+  # takes months.
+  Strict-Transport-Security: max-age=86400; includeSubDomains
+
+  Cross-Origin-Opener-Policy: same-origin
+
+# Immutable build artefacts: hashed filenames, so they can be cached forever.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Machine-readable endpoints that should stay fresh.
+/data/*.json
+  Cache-Control: public, max-age=600, stale-while-revalidate=3600
+
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8

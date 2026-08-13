@@ -1,0 +1,104 @@
+---
+import Base from '../layouts/Base.astro';
+
+const updated = '13 August 2026';
+---
+
+<Base
+  title="Privacy"
+  description="What CyberCVE collects, what it does not, and how to get it removed. No cookies, no advertising trackers, no accounts."
+>
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h1>Privacy</h1>
+        <p>Last updated {updated}.</p>
+      </div>
+    </div>
+
+    <div class="card prose">
+      <h2>The short version</h2>
+      <p>
+        CyberCVE sets no cookies, runs no advertising trackers, and has no accounts to sign
+        into. You can read every page on this site without giving us anything. The only
+        personal data we ever hold is what you deliberately type into the corrections form.
+      </p>
+
+      <h2>What we collect</h2>
+
+      <h3>If you submit a correction</h3>
+      <p>The <a href="/feedback">corrections form</a> stores what you send:</p>
+      <ul>
+        <li>the category of problem, your description, and any evidence link you provide;</li>
+        <li>the CVE ID and the page you reported from, so the report can be acted on;</li>
+        <li>
+          <strong>your email address, only if you choose to give one.</strong> It is used to follow
+          up on your report and nothing else. It is never displayed on the site, never included
+          in the public issue that may be opened to track a fix, and never added to a mailing
+          list;
+        </li>
+        <li>
+          your browser's user-agent string, and a <strong>salted hash of your IP address</strong> —
+          not the address itself. The hash exists so we can tell whether one source is flooding
+          the form. It cannot be reversed to an IP address, and rotating the salt makes every
+          stored hash meaningless.
+        </li>
+      </ul>
+      <p>
+        Submissions are protected by Cloudflare Turnstile, which checks that you are a person
+        rather than a script. Turnstile is Cloudflare's alternative to a CAPTCHA and does not
+        track you across sites.
+      </p>
+
+      <h3>If you just read the site</h3>
+      <p>
+        We use Cloudflare Web Analytics for aggregate traffic counts — which pages are read,
+        roughly where readers come from. It sets <strong>no cookies</strong>, builds no profile,
+        and uses no cross-site identifier, which is precisely why it was chosen: it means this
+        site needs no consent banner and there is nothing to opt out of.
+      </p>
+      <p>
+        Cloudflare also serves this site and keeps short-lived operational logs, as any host
+        does. See Cloudflare's own privacy documentation for what that involves.
+      </p>
+
+      <h2>What we never do</h2>
+      <ul>
+        <li>Sell, rent, or share your data with anyone.</li>
+        <li>Send marketing email. There is no mailing list.</li>
+        <li>Use advertising or cross-site tracking technology.</li>
+        <li>Ask for anything you do not need to give us.</li>
+      </ul>
+
+      <h2>How long we keep it</h2>
+      <p>
+        Corrections are kept while they are useful — an accepted report explains why a mapping
+        looks the way it does. If you gave an email address and would rather we did not keep
+        it, ask and it will be removed from the record while the correction itself stays.
+      </p>
+
+      <h2>Your data</h2>
+      <p>
+        Ask us and we will tell you what we hold about you, correct it, or delete it. Because
+        the only thing we can link to a person is an email address you typed yourself, in
+        practice this means: write to us from that address and say what you want done.
+      </p>
+      <p>
+        Contact: <a href="mailto:contact@cybercve.com">contact@cybercve.com</a>
+      </p>
+
+      <h2>Security reports</h2>
+      <p>
+        For a vulnerability in this site rather than in the data it publishes, see <a
+          href="/.well-known/security.txt">security.txt</a
+        > or write to <a href="mailto:security@cybercve.com">security@cybercve.com</a>.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If this policy changes materially, the date above changes with it. The site's source
+        code is public, so the history of this page is public too.
+      </p>
+    </div>
+  </section>
+</Base>

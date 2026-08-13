@@ -1,0 +1,34 @@
+---
+/**
+ * "Something wrong here?" — the link that turns a reader noticing an error into
+ * a correction we can act on.
+ *
+ * Placed on the pages where an error is actually visible, and carries the page's
+ * context so a report arrives already saying which record it is about. The Worker
+ * re-derives and re-validates all of this; the query string is a convenience for
+ * the reader, never trusted input.
+ */
+interface Props {
+  /** Prefills the CVE field when reporting from a record page. */
+  cve?: string;
+  /** Preselects the kind most likely to be wrong on this page type. */
+  kind?: 'wrong-category' | 'wrong-vendor' | 'wrong-discovery' | 'missing-cve' | 'other';
+  label?: string;
+}
+
+const { cve, kind, label = 'Something wrong here?' } = Astro.props;
+
+// `build.format: 'file'` makes Astro.url.pathname end in .html at build time,
+// but the served URL does not — so strip it, or every report arrives naming a
+// page that 404s when the triager clicks it.
+const from = Astro.url.pathname.replace(/\.html$/, '') || '/';
+
+const params = new URLSearchParams();
+if (cve) params.set('cve', cve);
+if (kind) params.set('kind', kind);
+params.set('from', from);
+---
+
+<p class="report-issue">
+  <a href={`/feedback?${params.toString()}`}>{label}</a>
+</p>

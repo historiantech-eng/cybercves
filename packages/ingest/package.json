@@ -14,6 +14,7 @@
     "backfill": "tsx src/bin/backfill.ts",
     "sync": "tsx src/bin/sync.ts",
     "taxonomy:review": "tsx src/bin/taxonomy-review.ts",
+    "feedback": "tsx src/bin/feedback.ts",
     "verify": "tsx src/bin/verify.ts",
     "push:d1": "tsx src/bin/push-d1.ts",
     "discovery": "tsx src/bin/discovery.ts",

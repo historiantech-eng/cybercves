@@ -1,0 +1,237 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Corrections form.
+ *
+ * /methodology has invited corrections since launch with no way to send one.
+ * This is that way.
+ *
+ * The form posts to the Worker as a plain HTML form, so it works with
+ * JavaScript disabled — a corrections channel that silently requires JS
+ * excludes exactly the privacy-conscious readers most likely to be checking our
+ * facts. The Worker answers a 303 redirect back here with ?sent=1 or ?error=.
+ *
+ * Turnstile is the one part that needs JS. When no site key is configured the
+ * widget is omitted and the Worker rejects the submission — failing closed is
+ * deliberate; see verifyTurnstile().
+ */
+const turnstileKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+
+const KINDS = [
+  { value: 'wrong-category', label: 'Wrong product category' },
+  { value: 'wrong-vendor', label: 'Wrong vendor, or missing vendor' },
+  { value: 'wrong-discovery', label: 'Wrong discovery attribution' },
+  { value: 'missing-cve', label: 'A CVE is missing' },
+  { value: 'other', label: 'Something else' },
+];
+---
+
+<Base
+  title="Report a correction"
+  description="Report an inaccuracy in CyberCVE's data — a miscategorised product, a wrong vendor attribution, or a missing CVE."
+>
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h1>Report a correction</h1>
+        <p>
+          This site makes factual claims about named companies. If one of them is wrong, tell
+          us and it gets fixed.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      {/*
+        Server-rendered banners. The Worker redirects here rather than returning
+        a bare JSON body, so a no-JS submission lands on a real page.
+        `Astro.url.searchParams` is read at build time for the static shell; the
+        script below re-reads it in the browser, which is what actually runs.
+      */}
+      <div class="fb-banner" data-fb-banner hidden></div>
+
+      <form class="fb-form" method="post" action="/api/v1/feedback" data-fb-form>
+        <div class="fb-field">
+          <label for="fb-kind">What is wrong?</label>
+          <select id="fb-kind" name="kind" required>
+            {KINDS.map((k) => <option value={k.value}>{k.label}</option>)}
+          </select>
+        </div>
+
+        <div class="fb-field">
+          <label for="fb-cve">CVE ID <span class="fb-opt">optional</span></label>
+          <input
+            id="fb-cve"
+            name="cveId"
+            type="text"
+            inputmode="text"
+            placeholder="CVE-2026-0259"
+            pattern="[Cc][Vv][Ee]-\d{4}-\d{4,7}"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="fb-field">
+          <label for="fb-body">What should it say instead?</label>
+          <textarea
+            id="fb-body"
+            name="body"
+            rows="6"
+            required
+            minlength="10"
+            maxlength="4000"
+            placeholder="WildFire is Palo Alto's malware sandbox, so it belongs under Threat Detection & Sandbox rather than Firewall."
+          ></textarea>
+          <p class="fb-help">
+            The more specific the better — what the site says now, and what it should say.
+          </p>
+        </div>
+
+        <div class="fb-field">
+          <label for="fb-evidence">Link to evidence <span class="fb-opt">optional</span></label>
+          <input
+            id="fb-evidence"
+            name="evidenceUrl"
+            type="url"
+            placeholder="https://security.paloaltonetworks.com/CVE-2026-0259"
+          />
+          <p class="fb-help">A vendor advisory or datasheet makes a correction quick to act on.</p>
+        </div>
+
+        <div class="fb-field">
+          <label for="fb-email">Your email <span class="fb-opt">optional</span></label>
+          <input id="fb-email" name="email" type="email" autocomplete="email" />
+          <p class="fb-help">
+            Only used to follow up on this report. Never shown on the site, never published to
+            an issue, never mailed anything else — see <a href="/privacy">privacy</a>.
+          </p>
+        </div>
+
+        {/*
+          Honeypot. Hidden from people and from screen readers; bots fill every
+          field they find. A submission that fills it is answered as though it
+          worked and stored nowhere.
+        */}
+        <div class="fb-hp" aria-hidden="true">
+          <label for="fb-website">Leave this empty</label>
+          <input id="fb-website" name="website" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <input type="hidden" name="pageUrl" value="" data-fb-page />
+
+        {
+          turnstileKey && (
+            <div class="cf-turnstile" data-sitekey={turnstileKey} data-theme="auto" />
+          )
+        }
+
+        <div class="fb-actions">
+          <button type="submit" class="fb-submit">Send correction</button>
+          <p class="fb-help">
+            No account needed. Reports go to a private queue, not a public tracker.
+          </p>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 class="fb-h2">What happens next</h2>
+      <ol class="fb-steps">
+        <li>Your report lands in a private triage queue and alerts the maintainer.</li>
+        <li>
+          Accepted corrections become a public issue tracking the fix — your report's text, never
+          your email address.
+        </li>
+        <li>
+          Most data corrections are a change to the taxonomy in <code>/data</code>, which is
+          version-controlled and reviewable.
+        </li>
+      </ol>
+      <p class="small muted">
+        Found a security issue in the site itself rather than in the data? See <a
+          href="/.well-known/security.txt">security.txt</a
+        >.
+      </p>
+    </div>
+  </section>
+</Base>
+
+{
+  turnstileKey && (
+    <script is:inline async src="https://challenges.cloudflare.com/turnstile/v0/api.js" />
+  )
+}
+
+<script>
+  // Progressive enhancement only. Without this the form still posts and the
+  // Worker still redirects back here with ?sent=1 — this just avoids the
+  // round trip and keeps what the reader typed if something was wrong.
+  const form = document.querySelector<HTMLFormElement>('[data-fb-form]');
+  const banner = document.querySelector<HTMLElement>('[data-fb-banner]');
+  const pageField = document.querySelector<HTMLInputElement>('[data-fb-page]');
+
+  function show(kind: 'ok' | 'error', message: string) {
+    if (!banner) return;
+    banner.textContent = message;
+    banner.dataset.kind = kind;
+    banner.hidden = false;
+    banner.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  // Carry over the page the reader came from, so a correction filed from a CVE
+  // page arrives with that context attached.
+  const params = new URLSearchParams(location.search);
+  const from = params.get('from');
+  if (pageField) pageField.value = from && from.startsWith('/') ? from : '/feedback';
+
+  const cve = params.get('cve');
+  if (cve) {
+    const field = document.querySelector<HTMLInputElement>('#fb-cve');
+    if (field) field.value = cve;
+  }
+  const kind = params.get('kind');
+  if (kind) {
+    const select = document.querySelector<HTMLSelectElement>('#fb-kind');
+    if (select && [...select.options].some((o) => o.value === kind)) select.value = kind;
+  }
+
+  // Banners from a no-JS round trip.
+  if (params.get('sent')) show('ok', 'Thank you — your correction is in the queue.');
+  const err = params.get('error');
+  if (err) show('error', err);
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submit = form.querySelector<HTMLButtonElement>('.fb-submit');
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = 'Sending…';
+    }
+
+    try {
+      const res = await fetch('/api/v1/feedback', {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+        body: new FormData(form),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      if (res.ok) {
+        form.reset();
+        show('ok', 'Thank you — your correction is in the queue.');
+      } else {
+        show('error', payload.error ?? 'That could not be sent. Please try again.');
+      }
+    } catch {
+      show('error', 'That could not be sent — check your connection and try again.');
+    } finally {
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = 'Send correction';
+      }
+      // Turnstile tokens are single-use; without a reset a second attempt in the
+      // same page load always fails verification.
+      (window as { turnstile?: { reset: () => void } }).turnstile?.reset();
+    }
+  });
+</script>

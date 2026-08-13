@@ -803,3 +803,181 @@ th.num {
   .svc-table > .table-scroll {
     margin-top: 10px;
   }
+
+/* ------------------------------------------------------- corrections form */
+/* Global rather than scoped to feedback.astro, for the same reason .svc-* and
+   .race-* are: the banner's state is driven from script, and a scoped rule
+   would match the server's first paint and nothing the browser does after. */
+
+.fb-form {
+  display: grid;
+  gap: 18px;
+  max-width: 620px;
+}
+.fb-field label {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.fb-opt {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.fb-field select,
+.fb-field input,
+.fb-field textarea {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14.5px;
+  padding: 9px 11px;
+  width: 100%;
+}
+.fb-field textarea {
+  line-height: 1.55;
+  resize: vertical;
+}
+.fb-field select:focus-visible,
+.fb-field input:focus-visible,
+.fb-field textarea:focus-visible {
+  border-color: var(--series-1);
+  outline: 2px solid color-mix(in srgb, var(--series-1) 45%, transparent);
+  outline-offset: 1px;
+}
+.fb-field input:user-invalid {
+  border-color: var(--status-critical);
+}
+.fb-help {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin: 6px 0 0;
+}
+
+/* Off-screen rather than display:none — some bots skip hidden inputs, and this
+   only works if it looks fillable to a script and is invisible to a person. */
+.fb-hp {
+  height: 0;
+  left: -9999px;
+  overflow: hidden;
+  position: absolute;
+  width: 0;
+}
+
+.fb-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.fb-actions .fb-help {
+  flex: 1 1 220px;
+  margin: 0;
+}
+.fb-submit {
+  background: var(--series-1);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  padding: 10px 20px;
+}
+.fb-submit:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.fb-submit:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+.fb-submit:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.fb-banner {
+  border-left: 3px solid var(--gridline);
+  border-radius: 4px;
+  font-size: 14px;
+  margin-bottom: 18px;
+  padding: 11px 14px;
+}
+/* Paired with wording, never colour alone: the ok and error banners read
+   differently with the stripe ignored entirely. */
+.fb-banner[data-kind='ok'] {
+  background: color-mix(in srgb, var(--status-good) 10%, transparent);
+  border-left-color: var(--status-good);
+}
+.fb-banner[data-kind='error'] {
+  background: color-mix(in srgb, var(--status-critical) 10%, transparent);
+  border-left-color: var(--status-critical);
+}
+
+.fb-h2 {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+.fb-steps {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+/* The inline "found a problem?" link on record pages. */
+.report-issue {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* --------------------------------------------------------- long-form prose */
+/* Privacy and terms are the only pages that are mostly running text. Given a
+   measure this wide, unstyled <p> and <li> would run edge to edge and be
+   genuinely hard to read — which is a poor look on the two pages a reader
+   consults precisely because they are being careful. */
+
+.prose {
+  max-width: 68ch;
+}
+.prose h2 {
+  font-size: 17px;
+  margin: 28px 0 8px;
+}
+.prose h2:first-child {
+  margin-top: 0;
+}
+.prose h3 {
+  font-size: 14.5px;
+  margin: 18px 0 6px;
+}
+.prose p,
+.prose li {
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+.prose p {
+  margin: 0 0 12px;
+}
+.prose ul {
+  margin: 0 0 14px;
+  padding-left: 20px;
+}
+.prose li {
+  margin-bottom: 7px;
+}
+.prose strong {
+  color: var(--text-primary);
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}

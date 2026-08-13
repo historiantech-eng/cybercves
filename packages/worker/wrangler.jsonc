@@ -52,9 +52,29 @@
     ]
   },
 
+  // Alert mail for reader-submitted corrections.
+  //
+  // Cloudflare Email Routing's send binding delivers only to addresses already
+  // verified on this account, which is exactly the notify-the-operator case and
+  // needs no third-party provider or API key. No `destination_address` is pinned
+  // here on purpose: that would publish the operator's personal inbox in a public
+  // repository. The address arrives as the ALERT_TO secret instead.
+  //
+  // Requires Email Routing enabled on cybercve.com and the destination verified
+  // — see DEPLOY.md. Until then the binding is absent and the Worker simply
+  // stores the correction without alerting, which is the safe degradation.
+  "send_email": [{ "name": "ALERT_EMAIL" }],
+
   "vars": {
     "ENVIRONMENT": "production"
   },
+
+  // Secrets, set with `wrangler secret put` and never committed:
+  //   ADMIN_TOKEN      — guards /api/v1/admin/*
+  //   TURNSTILE_SECRET — server-side verification for the feedback form
+  //   FEEDBACK_SALT    — salts the stored IP hash; rotating it retires every hash
+  //   ALERT_FROM       — e.g. alerts@cybercve.com
+  //   ALERT_TO         — where alerts land; kept secret to stay out of this repo
 
   // Custom domain. Requires cybercve.com to be an active zone on this account.
   "routes": [

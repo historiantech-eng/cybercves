@@ -1074,4 +1074,97 @@ export class Repository {
       [key, value, new Date().toISOString()],
     );
   }
+
+  // -------------------------------------------------------------------------
+  // Reader-submitted corrections
+  //
+  // The only rows in this database that cannot be rebuilt from source. See the
+  // header of migrations/0003_feedback.sql.
+  // -------------------------------------------------------------------------
+
+  async insertFeedback(entry: NewFeedback, now = new Date().toISOString()): Promise<number> {
+    await this.#db.run(
+      `INSERT INTO feedback
+         (created_at, kind, cve_id, page_url, body, evidence_url, reporter_email, ip_hash, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        now,
+        entry.kind,
+        entry.cveId ?? null,
+        entry.pageUrl ?? null,
+        entry.body,
+        entry.evidenceUrl ?? null,
+        entry.reporterEmail ?? null,
+        entry.ipHash ?? null,
+        entry.userAgent ?? null,
+      ],
+    );
+    const row = await this.#db.first<{ id: number }>(
+      'SELECT id FROM feedback ORDER BY id DESC LIMIT 1',
+    );
+    return row?.id ?? 0;
+  }
+
+  /** Submissions from one source since a cutoff — the abuse check the edge limiter cannot do. */
+  async countRecentFeedback(ipHash: string, since: string): Promise<number> {
+    const row = await this.#db.first<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM feedback WHERE ip_hash = ? AND created_at >= ?',
+      [ipHash, since],
+    );
+    return row?.n ?? 0;
+  }
+
+  async listFeedback(status = 'new', limit = 50): Promise<FeedbackRow[]> {
+    return this.#db.all<FeedbackRow>(
+      `SELECT id, created_at, kind, cve_id, page_url, body, evidence_url, reporter_email,
+              status, triaged_at, triage_note, github_issue
+         FROM feedback
+        WHERE (? = 'all' OR status = ?)
+        ORDER BY created_at ASC
+        LIMIT ?`,
+      [status, status, limit],
+    );
+  }
+
+  async triageFeedback(
+    id: number,
+    status: 'accepted' | 'rejected' | 'duplicate',
+    note: string | null,
+    githubIssue: number | null = null,
+    now = new Date().toISOString(),
+  ): Promise<void> {
+    await this.#db.run(
+      `UPDATE feedback
+          SET status = ?, triage_note = ?, triaged_at = ?,
+              github_issue = COALESCE(?, github_issue)
+        WHERE id = ?`,
+      [status, note, now, githubIssue, id],
+    );
+  }
+}
+
+export interface NewFeedback {
+  kind: string;
+  body: string;
+  cveId?: string | null;
+  pageUrl?: string | null;
+  evidenceUrl?: string | null;
+  reporterEmail?: string | null;
+  ipHash?: string | null;
+  userAgent?: string | null;
+}
+
+export interface FeedbackRow {
+  id: number;
+  created_at: string;
+  kind: string;
+  cve_id: string | null;
+  page_url: string | null;
+  body: string;
+  evidence_url: string | null;
+  reporter_email: string | null;
+  status: string;
+  triaged_at: string | null;
+  triage_note: string | null;
+  github_issue: number | null;
 }

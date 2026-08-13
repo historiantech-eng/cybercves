@@ -8,6 +8,8 @@ import { changedEntries, fetchDelta, fetchRecords } from '@cybercves/ingest';
 import { fetchEpss, fetchKev } from '@cybercves/ingest';
 import { ingestRecords } from '@cybercves/ingest';
 import { advisoryUrlFromRefs } from '@cybercves/ingest';
+import type { CleanFeedback, FeedbackInput } from './feedback.js';
+import { alertText, hashIp, validateFeedback, verifyTurnstile } from './feedback.js';
 
 /**
  * cybercve.com Worker.
@@ -378,6 +380,121 @@ function throttled(key: string, now = Date.now()): boolean {
   return seen.count > ADMIN_MAX_ATTEMPTS;
 }
 
+/** Reports accepted from one source per day before the form stops listening. */
+const FEEDBACK_DAILY_LIMIT = 10;
+
+interface FeedbackEnv {
+  TURNSTILE_SECRET?: string;
+  /** Salt for the stored IP hash. Rotating it retires every existing hash. */
+  FEEDBACK_SALT?: string;
+  /** Cloudflare Email Routing binding; absent until configured. */
+  ALERT_EMAIL?: { send(message: unknown): Promise<void> };
+  ALERT_FROM?: string;
+  ALERT_TO?: string;
+}
+
+/** Shared auth for the admin routes. Returns a response only when it should stop. */
+async function adminGate(c: {
+  env: unknown;
+  req: { header(name: string): string | undefined };
+  json: (body: unknown, status?: number) => Response;
+}): Promise<Response | null> {
+  const expected = (c.env as { ADMIN_TOKEN?: string }).ADMIN_TOKEN;
+  const supplied = c.req.header('authorization') ?? '';
+  if (throttled(c.req.header('cf-connecting-ip') ?? 'unknown')) {
+    return c.json({ error: 'too many requests' }, 429);
+  }
+  if (!expected || !(await secretsMatch(supplied, `Bearer ${expected}`))) {
+    return c.json({ error: 'unauthorized' }, 401);
+  }
+  return null;
+}
+
+/**
+ * Read a submission from either a JSON fetch or a plain HTML form POST.
+ *
+ * Both shapes are supported because /feedback must work with JavaScript
+ * disabled — a corrections form that silently requires JS excludes exactly the
+ * privacy-conscious readers most likely to be checking our facts.
+ */
+async function readSubmission(
+  req: Request,
+): Promise<(FeedbackInput & { turnstileToken?: string }) | null> {
+  const type = req.headers.get('content-type') ?? '';
+  try {
+    if (type.includes('application/json')) {
+      return (await req.json()) as FeedbackInput & { turnstileToken?: string };
+    }
+    const form = await req.formData();
+    const get = (k: string) => {
+      const v = form.get(k);
+      return typeof v === 'string' ? v : undefined;
+    };
+    return {
+      kind: get('kind'),
+      body: get('body'),
+      cveId: get('cveId'),
+      pageUrl: get('pageUrl'),
+      evidenceUrl: get('evidenceUrl'),
+      email: get('email'),
+      website: get('website'),
+      turnstileToken: get('cf-turnstile-response'),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Answer in whatever form the caller can use: JSON for fetch, a redirect for a
+ * plain form post so the browser lands on a page rather than a bare payload.
+ */
+function respondFeedback(
+  c: { req: { header(n: string): string | undefined }; json: (b: unknown, s?: number) => Response },
+  status: number,
+  error: string | null,
+  id?: number,
+): Response {
+  const wantsJson = (c.req.header('accept') ?? '').includes('application/json');
+  if (wantsJson) {
+    return c.json(error ? { error } : { ok: true, id }, status as 200);
+  }
+  const target = error
+    ? `/feedback?error=${encodeURIComponent(error)}`
+    : '/feedback?sent=1';
+  return new Response(null, { status: 303, headers: { location: target } });
+}
+
+/**
+ * Tell the operator a correction arrived.
+ *
+ * Uses Cloudflare Email Routing's send binding, which may only deliver to an
+ * address already verified on the account — precisely the notify-yourself case,
+ * and it needs no third-party provider or API key. Failures are swallowed: the
+ * row is already stored and the triage queue is the system of record.
+ */
+async function notifyOperator(
+  env: FeedbackEnv,
+  id: number,
+  entry: CleanFeedback,
+): Promise<void> {
+  if (!env.ALERT_EMAIL || !env.ALERT_FROM || !env.ALERT_TO) return;
+  try {
+    const raw = [
+      `From: CyberCVE <${env.ALERT_FROM}>`,
+      `To: <${env.ALERT_TO}>`,
+      `Subject: [CyberCVE] feedback #${id} — ${entry.kind}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'MIME-Version: 1.0',
+      '',
+      alertText(id, entry),
+    ].join('\r\n');
+    await env.ALERT_EMAIL.send({ from: env.ALERT_FROM, to: env.ALERT_TO, raw });
+  } catch (err) {
+    console.warn('feedback alert failed', err);
+  }
+}
+
 /**
  * Manual cron trigger, for verifying a fresh deploy without waiting 15 minutes.
  * Guarded by a secret so it cannot be used to run up our egress.
@@ -402,6 +519,98 @@ api.post('/api/v1/admin/run/:job', async (c) => {
   else if (job === 'enrichment') await syncEnrichment(c.env);
   else return c.json({ error: 'unknown job' }, 400);
   return c.json({ ok: true, job });
+});
+
+// ---------------------------------------------------------------------------
+// Reader-submitted corrections
+// ---------------------------------------------------------------------------
+
+/**
+ * Accept a correction.
+ *
+ * Same-origin only by construction: `cors()` above stays GET/OPTIONS, so a
+ * cross-site page cannot read the response even if it manages to post. The real
+ * controls are Turnstile, the per-source rate limit, and the length caps.
+ *
+ * Storage is best-effort about notification but never about the row: if the
+ * email alert fails, the correction is still saved. Losing a reader's report
+ * because our mail path broke is the worse outcome, and the triage queue is the
+ * system of record — the email only tells the operator to go look at it.
+ */
+api.post('/api/v1/feedback', async (c) => {
+  const env = c.env as Env & FeedbackEnv;
+  const ip = c.req.header('cf-connecting-ip') ?? 'unknown';
+
+  const payload = await readSubmission(c.req.raw);
+  if (!payload) return respondFeedback(c, 400, 'That submission could not be read.');
+
+  const verdict = validateFeedback(payload);
+  if (!verdict.ok) {
+    // The honeypot answers 200 so a bot cannot tell it was caught.
+    return verdict.silent
+      ? respondFeedback(c, 200, null)
+      : respondFeedback(c, 400, verdict.error);
+  }
+
+  if (!(await verifyTurnstile(String(payload.turnstileToken ?? ''), env.TURNSTILE_SECRET, ip))) {
+    return respondFeedback(c, 400, 'Please complete the verification check and try again.');
+  }
+
+  const repo = repoFor(c.env);
+  const ipHash = env.FEEDBACK_SALT ? await hashIp(ip, env.FEEDBACK_SALT) : null;
+
+  // Durable per-source limit. The in-memory `throttled()` helper resets with each
+  // isolate, so the count that actually holds is the one in the database.
+  if (ipHash) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    if ((await repo.countRecentFeedback(ipHash, since)) >= FEEDBACK_DAILY_LIMIT) {
+      return respondFeedback(c, 429, 'You have sent several reports today — thank you. Try again tomorrow.');
+    }
+  }
+
+  const id = await repo.insertFeedback({
+    ...verdict.value,
+    ipHash,
+    userAgent: (c.req.header('user-agent') ?? '').slice(0, 300),
+  });
+
+  c.executionCtx.waitUntil(notifyOperator(env, id, verdict.value));
+  return respondFeedback(c, 200, null, id);
+});
+
+/** Triage queue. Same token and constant-time compare as the cron trigger. */
+api.get('/api/v1/admin/feedback', async (c) => {
+  const gate = await adminGate(c);
+  if (gate) return gate;
+  const status = c.req.query('status') ?? 'new';
+  const limit = Math.min(Number.parseInt(c.req.query('limit') ?? '50', 10) || 50, 200);
+  return c.json({ items: await repoFor(c.env).listFeedback(status, limit) });
+});
+
+api.post('/api/v1/admin/feedback/:id', async (c) => {
+  const gate = await adminGate(c);
+  if (gate) return gate;
+
+  const id = Number.parseInt(c.req.param('id'), 10);
+  if (!Number.isInteger(id)) return c.json({ error: 'bad id' }, 400);
+
+  const body = (await c.req.json().catch(() => ({}))) as {
+    status?: string;
+    note?: string;
+    githubIssue?: number;
+  };
+  const status = body.status;
+  if (status !== 'accepted' && status !== 'rejected' && status !== 'duplicate') {
+    return c.json({ error: 'status must be accepted, rejected or duplicate' }, 400);
+  }
+
+  await repoFor(c.env).triageFeedback(
+    id,
+    status,
+    body.note ?? null,
+    Number.isInteger(body.githubIssue) ? (body.githubIssue as number) : null,
+  );
+  return c.json({ ok: true, id, status });
 });
 
 /**

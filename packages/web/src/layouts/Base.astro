@@ -5,11 +5,24 @@ interface Props {
   title: string;
   description: string;
   path?: string;
+  /** Absolute or root-relative social preview image; defaults to the site card. */
+  image?: string;
 }
 
-const { title, description, path = Astro.url.pathname } = Astro.props;
-const canonical = new URL(path, Astro.site ?? 'https://cybercve.com').toString();
+const { title, description, path = Astro.url.pathname, image = '/og-default.png' } = Astro.props;
+const site = Astro.site ?? 'https://cybercve.com';
+const canonical = new URL(path, site).toString();
 const fullTitle = title === 'CyberCVE' ? title : `${title} — CyberCVE`;
+
+// Must be absolute: every social scraper rejects a relative og:image, which is
+// how a card silently renders blank.
+const ogImage = new URL(image, site).toString();
+
+// Set in CI as PUBLIC_CF_ANALYTICS_TOKEN. Absent locally, so the beacon is simply
+// omitted rather than shipping a broken script tag to every dev build.
+const analyticsToken = import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN ?? '';
+
+const isHome = path === '/' || path === '/index.html';
 
 const nav = [
   { href: '/', label: 'Overview' },
@@ -34,13 +47,94 @@ const nav = [
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content="CyberCVE" />
+    {/*
+      summary_large_image has been declared here since launch with no image to
+      go with it, so every share rendered a blank card.
+    */}
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="CyberCVE — published CVEs across Fortinet, Palo Alto Networks and Cisco, by product category." />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="sitemap" href="/sitemap.xml" />
     <link rel="alternate" type="application/rss+xml" title="CyberCVE" href="/rss.xml" />
 
-    <!-- Applied before first paint so a dark-mode visitor never sees a light flash. -->
+    {
+      isHome && (
+        <script
+          type="application/ld+json"
+          is:inline
+          set:html={JSON.stringify({
+            '@context': 'https://schema.org',
+            '@graph': [
+              {
+                '@type': 'WebSite',
+                '@id': `${site}#website`,
+                url: site,
+                name: 'CyberCVE',
+                description,
+                publisher: { '@id': `${site}#org` },
+              },
+              {
+                '@type': 'Organization',
+                '@id': `${site}#org`,
+                name: 'CyberCVE',
+                url: site,
+                logo: `${site}og-default.png`,
+              },
+              {
+                // What this site actually is: a derived dataset. Naming its
+                // sources here is the same attribution the footer carries, in
+                // the form a search engine can read.
+                '@type': 'Dataset',
+                name: 'CyberCVE vulnerability dataset',
+                description:
+                  'Published CVEs affecting security products from Fortinet, Palo Alto Networks and Cisco, mapped to product categories with severity, exploitation and discovery attribution.',
+                url: `${site}methodology`,
+                license: 'https://www.cve.org/Legal/TermsOfUse',
+                creator: { '@id': `${site}#org` },
+                isBasedOn: [
+                  'https://www.cve.org/',
+                  'https://www.cisa.gov/known-exploited-vulnerabilities-catalog',
+                  'https://www.first.org/epss/',
+                ],
+              },
+            ],
+          })}
+        />
+      )
+    }
+
+    {
+      analyticsToken && (
+        /*
+          Cloudflare Web Analytics: no cookies, no cross-site identifier, so the
+          site needs no consent banner — a property worth keeping, and stated as
+          such on /privacy. `defer` because nothing on the page waits for it.
+        */
+        <script
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={`{"token": "${analyticsToken}"}`}
+        />
+      )
+    }
+
+    <!--
+      Applied before first paint so a dark-mode visitor never sees a light flash.
+
+      This one MUST stay `is:inline`: Astro bundles processed scripts as deferred
+      modules, and a deferred theme read runs after first paint, which is the
+      exact flash this exists to prevent.
+
+      The cost is that Astro does not hash it, so its hash is pinned by hand in
+      astro.config.mjs. Change a byte here and the CSP will refuse it — silently,
+      taking dark mode with it. `npm test` fails in that case; see
+      packages/web/test/csp.test.ts.
+    -->
     <script is:inline>
       (() => {
         try {
@@ -101,10 +195,28 @@ const nav = [
           nominatively to identify affected products. CVE counts reflect disclosure practice as
           much as product quality — see <a href="/methodology">methodology</a>.
         </p>
+        <p class="small footer-links">
+          {/*
+            Corrections sit first on purpose. This site asserts things about named
+            companies, so the way to say "that is wrong" should be the easiest
+            link to find down here, not the last.
+          */}
+          <a href="/feedback">Report a correction</a> · <a href="/privacy">Privacy</a> · <a
+            href="/terms">Terms</a
+          > · <a href="/.well-known/security.txt">Security</a> · <a
+            href="https://github.com/historiantech-eng/cybercves">Source</a
+          >
+        </p>
       </div>
     </footer>
 
-    <script is:inline>
+    {/*
+      NOT is:inline — Astro only hashes the scripts it processes, and an
+      unhashed inline script is refused by the CSP in astro.config.mjs. This one
+      runs on click, so bundling it costs nothing. The pre-paint script in
+      <head> cannot be treated the same way; see the note there.
+    */}
+    <script>
       document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
         const root = document.documentElement;
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;

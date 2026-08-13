@@ -1,0 +1,19 @@
+# CyberCVE — security contact (RFC 9116)
+#
+# This file is about vulnerabilities in cybercve.com itself. For an error in the
+# vulnerability DATA the site publishes — a miscategorised product, a wrong
+# vendor attribution — use https://cybercve.com/feedback instead.
+
+Contact: mailto:security@cybercve.com
+Contact: https://cybercve.com/feedback
+
+Expires: 2027-08-13T00:00:00.000Z
+
+Preferred-Languages: en
+
+Canonical: https://cybercve.com/.well-known/security.txt
+
+Policy: https://cybercve.com/terms
+
+# The site is open source. If you can point at the line, please do.
+# https://github.com/historiantech-eng/cybercves

@@ -3,6 +3,7 @@ import Base from '../../layouts/Base.astro';
 import Severity from '../../components/Severity.astro';
 import { db, formatDate } from '../../lib/data';
 import { discoverySourceLabel } from '@cybercves/core';
+import ReportIssue from '../../components/ReportIssue.astro';
 
 export async function getStaticPaths() {
   const repo = db();
@@ -211,6 +212,13 @@ const summary =
       </ul>
     </div>
   </section>
+
+  {/*
+    The record page is where a miscategorisation is actually visible — this is
+    the page that showed WildFire under the wrong heading for months with no way
+    to say so.
+  */}
+  <ReportIssue cve={detail.cve_id} kind="wrong-category" />
 
   <script
     type="application/ld+json"

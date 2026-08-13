@@ -16,7 +16,13 @@ export const GET: APIRoute = async () => {
     { loc: '/vendors', priority: '0.9', changefreq: 'daily' },
     { loc: '/categories', priority: '0.9', changefreq: 'daily' },
     { loc: '/kev', priority: '0.9', changefreq: 'daily' },
+    { loc: '/compare', priority: '0.7', changefreq: 'daily' },
     { loc: '/methodology', priority: '0.5', changefreq: 'monthly' },
+    { loc: '/feedback', priority: '0.4', changefreq: 'yearly' },
+    // Low priority, but present: a site making claims about named companies
+    // should have its terms and privacy findable rather than buried.
+    { loc: '/privacy', priority: '0.2', changefreq: 'yearly' },
+    { loc: '/terms', priority: '0.2', changefreq: 'yearly' },
   ];
 
   if (repo) {

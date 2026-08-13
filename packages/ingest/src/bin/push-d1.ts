@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { NodeSqliteDriver } from '@cybercves/db/drivers/node';
+import { PUSHED_TABLES } from '../push-tables.js';
 
 /**
  * Push the local SQLite snapshot into Cloudflare D1.
@@ -45,24 +46,11 @@ const MAX_BATCH_BYTES = 500_000;
 const MAX_STATEMENT_BYTES = 500_000;
 
 /**
- * Order matters: parents before children, because the schema declares real
- * foreign keys. Taxonomy first, then CVEs, then everything that references them.
+ * Defined in ../push-tables.js so a test can assert on it — notably that tables
+ * with no upstream (feedback, subscriber) never appear here, since this script
+ * truncates everything it lists.
  */
-const TABLES = [
-  'category',
-  'vendor',
-  'product',
-  'cve',
-  'cve_affected',
-  'cve_product',
-  'kev',
-  'epss',
-  'advisory',
-  'advisory_cve',
-  'insight',
-  'unmapped_product',
-  'sync_state',
-] as const;
+const TABLES = PUSHED_TABLES;
 
 const driver = new NodeSqliteDriver(values.db);
 
