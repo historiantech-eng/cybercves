@@ -13,8 +13,14 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-08-12T23:26:27.921Z
+generated: 2026-08-15T04:55:31.230Z
 cves:
+  CVE-2019-5591:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-19-037
+    credit: Fortinet is pleased to thank James Renken from the Internet Security Research Group and
+      Florian Thiele for bringing this issue to our attention under responsible disclosure.
   CVE-2024-21753:
     discovery: INTERNAL
     source: psirt-field
