@@ -3,9 +3,12 @@ import {
   MIN_N,
   aggregateBy,
   bandOf,
+  categoriesIn,
   countCves,
+  filterRows,
   formatLag,
   median,
+  yearsIn,
 } from '../src/lib/kev-timing';
 import type { KevTimingRow } from '../src/lib/kev-timing';
 
@@ -22,12 +25,15 @@ import type { KevTimingRow } from '../src/lib/kev-timing';
 const row = (over: Partial<KevTimingRow> = {}): KevTimingRow => ({
   cve_id: 'CVE-2026-0001',
   date_published: '2026-01-01T00:00:00.000Z',
+  published_year: 2026,
   date_added: '2026-01-01',
   ransomware_known: 0,
   discovery: 'EXTERNAL',
   vendor_slug: 'cisco',
   product_slug: 'cisco-asa',
   product_name: 'Cisco ASA',
+  category_slug: 'firewall',
+  category_name: 'Firewall',
   days: 0,
   ...over,
 });
@@ -224,5 +230,78 @@ describe('formatLag', () => {
   it('distinguishes absent from zero', () => {
     expect(formatLag(null)).toBe('—');
     expect(formatLag(undefined)).toBe('—');
+  });
+});
+
+describe('filters', () => {
+  const rows = [
+    row({ cve_id: 'CVE-2024-1', published_year: 2024, category_slug: 'firewall', days: 0 }),
+    row({ cve_id: 'CVE-2025-1', published_year: 2025, category_slug: 'firewall', days: 10 }),
+    row({ cve_id: 'CVE-2025-2', published_year: 2025, category_slug: 'identity', days: 40 }),
+    row({ cve_id: 'CVE-2026-1', published_year: 2026, category_slug: 'identity', days: 100 }),
+  ];
+
+  it('narrows to one publication cohort', () => {
+    expect(filterRows(rows, { year: 2025 }).map((r) => r.cve_id)).toEqual([
+      'CVE-2025-1',
+      'CVE-2025-2',
+    ]);
+  });
+
+  it('narrows to one category', () => {
+    expect(filterRows(rows, { categorySlug: 'identity' }).map((r) => r.cve_id)).toEqual([
+      'CVE-2025-2',
+      'CVE-2026-1',
+    ]);
+  });
+
+  it('combines year and category rather than choosing between them', () => {
+    expect(
+      filterRows(rows, { year: 2025, categorySlug: 'identity' }).map((r) => r.cve_id),
+    ).toEqual(['CVE-2025-2']);
+  });
+
+  it('treats a null year as every year, not as a missing year', () => {
+    expect(filterRows(rows, { year: null }).length).toBe(4);
+    expect(filterRows(rows, {}).length).toBe(4);
+  });
+
+  it('applies the filters inside aggregateBy, not only to raw rows', () => {
+    const [series] = aggregateBy(rows, 'vendor', { year: 2025 });
+    expect(series.n).toBe(2);
+    expect(series.days).toEqual([10, 40]);
+  });
+
+  it('yields an empty series list rather than throwing when nothing matches', () => {
+    expect(aggregateBy(rows, 'vendor', { year: 1999 })).toEqual([]);
+  });
+
+  it('lists the years present, newest first', () => {
+    expect(yearsIn(rows)).toEqual([2026, 2025, 2024]);
+  });
+
+  it('lists categories by display name, de-duplicated', () => {
+    const mixed = [
+      row({ cve_id: 'a', category_slug: 'zeta', category_name: 'Zeta' }),
+      row({ cve_id: 'b', category_slug: 'alpha', category_name: 'Alpha' }),
+      row({ cve_id: 'c', category_slug: 'alpha', category_name: 'Alpha' }),
+      row({ cve_id: 'd', category_slug: null, category_name: null }),
+    ];
+    expect(categoriesIn(mixed)).toEqual([
+      { slug: 'alpha', name: 'Alpha' },
+      { slug: 'zeta', name: 'Zeta' },
+    ]);
+  });
+
+  it('counts a multi-product CVE once per vendor even after filtering', () => {
+    // The dedupe has to survive the filter, or narrowing to a category would
+    // start double-counting CVEs that touch two products in it.
+    const multi = [
+      row({ cve_id: 'CVE-2025-9', published_year: 2025, product_slug: 'p1', days: 5 }),
+      row({ cve_id: 'CVE-2025-9', published_year: 2025, product_slug: 'p2', days: 5 }),
+    ];
+    const [series] = aggregateBy(multi, 'vendor', { year: 2025, categorySlug: 'firewall' });
+    expect(series.n).toBe(1);
+    expect(countCves(filterRows(multi, { year: 2025 }))).toBe(1);
   });
 });

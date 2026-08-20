@@ -295,6 +295,87 @@ describe('getKevTiming', () => {
     // this metric can report, and zeroing it would erase the distinction.
     expect(rows.find((r) => r.cve_id === 'CVE-2026-7777')?.days).toBe(-6);
   });
+  it('carries the publication year and category so the page can filter on them', async () => {
+    await ingest('CVE-2023-20198');
+    await repo.upsertKev([
+      { cveId: 'CVE-2023-20198', dateAdded: '2023-10-20', dueDate: null,
+        ransomwareKnown: false, vendorProject: 'Cisco', product: 'IOS XE' },
+    ]);
+    const [first] = await repo.getKevTiming();
+    expect(first?.published_year).toBe(2023);
+    expect(first?.category_slug).toBeTruthy();
+    expect(first?.category_name).toBeTruthy();
+  });
+});
+
+describe('getKevCohortRate', () => {
+  /**
+   * The metric exists because year-filtering the runway charts is not a fair
+   * comparison: cohorts have not been observed for equal time. These tests pin
+   * the two properties that make it fair.
+   */
+  const publish = (id: string, published: string) =>
+    db.run(
+      `INSERT INTO cve (cve_id, state, date_published, published_year, source_hash,
+                        first_seen_at, last_synced_at)
+       VALUES (?, 'PUBLISHED', ?, ?, 'h', 'n', 'n')`,
+      [id, published, Number(published.slice(0, 4))],
+    );
+
+  const link = (id: string) =>
+    db.run(
+      `INSERT INTO cve_product (cve_id, product_slug, vendor_slug, match_signal)
+       VALUES (?, 'fortinet-fortimail', 'fortinet', 'test')`,
+      [id],
+    );
+
+  it('excludes CVEs too recent to have been watched for the whole window', async () => {
+    // Published 10 days ago: it cannot yet have failed to be exploited within
+    // 90, so counting it would dilute the rate with an unfinished observation.
+    await publish('CVE-2026-0001', '2026-08-10T00:00:00.000Z');
+    await link('CVE-2026-0001');
+    // Published 200 days ago: fully observed.
+    await publish('CVE-2026-0002', '2026-01-01T00:00:00.000Z');
+    await link('CVE-2026-0002');
+
+    const rows = await repo.getKevCohortRate(90, new Date('2026-08-20T00:00:00Z'));
+    const y2026 = rows.find((r) => r.published_year === 2026 && r.vendor_slug === 'fortinet');
+    expect(y2026?.eligible).toBe(1);
+  });
+
+  it('counts exploitation inside the window and ignores it outside', async () => {
+    await publish('CVE-2025-0001', '2025-01-01T00:00:00.000Z');
+    await link('CVE-2025-0001');
+    await publish('CVE-2025-0002', '2025-01-01T00:00:00.000Z');
+    await link('CVE-2025-0002');
+    await repo.upsertKev([
+      // 30 days after publication — inside the window.
+      { cveId: 'CVE-2025-0001', dateAdded: '2025-01-31', dueDate: null,
+        ransomwareKnown: false, vendorProject: null, product: null },
+      // 300 days after — a real exploitation, but outside the ruler, so it must
+      // not count or the window would not be a window.
+      { cveId: 'CVE-2025-0002', dateAdded: '2025-10-28', dueDate: null,
+        ransomwareKnown: false, vendorProject: null, product: null },
+    ]);
+
+    const rows = await repo.getKevCohortRate(90, new Date('2026-08-20T00:00:00Z'));
+    const y2025 = rows.find((r) => r.published_year === 2025 && r.vendor_slug === 'fortinet');
+    expect(y2025?.eligible).toBe(2);
+    expect(y2025?.exploited).toBe(1);
+  });
+
+  it('counts a CVE once for its vendor however many products it touches', async () => {
+    await publish('CVE-2025-0003', '2025-02-01T00:00:00.000Z');
+    await db.run(
+      `INSERT INTO cve_product (cve_id, product_slug, vendor_slug, match_signal)
+       VALUES ('CVE-2025-0003', 'fortinet-fortimail', 'fortinet', 'test'),
+              ('CVE-2025-0003', 'fortinet-fortindr', 'fortinet', 'test')`,
+    );
+    const rows = await repo.getKevCohortRate(90, new Date('2026-08-20T00:00:00Z'));
+    const y2025 = rows.find((r) => r.published_year === 2025 && r.vendor_slug === 'fortinet');
+    expect(y2025?.eligible).toBe(1);
+  });
+
 });
 
 describe('taxonomy review queue', () => {

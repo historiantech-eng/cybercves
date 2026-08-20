@@ -983,25 +983,84 @@ export class Repository {
     return this.#db.all<{
       cve_id: string;
       date_published: string;
+      published_year: number | null;
       date_added: string;
       ransomware_known: number;
       discovery: string | null;
       vendor_slug: string | null;
       product_slug: string | null;
       product_name: string | null;
+      category_slug: string | null;
+      category_name: string | null;
       days: number;
     }>(
-      `SELECT c.cve_id, c.date_published, k.date_added, k.ransomware_known,
-              c.discovery, cp.vendor_slug, cp.product_slug,
+      `SELECT c.cve_id, c.date_published, c.published_year, k.date_added,
+              k.ransomware_known, c.discovery, cp.vendor_slug, cp.product_slug,
               p.name AS product_name,
+              p.category_slug, cat.name AS category_name,
               ${KEV_LAG_SQL} AS days
          FROM kev k
          JOIN cve c               ON c.cve_id = k.cve_id
          LEFT JOIN cve_product cp ON cp.cve_id = k.cve_id
          LEFT JOIN product p      ON p.slug = cp.product_slug
+         LEFT JOIN category cat   ON cat.slug = p.category_slug
         WHERE c.date_published IS NOT NULL
           AND c.state = 'PUBLISHED'
         ORDER BY days, c.cve_id`,
+    );
+  }
+
+  /**
+   * Share of each publication-year cohort exploited within a fixed window.
+   *
+   * THIS EXISTS BECAUSE THE OBVIOUS COMPARISON IS WRONG. Filtering the runway
+   * charts by year invites reading one year against another, but the cohorts
+   * have not been observed for equal time: as of writing, CVEs published in
+   * 2026 have had an average of 118 days in which to be exploited against 752
+   * for 2024. The recent cohort therefore cannot show long lags, its
+   * long-window buckets are necessarily emptier, and the year reads as
+   * "exploited faster" for reasons that have nothing to do with attackers.
+   *
+   * Restricting both the numerator and the denominator to `windowDays` gives
+   * every year the same ruler: only CVEs old enough to have been observed for
+   * the full window are counted, and only exploitation inside that window
+   * counts as a hit. A cohort still accumulating is excluded rather than
+   * reported short.
+   *
+   * The denominator is all published CVEs for the vendor, not just exploited
+   * ones -- the question is what share of what a vendor shipped got exploited,
+   * so a vendor cannot improve its rate by having more unexploited CVEs left
+   * out of the calculation.
+   */
+  async getKevCohortRate(windowDays = 90, asOf = new Date()) {
+    const today = asOf.toISOString().slice(0, 10);
+    return this.#db.all<{
+      published_year: number;
+      vendor_slug: string;
+      eligible: number;
+      exploited: number;
+    }>(
+      `WITH vendor_cve AS (
+         SELECT DISTINCT cp.vendor_slug, c.cve_id, c.published_year, c.date_published
+           FROM cve c
+           JOIN cve_product cp ON cp.cve_id = c.cve_id
+          WHERE c.state = 'PUBLISHED'
+            AND c.date_published IS NOT NULL
+            AND julianday(?) - julianday(substr(c.date_published, 1, 10)) >= ?
+       )
+       SELECT v.published_year, v.vendor_slug,
+              COUNT(*) AS eligible,
+              SUM(CASE
+                    WHEN k.cve_id IS NOT NULL
+                     AND julianday(substr(k.date_added, 1, 10))
+                         - julianday(substr(v.date_published, 1, 10)) <= ?
+                    THEN 1 ELSE 0
+                  END) AS exploited
+         FROM vendor_cve v
+         LEFT JOIN kev k ON k.cve_id = v.cve_id
+        GROUP BY v.published_year, v.vendor_slug
+        ORDER BY v.published_year, v.vendor_slug`,
+      [today, windowDays, windowDays],
     );
   }
 

@@ -3,36 +3,52 @@ import Base from '../layouts/Base.astro';
 import CveTable from '../components/CveTable.astro';
 import KevRunway from '../components/KevRunway.astro';
 import { db } from '../lib/data';
-import { MIN_N, aggregateBy, countCves } from '../lib/kev-timing';
+import {
+  COHORT_WINDOW_DAYS,
+  MIN_N,
+  aggregateBy,
+  categoriesIn,
+  countCves,
+  yearsIn,
+} from '../lib/kev-timing';
 
 const repo = db();
 const rows = repo ? await repo.listKevCves(300) : [];
 const timing = repo ? await repo.getKevTiming() : [];
 const vendors = repo ? await repo.listVendors() : [];
+const cohort = repo ? await repo.getKevCohortRate(COHORT_WINDOW_DAYS) : [];
 const ransomware = rows.filter((r) => r.ransomware_known === 1).length;
 
 const vendorNames = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
+const years = yearsIn(timing);
+const categories = categoriesIn(timing);
+
+// Server renders the unfiltered view — every year, every category, no
+// comparison. The filters re-render client-side from /data/kev-timing.json
+// using these same functions, so the two cannot disagree about a shape.
 const byVendor = aggregateBy(timing, 'vendor', { labels: vendorNames });
 const byDiscovery = aggregateBy(timing, 'discovery');
 
-// Every vendor's product panel is rendered here and all but one are hidden; the
-// filter only flips which is visible. With three vendors and ~30 products the
-// whole set is a few kilobytes of markup, and building it server-side means the
-// browser never re-implements the aggregation — the failure mode where a chart
-// silently shows different numbers once the script loads cannot occur.
-const productPanels = vendors
-  .map((v) => ({
-    slug: v.slug,
-    name: v.name,
-    series: aggregateBy(timing, 'product', { vendorSlug: v.slug }),
-  }))
-  .filter((p) => p.series.length > 0)
+const productVendors = vendors
+  .filter((v) => aggregateBy(timing, 'product', { vendorSlug: v.slug }).length > 0)
   .sort((a, b) => a.name.localeCompare(b.name));
-
-const defaultVendor = productPanels[0]?.slug ?? '';
+const defaultVendor = productVendors[0]?.slug ?? '';
+const byProduct = aggregateBy(timing, 'product', { vendorSlug: defaultVendor });
 
 const trackedCves = countCves(timing);
 const linkedCves = countCves(timing.filter((r) => r.product_slug));
+
+// Cohort rates, pivoted to one row per vendor with a column per year.
+const cohortYears = [...new Set(cohort.map((r) => r.published_year))].sort((a, b) => a - b);
+const cohortByVendor = vendors
+  .map((v) => ({
+    slug: v.slug,
+    name: v.name,
+    cells: cohortYears.map(
+      (y) => cohort.find((r) => r.vendor_slug === v.slug && r.published_year === y) ?? null,
+    ),
+  }))
+  .filter((r) => r.cells.some(Boolean));
 ---
 
 <Base
@@ -47,6 +63,34 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
     ransomware campaign use.
   </p>
 
+  <div class="filters" role="group" aria-label="Exploitation timing filters">
+    <div>
+      <label for="kev-year">Published</label>
+      <select id="kev-year" data-kev-year>
+        <option value="">All years</option>
+        {years.map((y) => <option value={y}>{y}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="kev-compare">Compare</label>
+      <select id="kev-compare" data-kev-compare disabled>
+        <option value="">No comparison</option>
+        <option value="prev">vs previous year</option>
+      </select>
+    </div>
+    <div>
+      <label for="kev-category">Category</label>
+      <select id="kev-category" data-kev-category>
+        <option value="">All categories</option>
+        {categories.map((c) => <option value={c.slug}>{c.name}</option>)}
+      </select>
+    </div>
+    <span class="filter-count" data-kev-count></span>
+  </div>
+
+  {/* Written by the script, because the warning names the year it is about. */}
+  <p class="kev-censor small" data-kev-censor hidden></p>
+
   <section class="section">
     <h2>How much warning did customers get?</h2>
     <p class="lede small">
@@ -57,6 +101,7 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
     </p>
     <div class="card">
       <KevRunway
+        id="vendor"
         series={byVendor}
         caption="Vendor"
         note={`${trackedCves.toLocaleString()} exploited CVEs across ${byVendor.length} vendors. Medians this close together, at these counts, are not a ranking — the distributions overlap almost entirely.`}
@@ -72,9 +117,9 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
           <label for="kev-vendor">Vendor</label>
           <select id="kev-vendor" data-kev-vendor>
             {
-              productPanels.map((p) => (
-                <option value={p.slug} selected={p.slug === defaultVendor}>
-                  {p.name}
+              productVendors.map((v) => (
+                <option value={v.slug} selected={v.slug === defaultVendor}>
+                  {v.name}
                 </option>
               ))
             }
@@ -87,17 +132,12 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
       bucket is one being exploited the day it is disclosed.
     </p>
     <div class="card">
-      {
-        productPanels.map((p) => (
-          <div data-kev-panel={p.slug} hidden={p.slug !== defaultVendor}>
-            <KevRunway
-              series={p.series}
-              caption={`${p.name} product`}
-              note={`Products are listed alphabetically, every one with at least one exploited CVE. Counts sum to more than the vendor total: a CVE affecting five products is a real vulnerability in each of them. Medians are shown from ${MIN_N} exploited CVEs upward.`}
-            />
-          </div>
-        ))
-      }
+      <KevRunway
+        id="product"
+        series={byProduct}
+        caption="Product"
+        note={`Products are listed alphabetically, every one with at least one exploited CVE. Counts sum to more than the vendor total: a CVE affecting five products is a real vulnerability in each of them. Medians are shown from ${MIN_N} exploited CVEs upward.`}
+      />
     </div>
   </section>
 
@@ -109,6 +149,7 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
     </p>
     <div class="card">
       <KevRunway
+        id="discovery"
         series={byDiscovery}
         caption="Discovery channel"
         note="Vulnerabilities a vendor finds itself reach documented exploitation substantially later than ones reported from outside. Customer-reported bugs cluster at day zero for an unhappy reason: customers tend to report them after being breached. Attribution comes from vendor advisories and CVE credits; see /methodology."
@@ -125,11 +166,76 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
     }
   </section>
 
+  {/*
+    The honest year-over-year comparison, and the reason the filters above are
+    not one. Cohorts have not been observed for equal time — CVEs published this
+    year have had months in which to be exploited where 2024's have had years —
+    so their long-lag buckets are emptier for reasons that have nothing to do
+    with attackers. This gives every year the same ruler instead.
+  */}
+  <section class="section">
+    <h2>Is it getting better or worse?</h2>
+    <p class="lede small">
+      Share of each year's CVEs exploited within {COHORT_WINDOW_DAYS} days of publication. Every
+      year is measured over the same {COHORT_WINDOW_DAYS}-day window and counts only CVEs old
+      enough to have been watched for all of it, so these years are comparable in a way that
+      filtering the charts above is not.
+    </p>
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <caption class="sr-only">
+            Share of published CVEs exploited within {COHORT_WINDOW_DAYS} days, by vendor and
+            publication year
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Vendor</th>
+              {cohortYears.map((y) => <th scope="col" class="num">{y}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {
+              cohortByVendor.map((row) => (
+                <tr>
+                  <th scope="row">
+                    <a href={`/vendors/${row.slug}`}>{row.name}</a>
+                  </th>
+                  {row.cells.map((cell) => (
+                    <td class="num">
+                      {cell && cell.eligible > 0 ? (
+                        <>
+                          {((cell.exploited / cell.eligible) * 100).toFixed(2)}%
+                          <span class="muted small">
+                            {' '}
+                            {cell.exploited}/{cell.eligible}
+                          </span>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        Denominator is every CVE we attribute to that vendor that year, not only the exploited
+        ones — the question is what share of what a vendor shipped got weaponised. The newest
+        year's denominator is smaller because CVEs published in the last {COHORT_WINDOW_DAYS} days
+        are not yet eligible, not because the vendor published less.
+      </p>
+    </div>
+  </section>
+
   <section class="section">
     <h2>Every exploited CVE we track</h2>
     <p class="lede small">
-      Newest KEV additions first. "Days to exploit" is the same measure the charts above
-      bucket.
+      Newest KEV additions first, and not affected by the filters above. "Days to exploit" is the
+      same measure the charts bucket.
     </p>
     <div class="card">
       <CveTable rows={rows} caption="Known exploited CVEs" showKevTiming />
@@ -138,21 +244,120 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
 </Base>
 
 <script>
-  /**
-   * Vendor filter for the product panels.
-   *
-   * Every panel is already in the DOM, server-rendered; this only changes which
-   * one is visible. Nothing is fetched, nothing is re-aggregated, and there is
-   * no template here that could drift from the one Astro rendered.
-   */
-  const select = document.querySelector<HTMLSelectElement>('[data-kev-vendor]');
-  const panels = document.querySelectorAll<HTMLElement>('[data-kev-panel]');
+  import { aggregateBy, countCves, filterRows } from '../lib/kev-timing';
+  import type { KevTimingRow } from '../lib/kev-timing';
+  import { renderRunway } from '../lib/kev-runway-html';
 
-  if (select && panels.length) {
-    select.addEventListener('change', () => {
-      for (const panel of panels) {
-        panel.hidden = panel.dataset.kevPanel !== select.value;
+  /**
+   * Year / category / comparison filters for the three runway panels.
+   *
+   * Re-aggregates the shipped rows and re-renders with renderRunway — the same
+   * functions that produced the server's markup, so switching a filter and
+   * switching back lands on exactly what the build emitted.
+   */
+  const yearSel = document.querySelector<HTMLSelectElement>('[data-kev-year]');
+  const cmpSel = document.querySelector<HTMLSelectElement>('[data-kev-compare]');
+  const catSel = document.querySelector<HTMLSelectElement>('[data-kev-category]');
+  const vendorSel = document.querySelector<HTMLSelectElement>('[data-kev-vendor]');
+  const countEl = document.querySelector<HTMLElement>('[data-kev-count]');
+  const censorEl = document.querySelector<HTMLElement>('[data-kev-censor]');
+
+  const vendorPanel = document.querySelector<HTMLElement>('[data-runway="vendor"]');
+  const productPanel = document.querySelector<HTMLElement>('[data-runway="product"]');
+  const discoveryPanel = document.querySelector<HTMLElement>('[data-runway="discovery"]');
+
+  const PRODUCT_NOTE =
+    'Products are listed alphabetically, every one with at least one exploited CVE. Counts sum to more than the vendor total: a CVE affecting five products is a real vulnerability in each of them.';
+  const DISCOVERY_NOTE =
+    'Vulnerabilities a vendor finds itself reach documented exploitation substantially later than ones reported from outside.';
+
+  if (yearSel && catSel && vendorPanel) {
+    let rows: KevTimingRow[] = [];
+    let vendorNames: Record<string, string> = {};
+
+    const render = () => {
+      const year = yearSel.value ? Number(yearSel.value) : null;
+      const categorySlug = catSel.value || null;
+      // A comparison needs a year to compare against, so the control only goes
+      // live once a single cohort is selected.
+      if (cmpSel) cmpSel.disabled = year === null;
+      const comparing = year !== null && cmpSel?.value === 'prev';
+      const prevYear = comparing ? year - 1 : null;
+
+      const scope = { year, categorySlug };
+      const prevScope = { year: prevYear, categorySlug };
+      const currentLabel = year === null ? 'All years' : String(year);
+      const compareLabel = prevYear === null ? '' : String(prevYear);
+
+      const shownCount = countCves(filterRows(rows, scope));
+      if (countEl) {
+        const where = categorySlug ? ` in ${catSel.options[catSel.selectedIndex].text}` : '';
+        const when = year === null ? '' : ` published in ${year}`;
+        countEl.textContent = `${shownCount.toLocaleString()} exploited ${
+          shownCount === 1 ? 'CVE' : 'CVEs'
+        }${when}${where}`;
       }
-    });
+
+      // Only true when a single cohort is on screen; with all years pooled
+      // there is nothing being read across unequal exposure.
+      if (censorEl) {
+        censorEl.hidden = year === null;
+        if (year !== null) {
+          censorEl.textContent =
+            `CVEs published in ${year} have had less time in which to be exploited than earlier ` +
+            `years, so their longer buckets are necessarily emptier. That is observation time, ` +
+            `not a change in attacker behaviour — for a fair year-over-year read use the ` +
+            `same-ruler comparison further down this page.`;
+        }
+      }
+
+      if (vendorPanel) {
+        vendorPanel.innerHTML = renderRunway({
+          series: aggregateBy(rows, 'vendor', { ...scope, labels: vendorNames }),
+          compare: comparing
+            ? aggregateBy(rows, 'vendor', { ...prevScope, labels: vendorNames })
+            : null,
+          currentLabel,
+          compareLabel,
+          caption: 'Vendor',
+        });
+      }
+      if (productPanel) {
+        const vendorSlug = vendorSel?.value;
+        productPanel.innerHTML = renderRunway({
+          series: aggregateBy(rows, 'product', { ...scope, vendorSlug }),
+          compare: comparing ? aggregateBy(rows, 'product', { ...prevScope, vendorSlug }) : null,
+          currentLabel,
+          compareLabel,
+          caption: 'Product',
+          note: PRODUCT_NOTE,
+        });
+      }
+      if (discoveryPanel) {
+        discoveryPanel.innerHTML = renderRunway({
+          series: aggregateBy(rows, 'discovery', scope),
+          compare: comparing ? aggregateBy(rows, 'discovery', prevScope) : null,
+          currentLabel,
+          compareLabel,
+          caption: 'Discovery channel',
+          note: DISCOVERY_NOTE,
+        });
+      }
+    };
+
+    fetch('/data/kev-timing.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        rows = data.rows as KevTimingRow[];
+        vendorNames = data.vendorNames ?? {};
+        for (const el of [yearSel, cmpSel, catSel, vendorSel]) {
+          el?.addEventListener('change', render);
+        }
+        if (cmpSel) cmpSel.disabled = !yearSel.value;
+      })
+      // The server-rendered panels stay on screen if this fails, so a reader
+      // still sees the unfiltered truth rather than an empty card.
+      .catch(() => {});
   }
 </script>

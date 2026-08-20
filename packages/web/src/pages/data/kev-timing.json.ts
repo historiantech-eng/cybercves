@@ -4,17 +4,18 @@ import { db } from '../../lib/data';
 /**
  * Every known-exploited CVE with its lag from publication to KEV listing.
  *
- * Published for readers who want the underlying numbers, alongside /rss.xml and
- * /data/stats.json. NOT consumed by any page: /kev and /compare render every
- * panel server-side, including the ones the vendor filter hides, because with
- * three vendors and ~30 products the whole set is a few kilobytes of markup and
- * server-rendering removes the possibility of the browser re-aggregating it into
- * different numbers than the build did.
+ * Read by /kev, whose year, category and vendor filters re-aggregate in the
+ * browser rather than round-tripping. About eighty rows of ten short fields, so
+ * the whole set costs less than one request would.
  *
  * Flat and unaggregated on purpose — the same rows answer per-vendor,
- * per-product and per-discovery questions with different counting rules, so any
- * pre-aggregation here would pick one of them for everybody. See
- * lib/kev-timing.ts for what those rules are.
+ * per-product and per-discovery questions with different counting rules, and
+ * the year and category filters cut across all three. Any pre-aggregation here
+ * would pick one of those shapes for everybody. See lib/kev-timing.ts for what
+ * the rules are.
+ *
+ * Also the published record behind the charts, alongside /rss.xml and
+ * /data/stats.json, so a reader can check the arithmetic.
  */
 
 export const GET: APIRoute = async () => {

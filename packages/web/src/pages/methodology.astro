@@ -235,6 +235,30 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
         it is the summary that is not supportable. Most products fall under this threshold.
       </p>
 
+      <h3 style="margin-top:18px">Comparing one year against another</h3>
+      <p class="muted small">
+        The charts can be filtered to a single publication year, but two filtered years are
+        <strong>not</strong> directly comparable, and the page says so when a year is selected.
+        Cohorts have not been observed for equal time: CVEs published this year have had months
+        in which to be exploited, where 2024's have had years. The recent cohort therefore
+        cannot show long lags at all, its longer buckets are necessarily emptier, and the year
+        reads as "exploited faster" for reasons that have nothing to do with attackers. This is
+        right-censoring, and it is the most common way a trend like this gets misread.
+      </p>
+      <p class="muted small">
+        The "Is it getting better or worse?" table avoids it by giving every year the same
+        ruler: the share of each year's CVEs exploited within a fixed 90-day window, counting
+        only CVEs old enough to have been watched for all 90 days. A cohort still accumulating
+        is excluded rather than reported short. The denominator is every CVE attributed to the
+        vendor that year, not only the exploited ones, so a vendor cannot improve its rate by
+        having more unexploited CVEs left out of the calculation.
+      </p>
+      <p class="muted small">
+        Ninety days rather than a year because it is the longest window the newest cohort still
+        has a usable denominator for — at 365 days it has none, and the most interesting row
+        disappears.
+      </p>
+
       <h3 style="margin-top:18px">Counting</h3>
       <p class="muted small">
         In the vendor and discovery views a CVE counts once no matter how many products it
@@ -349,6 +373,12 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
           <strong>Discovery attribution is uneven.</strong> Cisco and Palo Alto publish a discovery
           field; Fortinet does not, so theirs is read from published advisory pages. Records with
           no attribution are reported separately and never silently counted as either.
+        </li>
+        <li>
+          <strong>Year-filtered exploitation charts are censored, not wrong.</strong> The most
+          recent year cannot show long lags because there has not been time for one to occur.
+          Compare years using the fixed-window table, never by reading two filtered charts
+          against each other.
         </li>
         <li>
           <strong>Time-to-exploitation rests on very few CVEs.</strong> Only about fifty CVEs we

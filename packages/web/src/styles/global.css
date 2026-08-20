@@ -485,15 +485,62 @@ h3 {
      baseline instead of stepping up and down with their labels. */
   min-height: 14px;
 }
+/* The earlier cohort's count, beside the current one. */
+.runway-prev {
+  color: var(--text-muted);
+  font-size: 10px;
+  margin-left: 3px;
+}
+
+.runway-legend {
+  display: flex;
+  font-size: 12px;
+  gap: 4px 16px;
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+.runway-legend li {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 6px;
+}
+.runway-key {
+  background: var(--series-1);
+  border-radius: 2px;
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+.runway-key.is-prev {
+  background: var(--disc-user);
+}
+/* Holds one bar, or two when a previous cohort is being compared. 2px of
+   surface between them rather than a stroke -- a border would add ink that is
+   not data. */
+.runway-pair {
+  align-items: end;
+  display: flex;
+  gap: 2px;
+  height: 100%;
+  width: 100%;
+}
 /* 4px rounded at the data end, square against the baseline it grows from. */
 .runway-bar {
   background: var(--series-1);
   border-radius: 4px 4px 0 0;
   display: block;
+  flex: 1;
   /* A bucket holding one CVE must not round away to nothing when the panel's
      tallest bar is twenty-four. */
   min-height: 3px;
-  width: 100%;
+}
+/* The earlier cohort. A lighter step of the SAME hue, not a second categorical
+   colour: it is the same measure at a different time, and a new hue would read
+   as a different quantity. */
+.runway-bar.is-prev {
+  background: var(--disc-user);
 }
 /* An empty bucket keeps its column so the axis stays aligned, but draws only a
    baseline tick -- absence, not a value of zero height that reads as a bar. */
@@ -531,6 +578,17 @@ h3 {
   min-width: 96px;
   padding-top: 4px;
   text-align: right;
+}
+
+/* Censoring warning above the panels. Bordered rather than muted-grey because
+   it changes how the chart below it should be read, and a reader who misses it
+   draws the wrong conclusion from a chart that otherwise looks fine. */
+.kev-censor {
+  border-left: 3px solid var(--status-warning);
+  color: var(--text-secondary);
+  margin: 0 0 18px;
+  max-width: 78ch;
+  padding: 6px 0 6px 12px;
 }
 
 .runway-note {

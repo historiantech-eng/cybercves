@@ -23,12 +23,15 @@
 export interface KevTimingRow {
   cve_id: string;
   date_published: string;
+  published_year: number | null;
   date_added: string;
   ransomware_known: number;
   discovery: string | null;
   vendor_slug: string | null;
   product_slug: string | null;
   product_name: string | null;
+  category_slug: string | null;
+  category_name: string | null;
   days: number;
 }
 
@@ -133,8 +136,60 @@ const emptyCounts = (): Record<BandKey, number> => ({
 export interface AggregateOptions {
   /** Restrict to one vendor. Only meaningful for the product dimension. */
   vendorSlug?: string;
+  /**
+   * Restrict to CVEs PUBLISHED in this year — a cohort, not a window of KEV
+   * activity. Filtering on the KEV date instead would answer "what did CISA do
+   * in 2025", which says nothing about the vendor whose product it was.
+   *
+   * Cohorts are not observed for equal time; see COHORT_WINDOW_DAYS and
+   * Repository.getKevCohortRate before comparing one year against another.
+   */
+  year?: number | null;
+  /** Restrict to products in one category. Rows carry it per product. */
+  categorySlug?: string | null;
   /** Display names by slug, for vendor series. Products carry their own. */
   labels?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Observation window for the year-over-year rate, in days.
+ *
+ * 90 rather than 365 because it is the longest window the newest cohort still
+ * has a usable denominator for: at a year, the current cohort has none at all
+ * and the comparison silently loses its most interesting row.
+ */
+export const COHORT_WINDOW_DAYS = 90;
+
+/** Rows matching the year and category filters, before any grouping. */
+export function filterRows(
+  rows: readonly KevTimingRow[],
+  options: Pick<AggregateOptions, 'year' | 'categorySlug' | 'vendorSlug'> = {},
+): KevTimingRow[] {
+  const { year, categorySlug, vendorSlug } = options;
+  return rows.filter(
+    (row) =>
+      (!vendorSlug || row.vendor_slug === vendorSlug) &&
+      (year == null || row.published_year === year) &&
+      (!categorySlug || row.category_slug === categorySlug),
+  );
+}
+
+/** Publication years present in the data, newest first. */
+export function yearsIn(rows: readonly KevTimingRow[]): number[] {
+  return [...new Set(rows.map((r) => r.published_year).filter((y): y is number => y != null))].sort(
+    (a, b) => b - a,
+  );
+}
+
+/** Categories present, as slug/name pairs sorted by name. */
+export function categoriesIn(rows: readonly KevTimingRow[]): Array<{ slug: string; name: string }> {
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    if (row.category_slug) map.set(row.category_slug, row.category_name ?? row.category_slug);
+  }
+  return [...map.entries()]
+    .map(([slug, name]) => ({ slug, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
@@ -153,14 +208,12 @@ export function aggregateBy(
   dimension: Dimension,
   options: AggregateOptions = {},
 ): KevSeries[] {
-  const { vendorSlug, labels = {} } = options;
+  const { labels = {} } = options;
   const groups = new Map<string, { label: string; days: number[] }>();
   // Only consulted for the deduped dimensions; the product view wants every row.
   const seen = new Set<string>();
 
-  for (const row of rows) {
-    if (vendorSlug && row.vendor_slug !== vendorSlug) continue;
-
+  for (const row of filterRows(rows, options)) {
     let key: string | null;
     let label: string;
 
