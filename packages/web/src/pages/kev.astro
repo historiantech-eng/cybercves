@@ -1,16 +1,43 @@
 ---
 import Base from '../layouts/Base.astro';
 import CveTable from '../components/CveTable.astro';
+import KevRunway from '../components/KevRunway.astro';
 import { db } from '../lib/data';
+import { MIN_N, aggregateBy, countCves } from '../lib/kev-timing';
 
 const repo = db();
 const rows = repo ? await repo.listKevCves(300) : [];
+const timing = repo ? await repo.getKevTiming() : [];
+const vendors = repo ? await repo.listVendors() : [];
 const ransomware = rows.filter((r) => r.ransomware_known === 1).length;
+
+const vendorNames = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
+const byVendor = aggregateBy(timing, 'vendor', { labels: vendorNames });
+const byDiscovery = aggregateBy(timing, 'discovery');
+
+// Every vendor's product panel is rendered here and all but one are hidden; the
+// filter only flips which is visible. With three vendors and ~30 products the
+// whole set is a few kilobytes of markup, and building it server-side means the
+// browser never re-implements the aggregation — the failure mode where a chart
+// silently shows different numbers once the script loads cannot occur.
+const productPanels = vendors
+  .map((v) => ({
+    slug: v.slug,
+    name: v.name,
+    series: aggregateBy(timing, 'product', { vendorSlug: v.slug }),
+  }))
+  .filter((p) => p.series.length > 0)
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+const defaultVendor = productPanels[0]?.slug ?? '';
+
+const trackedCves = countCves(timing);
+const linkedCves = countCves(timing.filter((r) => r.product_slug));
 ---
 
 <Base
   title="Known exploited"
-  description="Tracked cybersecurity vendor CVEs listed in the CISA Known Exploited Vulnerabilities catalog — confirmed exploitation in the wild, not just high severity."
+  description="Tracked cybersecurity vendor CVEs in the CISA KEV catalog, with how long customers had between disclosure and documented exploitation."
 >
   <h1>Known exploited</h1>
   <p class="lede">
@@ -22,7 +49,105 @@ const ransomware = rows.filter((r) => r.ransomware_known === 1).length;
 
   <section class="section">
     <div class="card">
-      <CveTable rows={rows} caption="Known exploited CVEs" />
+      <CveTable rows={rows} caption="Known exploited CVEs" showKevTiming />
     </div>
   </section>
+
+  <section class="section">
+    <h2>How much warning did customers get?</h2>
+    <p class="lede small">
+      Days from a CVE record publishing to CISA listing it as exploited. Each dot is one CVE;
+      the dashed rule is the median. Read this as the outside limit of the defenders' head
+      start, not its measure — <strong>the KEV date is when exploitation was documented</strong>,
+      which trails when it began by an unknown margin.
+    </p>
+    <div class="card">
+      <KevRunway
+        series={byVendor}
+        caption="Vendor"
+        note={`${trackedCves.toLocaleString()} exploited CVEs across ${byVendor.length} vendors. Medians this close together, at these counts, are not a ranking — the distributions overlap almost entirely.`}
+      />
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>By product</h2>
+      <div class="filters" role="group" aria-label="Product comparison controls">
+        <div>
+          <label for="kev-vendor">Vendor</label>
+          <select id="kev-vendor" data-kev-vendor>
+            {
+              productPanels.map((p) => (
+                <option value={p.slug} selected={p.slug === defaultVendor}>
+                  {p.name}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+    <p class="lede small">
+      Which products attackers actually reach for. A product whose dots sit at zero is one
+      being exploited the day it is disclosed.
+    </p>
+    <div class="card">
+      {
+        productPanels.map((p) => (
+          <div data-kev-panel={p.slug} hidden={p.slug !== defaultVendor}>
+            <KevRunway
+              series={p.series}
+              caption={`${p.name} product`}
+              note={`Products are listed alphabetically, every one with at least one exploited CVE. Counts sum to more than the vendor total: a CVE affecting five products is a real vulnerability in each of them. Medians are shown from ${MIN_N} exploited CVEs upward.`}
+            />
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Who found it changes everything</h2>
+    <p class="lede small">
+      The same CVEs, grouped by how the vulnerability came to light. This is the one cut of
+      the data where the differences are not subtle.
+    </p>
+    <div class="card">
+      <KevRunway
+        series={byDiscovery}
+        caption="Discovery channel"
+        note="Vulnerabilities a vendor finds itself reach documented exploitation substantially later than ones reported from outside. Customer-reported bugs cluster at day zero for an unhappy reason: customers tend to report them after being breached. Attribution comes from vendor advisories and CVE credits; see /methodology."
+      />
+    </div>
+    {
+      linkedCves < trackedCves && (
+        <p class="muted small">
+          {(trackedCves - linkedCves).toLocaleString()} of {trackedCves.toLocaleString()} exploited
+          CVEs are not yet mapped to a product, so they appear here and in the table above but
+          in no vendor or product panel.
+        </p>
+      )
+    }
+  </section>
 </Base>
+
+<script>
+  /**
+   * Vendor filter for the product panels.
+   *
+   * Every panel is already in the DOM, server-rendered; this only changes which
+   * one is visible. Nothing is fetched, nothing is re-aggregated, and there is
+   * no template here that could drift from the one Astro rendered.
+   */
+  const select = document.querySelector<HTMLSelectElement>('[data-kev-vendor]');
+  const panels = document.querySelectorAll<HTMLElement>('[data-kev-panel]');
+
+  if (select && panels.length) {
+    select.addEventListener('change', () => {
+      for (const panel of panels) {
+        panel.hidden = panel.dataset.kevPanel !== select.value;
+      }
+    });
+  }
+</script>

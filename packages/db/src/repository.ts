@@ -42,6 +42,27 @@ const RISK_SQL = `(CASE c.cvss_severity
                   * (CASE WHEN k.cve_id IS NOT NULL THEN 4 ELSE 1 END)
                   * (1 + COALESCE(e.score, 0))`;
 
+/**
+ * Days from a CVE being published to CISA documenting exploitation of it.
+ *
+ * Written once for the same reason as RISK_SQL: the KEV table and the runway
+ * charts must not be able to disagree about what "days to exploit" means.
+ *
+ * The substr is load-bearing, not defensive. `cve.date_published` is a full
+ * ISO-8601 timestamp ('2023-10-16T20:00:00.000Z') while `kev.date_added` is a
+ * bare date ('2023-10-16'); handing julianday the raw timestamp yields a
+ * fractional day that truncates toward zero, so a CVE published at 20:00 and
+ * exploited the next morning reads as 0 days rather than 1. Slicing both to
+ * YYYY-MM-DD makes this a calendar-day difference, which is the only precision
+ * `date_added` actually carries.
+ *
+ * Negative results are legitimate and must not be clamped here: CISA sometimes
+ * lists a CVE before its record publishes, and "exploited before disclosure" is
+ * the single most important thing this metric can say. Expects `c` and `k`.
+ */
+const KEV_LAG_SQL = `CAST(julianday(substr(k.date_added, 1, 10))
+                          - julianday(substr(c.date_published, 1, 10)) AS INTEGER)`;
+
 export interface UpsertResult {
   inserted: number;
   updated: number;
@@ -922,10 +943,12 @@ export class Repository {
       products: string | null;
       ransomware_known: number;
       in_kev: number;
+      days: number | null;
     }>(
       `SELECT c.cve_id, c.date_published, k.date_added,
               c.cvss_severity AS severity, c.cvss_base_score AS score,
               e.score AS epss, k.ransomware_known, 1 AS in_kev,
+              ${KEV_LAG_SQL} AS days,
               (SELECT GROUP_CONCAT(DISTINCT cp.vendor_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS vendors,
               (SELECT GROUP_CONCAT(DISTINCT cp.product_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS products
        FROM kev k
@@ -934,6 +957,51 @@ export class Repository {
        ORDER BY k.date_added DESC, c.cve_id DESC
        LIMIT ?`,
       [limit],
+    );
+  }
+
+  /**
+   * One row per (known-exploited CVE, affected product), for the runway charts.
+   *
+   * Flat and unaggregated on purpose. The same rows have to answer three
+   * different questions — per vendor, per product, per discovery channel — and
+   * two of those need the CVE counted once while the third needs it counted in
+   * every product it affects. Aggregating here would force one of those shapes
+   * on all three; the caller dedupes per view instead (see lib/kev-timing.ts).
+   *
+   * LEFT JOIN, not JOIN: a KEV CVE we track but have not mapped to a product is
+   * still a real exploited vulnerability and still belongs in the corpus-wide
+   * and discovery views. Inner-joining would drop it from those panels while
+   * leaving it in the table above them, so the page would quietly disagree with
+   * itself about how many exploited CVEs there are.
+   *
+   * Rows with no `date_published` are excluded rather than emitted with a null
+   * lag: there is no runway to measure without a start date, and a null would
+   * have to be filtered by every consumer anyway.
+   */
+  async getKevTiming() {
+    return this.#db.all<{
+      cve_id: string;
+      date_published: string;
+      date_added: string;
+      ransomware_known: number;
+      discovery: string | null;
+      vendor_slug: string | null;
+      product_slug: string | null;
+      product_name: string | null;
+      days: number;
+    }>(
+      `SELECT c.cve_id, c.date_published, k.date_added, k.ransomware_known,
+              c.discovery, cp.vendor_slug, cp.product_slug,
+              p.name AS product_name,
+              ${KEV_LAG_SQL} AS days
+         FROM kev k
+         JOIN cve c               ON c.cve_id = k.cve_id
+         LEFT JOIN cve_product cp ON cp.cve_id = k.cve_id
+         LEFT JOIN product p      ON p.slug = cp.product_slug
+        WHERE c.date_published IS NOT NULL
+          AND c.state = 'PUBLISHED'
+        ORDER BY days, c.cve_id`,
     );
   }
 

@@ -356,6 +356,19 @@ h3 {
   white-space: nowrap;
 }
 
+/* Deliberately quieter than .kev-flag: on the KEV page every row is already
+   exploited, so ransomware use is a qualifier on that fact rather than a second
+   alarm. The word carries it; the border only groups it. */
+.ransom-flag {
+  border: 1px solid var(--gridline);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------ vendor race */
 
 .race {
@@ -404,6 +417,123 @@ h3 {
   color: var(--text-secondary);
   min-width: 46px;
   text-align: right;
+}
+
+/* --------------------------------------------------- kev runway dot plot */
+
+/* Global rather than scoped to KevRunway.astro, matching .race-* and .svc-*.
+   astro.config.mjs explains why: every inline <style> block Astro emits adds a
+   hash to style-src, and a style-src carrying any hash ignores 'unsafe-inline'
+   — which this site needs for the inline style ATTRIBUTES that give every bar
+   its width and, here, every dot its position. Four components still carry a
+   <style> block and each one is a step to undo before CSP can be re-enabled.
+   This is not a fifth. */
+
+.runway {
+  display: grid;
+  gap: 4px;
+}
+.runway-row {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(110px, 190px) 1fr auto;
+}
+.runway-name {
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow: hidden;
+  padding-bottom: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runway-n {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.runway-track {
+  position: relative;
+}
+/* Band separators, not gridlines: the axis is piecewise, so the boundaries are
+   the information. Recessive — they sit behind the data. */
+.runway-band {
+  border-left: 1px solid var(--gridline);
+  bottom: 0;
+  position: absolute;
+  top: 0;
+}
+.runway-band:first-of-type {
+  border-left: 0;
+}
+.runway-dot {
+  background: var(--series-1);
+  border-radius: 50%;
+  /* A 2px ring in the surface colour so adjacent and near-coincident dots stay
+     individually countable instead of merging into a blob. */
+  box-shadow: 0 0 0 2px var(--surface-1);
+  height: 9px;
+  margin-left: -4.5px;
+  position: absolute;
+  width: 9px;
+}
+/* The median rule reads as an annotation, not a series: same hue, thin, dashed,
+   and behind the dots. */
+.runway-median {
+  border-left: 2px dashed var(--text-muted);
+  bottom: -2px;
+  position: absolute;
+  top: -2px;
+}
+.runway-median-value {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 92px;
+  padding-bottom: 4px;
+  text-align: right;
+}
+.runway-axis {
+  display: flex;
+  grid-column: 2 / 3;
+  margin-top: 2px;
+}
+.runway-tick {
+  border-left: 1px solid var(--gridline);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 0 0 5px;
+}
+.runway-tick:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.runway-note {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+}
+.runway-table {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+}
+.runway-table summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+@media (max-width: 620px) {
+  .runway-row {
+    grid-template-columns: 1fr auto;
+  }
+  /* The track spans the full width below its own label rather than shrinking to
+     a strip too narrow to separate the bands. */
+  .runway-track {
+    grid-column: 1 / -1;
+  }
+  .runway-axis {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ---------------------------------------------------------------- tables */

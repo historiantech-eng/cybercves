@@ -190,6 +190,64 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
 
   <section class="section">
     <div class="card">
+      <h2>Time to exploitation</h2>
+      <p class="muted">
+        On <a href="/kev">Exploited</a>, each known-exploited CVE carries the number of calendar
+        days between its record publishing and CISA listing it in the KEV catalog. It is the
+        closest available proxy for how long customers had to patch before attackers were
+        documented using the vulnerability.
+      </p>
+
+      <h3 style="margin-top:18px">What the number does and does not say</h3>
+      <ul class="muted small">
+        <li>
+          <strong>The KEV date is when exploitation was documented, not when it began.</strong>
+          CISA adds an entry once it has reliable evidence, which trails real attacker activity
+          by an unknown margin and by CISA's own process. Every figure is therefore an upper
+          bound on the defender's warning and a lower bound on the attacker's head start.
+        </li>
+        <li>
+          <strong>A long runway does not prove diligence.</strong> The metric cannot separate "the
+          vendor found and fixed this early" from "nobody bothered attacking this product". Both
+          produce the same number.
+        </li>
+        <li>
+          <strong>Zero is a real value, not a missing one.</strong> A CVE published the same day
+          it was listed had no patch window at all. Where CISA listed a CVE before its record
+          published, the lag is negative and is shown at the same position — exploitation
+          preceded disclosure.
+        </li>
+      </ul>
+
+      <h3 style="margin-top:18px">Why the median, and why no percentiles</h3>
+      <p class="muted small">
+        The median is the only summary shown. The arithmetic mean is not reported because it is
+        actively misleading at this scale: one vendor's mean is more than twenty times its
+        median, carried by two late catalogue additions, and ranking on it would show the vendor
+        whose typical exploited CVE is weaponised within two days as the one giving customers the
+        most time. Percentiles are not reported either — with eleven to twenty-three exploited
+        CVEs per vendor, a 95th percentile interpolates between the last two observations and is
+        the maximum under another name.
+      </p>
+      <p class="muted small">
+        For the same reason a median is withheld entirely below five exploited CVEs. The
+        individual observations are still plotted, because each is a real CVE with a real date;
+        it is the summary that is not supportable. Most products fall under this threshold.
+      </p>
+
+      <h3 style="margin-top:18px">Counting</h3>
+      <p class="muted small">
+        In the vendor and discovery views a CVE counts once no matter how many products it
+        affects. In the per-product view it counts in each product it affects, because it is a
+        real vulnerability in each — so per-product totals sum to more than the vendor total.
+        Products are listed alphabetically rather than ranked, since sorting by median would
+        order the many products holding a single observation against one another.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
       <h2>How CVEs are attributed to vendors</h2>
       <p class="muted">
         Not every CVE affecting a vendor is filed by that vendor. Researchers routinely submit
@@ -291,6 +349,14 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
           <strong>Discovery attribution is uneven.</strong> Cisco and Palo Alto publish a discovery
           field; Fortinet does not, so theirs is read from published advisory pages. Records with
           no attribution are reported separately and never silently counted as either.
+        </li>
+        <li>
+          <strong>Time-to-exploitation rests on very few CVEs.</strong> Only about fifty CVEs we
+          track have ever been listed as exploited — eleven to twenty-three per vendor, and a
+          single observation for half the products involved. The vendor medians sit within days
+          of each other and the distributions overlap almost entirely, so the ordering between
+          them is not a finding. Treat that panel as a description of how little warning these
+          products tend to come with, not as a ranking of the companies behind them.
         </li>
       </ul>
     </div>

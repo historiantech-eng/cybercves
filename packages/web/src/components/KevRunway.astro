@@ -1,0 +1,178 @@
+---
+import {
+  BANDS,
+  MIN_N,
+  bandPosition,
+  bandsPresent,
+  formatLag,
+  layoutDots,
+  maxStack,
+} from '../lib/kev-timing';
+import type { KevSeries } from '../lib/kev-timing';
+
+/** Vertical pitch of a stacked dot, and the dot's own size. Keep in step with global.css. */
+const DOT_PITCH = 7;
+const DOT_SIZE = 9;
+
+interface Props {
+  series: KevSeries[];
+  /** Screen-reader caption for the table twin. */
+  caption: string;
+  /** Shown under the axis — denominators and caveats belong here. */
+  note?: string;
+}
+
+const { series, caption, note } = Astro.props;
+
+// Only bands some series actually reaches. With coverage starting in 2024 the
+// "over a year" band is empty, and drawing an axis segment no dot can occupy
+// implies we looked there and found nothing rather than that we could not look.
+const bands = bandsPresent(series);
+const shown = bands.length ? bands : BANDS.slice(0, 1);
+const total = series.reduce((sum, s) => sum + s.n, 0);
+---
+
+{/*
+  A banded dot plot: one row per series, one dot per exploited CVE, a rule at the
+  median. Dots rather than a bar because the distribution IS the finding — the
+  clustering at day zero is what the reader needs to see, and any summary bar
+  would hide exactly that.
+
+  Every row is also a row in the table twin below, so nothing here depends on
+  reading a chart, and the median is written as text beside each row rather than
+  only implied by the rule's position.
+*/}
+<div class="runway">
+  {
+    series.length === 0 && (
+      <p class="empty">No exploited CVEs on record for this selection.</p>
+    )
+  }
+
+  {
+    series.map((s) => {
+      const dots = layoutDots(s.days);
+      // The row grows to fit its deepest stack rather than clipping it: a
+      // clipped stack silently undercounts exactly where the data is densest.
+      const height = Math.max(22, maxStack(dots) * DOT_PITCH + DOT_SIZE);
+      return (
+      <div class="runway-row">
+        <div class="runway-name">
+          {s.label}
+          <span class="runway-n"> n={s.n}</span>
+        </div>
+
+        <div
+          class="runway-track"
+          style={`height: ${height}px`}
+          role="img"
+          {/* Spelled out rather than reusing formatLag: its em-dash form ("0 —
+              same day") is built for a table cell and reads badly aloud. */}
+          aria-label={`${s.label}: ${s.n} exploited ${s.n === 1 ? 'CVE' : 'CVEs'}, ${
+            s.median === null
+              ? 'median withheld, too few observations'
+              : s.median <= 0
+                ? 'median zero days — typically exploited on the day of disclosure'
+                : `median ${s.median} ${s.median === 1 ? 'day' : 'days'} to documented exploitation`
+          }`}
+        >
+          {shown.map((_, i) => (
+            <span
+              class="runway-band"
+              style={`left: ${(i / shown.length) * 100}%; width: ${100 / shown.length}%`}
+              aria-hidden="true"
+            />
+          ))}
+
+          {s.median !== null && (
+            <span
+              class="runway-median"
+              style={`left: ${bandPosition(s.median)}%`}
+              aria-hidden="true"
+            />
+          )}
+
+          {dots.map((dot) => (
+            <span
+              class="runway-dot"
+              style={`left: ${dot.x}%; bottom: ${dot.stack * DOT_PITCH}px`}
+              title={`${formatLag(dot.days)} to documented exploitation`}
+            />
+          ))}
+        </div>
+
+        <div class="runway-median-value">
+          {s.median !== null ? (
+            formatLag(s.median)
+          ) : (
+            <span class="muted" title={`Withheld below ${MIN_N} observations`}>—</span>
+          )}
+        </div>
+      </div>
+      );
+    })
+  }
+
+  {
+    series.length > 0 && (
+      <div class="runway-axis" aria-hidden="true">
+        {shown.map((band) => (
+          <span class="runway-tick" style={`width: ${100 / shown.length}%`}>
+            {band.label}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  {
+    series.some((s) => s.suppressed) && (
+      <p class="runway-note muted small">
+        A dash means the median is withheld: fewer than {MIN_N} exploited CVEs, where a
+        median reads as typical behaviour but is a handful of individual cases. The dots are
+        every observation.
+      </p>
+    )
+  }
+
+  {note && <p class="runway-note muted small">{note}</p>}
+
+  {
+    series.length > 0 && (
+      <details class="runway-table">
+        <summary>Table view</summary>
+        <div class="table-scroll">
+          <table>
+            <caption class="sr-only">{caption}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{caption}</th>
+                <th scope="col" class="num">
+                  Exploited CVEs
+                </th>
+                <th scope="col" class="num">
+                  Median
+                </th>
+                <th scope="col">Days to exploitation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {series.map((s) => (
+                <tr>
+                  <th scope="row">{s.label}</th>
+                  <td class="num">{s.n.toLocaleString()}</td>
+                  <td class="num">{s.median !== null ? s.median.toLocaleString() : '—'}</td>
+                  <td class="small muted">{s.days.join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="muted small">
+          {total.toLocaleString()} observations. Days are calendar days from the CVE record
+          publishing to CISA listing it as exploited.
+        </p>
+      </details>
+    )
+  }
+</div>

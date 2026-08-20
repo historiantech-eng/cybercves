@@ -198,6 +198,105 @@ describe('enrichment', () => {
   });
 });
 
+describe('getKevTiming', () => {
+  it('measures the lag in calendar days, one row per affected product', async () => {
+    await ingest('CVE-2023-20198');
+    await repo.upsertKev([
+      {
+        cveId: 'CVE-2023-20198',
+        dateAdded: '2023-10-20',
+        dueDate: null,
+        ransomwareKnown: true,
+        vendorProject: 'Cisco',
+        product: 'IOS XE',
+      },
+    ]);
+
+    const rows = await repo.getKevTiming();
+    expect(rows.length).toBeGreaterThan(0);
+
+    // The CVE published 2023-10-16T20:00:00Z. Comparing the raw timestamp
+    // against a bare date yields a fraction that truncates to 3; the lag has to
+    // be a calendar-day difference, which is all `date_added` can support.
+    for (const row of rows) {
+      expect(row.cve_id).toBe('CVE-2023-20198');
+      expect(row.days).toBe(4);
+      expect(row.ransomware_known).toBe(1);
+    }
+  });
+
+  it('keeps a KEV CVE that maps to no product', async () => {
+    // Inner-joining cve_product would drop it here while the KEV table above it
+    // still listed it, so the page would disagree with itself on the count.
+    await db.run(
+      `INSERT INTO cve (cve_id, state, date_published, published_year, source_hash,
+                        first_seen_at, last_synced_at)
+       VALUES ('CVE-2026-9999', 'PUBLISHED', '2026-01-01T00:00:00.000Z', 2026, 'h', 'n', 'n')`,
+    );
+    await repo.upsertKev([
+      {
+        cveId: 'CVE-2026-9999',
+        dateAdded: '2026-01-09',
+        dueDate: null,
+        ransomwareKnown: false,
+        vendorProject: 'Someone',
+        product: 'Something',
+      },
+    ]);
+
+    const rows = await repo.getKevTiming();
+    const orphan = rows.find((r) => r.cve_id === 'CVE-2026-9999');
+    expect(orphan).toBeDefined();
+    expect(orphan?.product_slug).toBeNull();
+    expect(orphan?.vendor_slug).toBeNull();
+    expect(orphan?.days).toBe(8);
+  });
+
+  it('excludes a CVE with no publication date, having no runway to measure', async () => {
+    await db.run(
+      `INSERT INTO cve (cve_id, state, date_published, published_year, source_hash,
+                        first_seen_at, last_synced_at)
+       VALUES ('CVE-2026-8888', 'PUBLISHED', NULL, NULL, 'h', 'n', 'n')`,
+    );
+    await repo.upsertKev([
+      {
+        cveId: 'CVE-2026-8888',
+        dateAdded: '2026-01-09',
+        dueDate: null,
+        ransomwareKnown: false,
+        vendorProject: null,
+        product: null,
+      },
+    ]);
+
+    const rows = await repo.getKevTiming();
+    expect(rows.find((r) => r.cve_id === 'CVE-2026-8888')).toBeUndefined();
+  });
+
+  it('reports a negative lag when CISA listed the CVE before it published', async () => {
+    await db.run(
+      `INSERT INTO cve (cve_id, state, date_published, published_year, source_hash,
+                        first_seen_at, last_synced_at)
+       VALUES ('CVE-2026-7777', 'PUBLISHED', '2026-03-10T00:00:00.000Z', 2026, 'h', 'n', 'n')`,
+    );
+    await repo.upsertKev([
+      {
+        cveId: 'CVE-2026-7777',
+        dateAdded: '2026-03-04',
+        dueDate: null,
+        ransomwareKnown: false,
+        vendorProject: null,
+        product: null,
+      },
+    ]);
+
+    const rows = await repo.getKevTiming();
+    // Must not be clamped: exploited-before-disclosure is the most severe thing
+    // this metric can report, and zeroing it would erase the distinction.
+    expect(rows.find((r) => r.cve_id === 'CVE-2026-7777')?.days).toBe(-6);
+  });
+});
+
 describe('taxonomy review queue', () => {
   it('records unmapped products and counts repeat sightings', async () => {
     const unmapped = [{ vendorRaw: 'Fortinet', productRaw: 'FortiBrandNew', vendorSlug: 'fortinet' }];

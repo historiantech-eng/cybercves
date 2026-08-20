@@ -1,6 +1,7 @@
 ---
 import Severity from './Severity.astro';
 import { formatDate, splitList } from '../lib/data';
+import { formatLag } from '../lib/kev-timing';
 
 interface Row {
   cve_id: string;
@@ -11,15 +12,27 @@ interface Row {
   epss?: number | null;
   vendors?: string | null;
   products?: string | null;
+  /** KEV-only, and only when the caller asks for them — see showKevTiming. */
+  date_added?: string | null;
+  days?: number | null;
+  ransomware_known?: number;
 }
 
 interface Props {
   rows: Row[];
   showVendor?: boolean;
   caption?: string;
+  /**
+   * Add the "Added to KEV" and "Days to exploit" columns.
+   *
+   * Opt-in because this table is shared by the homepage, /years, /categories
+   * and /vendors, none of which query those fields — they would render a column
+   * of dashes. Only listKevCves supplies them.
+   */
+  showKevTiming?: boolean;
 }
 
-const { rows, showVendor = true, caption } = Astro.props;
+const { rows, showVendor = true, caption, showKevTiming = false } = Astro.props;
 ---
 
 {/* Wide content scrolls inside its own container — the page body never scrolls sideways. */}
@@ -30,6 +43,12 @@ const { rows, showVendor = true, caption } = Astro.props;
       <tr>
         <th scope="col">CVE</th>
         <th scope="col">Published</th>
+        {/* Both of these are guarded by the same flag as their <td> counterparts
+            below. The header and body are separate loops, so a column added to
+            one and not the other shifts every cell in every row without failing
+            anything. */}
+        {showKevTiming && <th scope="col">Added to KEV</th>}
+        {showKevTiming && <th scope="col">Days to exploit</th>}
         <th scope="col">Severity</th>
         {showVendor && <th scope="col">Vendor</th>}
         <th scope="col">Products</th>
@@ -54,6 +73,26 @@ const { rows, showVendor = true, caption } = Astro.props;
               )}
             </td>
             <td class="muted small">{formatDate(row.date_published ?? null)}</td>
+            {showKevTiming && (
+              <td class="muted small">
+                {formatDate(row.date_added ?? null)}
+                {row.ransomware_known === 1 && (
+                  <>
+                    {' '}
+                    <span class="ransom-flag" title="Known ransomware campaign use">
+                      RANSOM
+                    </span>
+                  </>
+                )}
+              </td>
+            )}
+            {showKevTiming && (
+              <td class="small">
+                {/* Written with its unit, never as a bare integer: a lone "0"
+                    reads as missing data when it is the most severe value here. */}
+                {row.days != null ? formatLag(row.days) : '—'}
+              </td>
+            )}
             <td>
               <Severity severity={row.severity ?? null} score={row.score ?? null} />
             </td>
