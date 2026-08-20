@@ -33,18 +33,18 @@ export interface KevTimingRow {
 }
 
 /**
- * The axis, as bands rather than a linear scale.
+ * The buckets the histogram counts into.
  *
  * Lags run 0 to 237 days and cluster hard at zero — 20 of the 51 CVEs we track
- * were exploited on their publication date. A linear axis stacks two thirds of
- * the data on the left edge and spends most of its width on the two outliers. A
- * log axis cannot plot day zero at all, which is the single most important
- * value on the chart.
+ * were exploited on their publication date. Plotting each observation
+ * individually crowds that cluster into an unreadable clump, so the chart counts
+ * per bucket instead and the bar heights carry the shape.
  *
- * Equal-width bands with linear interpolation inside each one give the crowded
- * region room and keep the tail visible, at the cost of the axis not being
- * proportional — which is why every band is labelled with its own range and the
- * table twin carries the raw numbers.
+ * Ranges widen as they go because the interesting resolution is at the short
+ * end: the difference between 0 and 7 days decides whether a patch window
+ * existed at all, while the difference between 200 and 300 days does not change
+ * anyone's decision. Every bar is labelled with its own range, since unequal
+ * buckets are only honest when the reader can see the widths.
  */
 export const BANDS = [
   { key: 'same-day', label: 'Same day', short: '0', lo: Number.NEGATIVE_INFINITY, hi: 0 },
@@ -60,10 +60,10 @@ export type BandKey = (typeof BANDS)[number]['key'];
 /**
  * Minimum observations before a median is shown.
  *
- * Below this the dots are still drawn — each is a real CVE with a real lag, and
- * individually true. The summary is what gets withheld, because a "median" over
- * three points invites being read as this product's typical behaviour when it is
- * three anecdotes. 17 of the 32 products with any KEV entry have exactly one.
+ * Below this the bars are still drawn — the counts are real, and individually
+ * true. The summary is what gets withheld, because a "median" over three points
+ * invites being read as this product's typical behaviour when it is three
+ * anecdotes. 17 of the 32 products with any KEV entry have exactly one.
  *
  * Same rule and same reasoning as MIN_COVERAGE in DiscoveryBar.astro.
  */
@@ -74,75 +74,14 @@ export const MIN_N = 5;
  *
  * CISA occasionally lists a CVE before its record publishes. That is not an
  * error to discard: it means exploitation was documented before disclosure, the
- * worst case this chart can depict, and it belongs at the left edge rather than
- * off the axis.
+ * worst case this chart can depict, and it belongs in the leftmost bucket rather
+ * than off the scale.
  */
 export function bandOf(days: number): BandKey {
   for (const band of BANDS) {
     if (days <= band.hi) return band.key;
   }
   return 'beyond';
-}
-
-/**
- * Horizontal position, 0-100, for a dot on the banded axis.
- *
- * Everything at or below zero sits mid-band: the band represents a single value
- * ("no warning at all"), so spreading it would imply a precision the band does
- * not have. Anything past the last band's ceiling clamps to the right edge.
- */
-export function bandPosition(days: number): number {
-  const width = 100 / BANDS.length;
-  const index = BANDS.findIndex((b) => days <= b.hi);
-  const i = index === -1 ? BANDS.length - 1 : index;
-  const band = BANDS[i];
-
-  const span = band.hi - band.lo;
-  const fraction =
-    !Number.isFinite(span) || span <= 0
-      ? 0.5
-      : Math.min(Math.max((days - band.lo) / span, 0), 1);
-
-  return (i + fraction) * width;
-}
-
-export interface DotPlacement {
-  days: number;
-  /** Horizontal position, 0-100. */
-  x: number;
-  /** How many dots already occupy this position; the chart stacks upward by it. */
-  stack: number;
-}
-
-/**
- * Place every observation, stacking coincident ones vertically.
- *
- * Without this the chart lies by omission. 20 of the 51 CVEs we track were
- * exploited on their publication date, so they share an exact position and draw
- * as one dot — a reader sees a single mark where the chart's most important
- * finding is that there are twenty. Stacking is also why the marks are dots and
- * not a density curve: at these counts every observation can simply be shown.
- *
- * Positions are bucketed to the half-percent before stacking, so dots that are
- * merely near each other (and would overlap visually) stack too, rather than
- * smearing into an unreadable clump.
- */
-export function layoutDots(days: readonly number[]): DotPlacement[] {
-  const occupancy = new Map<number, number>();
-  return [...days]
-    .sort((a, b) => a - b)
-    .map((d) => {
-      const x = bandPosition(d);
-      const slot = Math.round(x * 2) / 2;
-      const stack = occupancy.get(slot) ?? 0;
-      occupancy.set(slot, stack + 1);
-      return { days: d, x, stack };
-    });
-}
-
-/** Deepest stack in a set of placements — the chart sizes its rows from this. */
-export function maxStack(dots: readonly DotPlacement[]): number {
-  return dots.reduce((max, d) => Math.max(max, d.stack + 1), 0);
 }
 
 /** Median, or null for an empty set. Even-length sets average the middle pair. */
@@ -157,11 +96,14 @@ export interface KevSeries {
   key: string;
   label: string;
   n: number;
-  /** Every observation, ascending. The chart plots these directly. */
+  /** Every observation, ascending. The table twin lists these verbatim. */
   days: number[];
+  /** How many observations fall in each bucket — the bar heights. */
   counts: Record<BandKey, number>;
   /** Withheld below MIN_N — see the constant. */
   median: number | null;
+  /** Bucket the median falls in, so the chart can mark it. Null when withheld. */
+  medianBand: BandKey | null;
   /** True when a median exists but is being withheld, so the UI can say why. */
   suppressed: boolean;
 }
@@ -255,13 +197,15 @@ export function aggregateBy(
   const series: KevSeries[] = [...groups.entries()].map(([key, { label, days }]) => {
     const counts = emptyCounts();
     for (const d of days) counts[bandOf(d)]++;
+    const med = days.length >= MIN_N ? median(days) : null;
     return {
       key,
       label,
       n: days.length,
       days: [...days].sort((a, b) => a - b),
       counts,
-      median: days.length >= MIN_N ? median(days) : null,
+      median: med,
+      medianBand: med === null ? null : bandOf(med),
       suppressed: days.length > 0 && days.length < MIN_N,
     };
   });

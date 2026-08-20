@@ -1,8 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
-import KevRunway from '../components/KevRunway.astro';
 import { CURRENT_YEAR, db } from '../lib/data';
-import { aggregateBy, countCves } from '../lib/kev-timing';
 
 const repo = db();
 const years = repo ? await repo.listYears() : [];
@@ -11,15 +9,6 @@ const categories = repo ? await repo.listCategories() : [];
 
 // Server-rendered default so the page is indexable and useful without JS.
 const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
-
-// Exploitation timing is not year-scoped and not driven by the filters above:
-// only ~50 CVEs we track have ever been listed as exploited, and slicing that
-// by year leaves single-digit cells that cannot support a comparison.
-const kevTiming = repo ? await repo.getKevTiming() : [];
-const kevByVendor = aggregateBy(kevTiming, 'vendor', {
-  labels: Object.fromEntries(vendors.map((v) => [v.slug, v.name])),
-});
-const kevCves = countCves(kevTiming);
 ---
 
 <Base
@@ -126,26 +115,6 @@ const kevCves = countCves(kevTiming);
     <a href="/methodology">methodology</a>.
   </p>
 
-  <section class="section">
-    <h2>Time to exploitation</h2>
-    <p class="lede small">
-      Counts say how much a vendor disclosed. This says how long its customers had before
-      attackers were caught using it — days from a CVE publishing to CISA listing it as
-      exploited. Deliberately not year-filtered: at these counts a single year holds too few
-      exploited CVEs to compare.
-    </p>
-    <div class="card">
-      <KevRunway
-        series={kevByVendor}
-        caption="Vendor"
-        note={`${kevCves.toLocaleString()} exploited CVEs, all years. The medians sit within days of each other and the distributions overlap almost entirely — this is a description of the exposure these products carry, not a ranking of the vendors behind them.`}
-      />
-    </div>
-    <p class="small muted">
-      Per-product breakdowns and the discovery-channel split are on{' '}
-      <a href="/kev">Exploited</a>.
-    </p>
-  </section>
 </Base>
 
 <style>

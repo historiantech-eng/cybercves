@@ -48,17 +48,11 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
   </p>
 
   <section class="section">
-    <div class="card">
-      <CveTable rows={rows} caption="Known exploited CVEs" showKevTiming />
-    </div>
-  </section>
-
-  <section class="section">
     <h2>How much warning did customers get?</h2>
     <p class="lede small">
-      Days from a CVE record publishing to CISA listing it as exploited. Each dot is one CVE;
-      the dashed rule is the median. Read this as the outside limit of the defenders' head
-      start, not its measure — <strong>the KEV date is when exploitation was documented</strong>,
+      How many exploited CVEs fell in each window between the CVE record publishing and CISA
+      listing it as exploited. Read this as the outside limit of the defenders' head start,
+      not its measure — <strong>the KEV date is when exploitation was documented</strong>,
       which trails when it began by an unknown margin.
     </p>
     <div class="card">
@@ -89,8 +83,8 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
       </div>
     </div>
     <p class="lede small">
-      Which products attackers actually reach for. A product whose dots sit at zero is one
-      being exploited the day it is disclosed.
+      Which products attackers actually reach for. A product whose bars pile up in the first
+      bucket is one being exploited the day it is disclosed.
     </p>
     <div class="card">
       {
@@ -124,11 +118,22 @@ const linkedCves = countCves(timing.filter((r) => r.product_slug));
       linkedCves < trackedCves && (
         <p class="muted small">
           {(trackedCves - linkedCves).toLocaleString()} of {trackedCves.toLocaleString()} exploited
-          CVEs are not yet mapped to a product, so they appear here and in the table above but
+          CVEs are not yet mapped to a product, so they appear here and in the table below but
           in no vendor or product panel.
         </p>
       )
     }
+  </section>
+
+  <section class="section">
+    <h2>Every exploited CVE we track</h2>
+    <p class="lede small">
+      Newest KEV additions first. "Days to exploit" is the same measure the charts above
+      bucket.
+    </p>
+    <div class="card">
+      <CveTable rows={rows} caption="Known exploited CVEs" showKevTiming />
+    </div>
   </section>
 </Base>
 

@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BANDS,
   MIN_N,
   aggregateBy,
   bandOf,
-  bandPosition,
   countCves,
   formatLag,
-  layoutDots,
-  maxStack,
   median,
 } from '../src/lib/kev-timing';
 import type { KevTimingRow } from '../src/lib/kev-timing';
@@ -51,29 +47,10 @@ describe('bands', () => {
     expect(bandOf(5000)).toBe('beyond');
   });
 
-  it('folds a negative lag into same-day rather than off the axis', () => {
+  it('folds a negative lag into same-day rather than off the scale', () => {
     // CISA can list a CVE before its record publishes. That is the worst case
-    // this chart depicts, so it must land at the left edge, not vanish.
+    // this chart depicts, so it must land in the first bucket, not vanish.
     expect(bandOf(-4)).toBe('same-day');
-    expect(bandPosition(-4)).toBe(bandPosition(0));
-  });
-
-  it('keeps positions inside 0-100 and ordered by band', () => {
-    const values = [-10, 0, 1, 7, 8, 30, 31, 90, 91, 365, 366, 99999];
-    const positions = values.map(bandPosition);
-    for (const p of positions) {
-      expect(p).toBeGreaterThanOrEqual(0);
-      expect(p).toBeLessThanOrEqual(100);
-    }
-    // Monotonic: a longer runway is never drawn to the left of a shorter one.
-    for (let i = 1; i < positions.length; i++) {
-      expect(positions[i]).toBeGreaterThanOrEqual(positions[i - 1]);
-    }
-  });
-
-  it('spreads the whole axis across the declared bands', () => {
-    expect(bandPosition(0)).toBeCloseTo(100 / BANDS.length / 2, 5);
-    expect(bandPosition(99999)).toBeCloseTo(100, 5);
   });
 });
 
@@ -94,21 +71,38 @@ describe('median', () => {
   });
 });
 
-describe('dot layout', () => {
-  it('stacks coincident observations instead of drawing them on top of each other', () => {
-    const dots = layoutDots([0, 0, 0, 0]);
-    expect(dots.map((d) => d.stack)).toEqual([0, 1, 2, 3]);
-    expect(new Set(dots.map((d) => d.x)).size).toBe(1);
-    expect(maxStack(dots)).toBe(4);
+describe('bucket counts', () => {
+  it('tallies each observation into exactly one bucket', () => {
+    const days = [0, 0, -2, 1, 7, 8, 30, 31, 90, 91, 365, 400];
+    const rows = days.map((d, i) => row({ cve_id: `CVE-2026-${i}`, days: d }));
+    const [series] = aggregateBy(rows, 'vendor');
+
+    expect(series.counts).toEqual({
+      'same-day': 3,
+      week: 2,
+      month: 2,
+      quarter: 2,
+      year: 2,
+      beyond: 1,
+    });
+    // The bars must account for every CVE in the row's own n, or the chart is
+    // quietly dropping observations the label claims are there.
+    const summed = Object.values(series.counts).reduce((a, b) => a + b, 0);
+    expect(summed).toBe(series.n);
+    expect(summed).toBe(days.length);
   });
 
-  it('does not stack observations that are far apart', () => {
-    const dots = layoutDots([0, 200]);
-    expect(dots.every((d) => d.stack === 0)).toBe(true);
-  });
+  it('reports which bucket the median falls in, and none when it is withheld', () => {
+    const many = Array.from({ length: 9 }, (_, i) =>
+      row({ cve_id: `CVE-2026-2${i}`, days: i < 5 ? 0 : 200 }),
+    );
+    const [shown] = aggregateBy(many, 'vendor');
+    expect(shown.median).toBe(0);
+    expect(shown.medianBand).toBe('same-day');
 
-  it('returns observations in ascending order', () => {
-    expect(layoutDots([200, 0, 30]).map((d) => d.days)).toEqual([0, 30, 200]);
+    const [withheld] = aggregateBy([row({ days: 40 })], 'vendor');
+    expect(withheld.median).toBeNull();
+    expect(withheld.medianBand).toBeNull();
   });
 });
 
@@ -174,7 +168,7 @@ describe('aggregateBy', () => {
   it('keeps a product-less CVE in the discovery view but out of vendor and product', () => {
     // CVE-2025-32433 is exactly this today: tracked and exploited, not yet
     // mapped to a product. Dropping it from the discovery panel would make the
-    // page disagree with the table above it about how many CVEs there are.
+    // page disagree with the CVE table about how many exploited CVEs there are.
     const rows = [row({ vendor_slug: null, product_slug: null, product_name: null, days: 8 })];
     expect(aggregateBy(rows, 'discovery')[0]?.n).toBe(1);
     expect(aggregateBy(rows, 'vendor')).toHaveLength(0);
