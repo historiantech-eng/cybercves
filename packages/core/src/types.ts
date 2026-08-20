@@ -101,6 +101,15 @@ export interface VendorConfig {
   cnaShortNames: string[];
   /** Strings seen in `affected[].vendor` and in CPE vendor fields. Lowercased on load. */
   aliases: string[];
+  /**
+   * Acquired brands still writing their own name in `affected[].vendor`, mapped
+   * to every spelling upstream uses for them: Splunk under Cisco, CyberArk under
+   * Palo Alto. These count as vendor aliases too — a CVE naming one is still
+   * this vendor's — and additionally scope product resolution to the brand, so
+   * that a Splunk product cannot be mistaken for a Cisco one. See
+   * TaxonomyResolver.resolveProductName.
+   */
+  brands: Record<string, string[]>;
   /** Hostnames whose presence in a reference URL implies this vendor's advisory. */
   psirtHosts: string[];
   psirtUrl: string | null;
@@ -118,6 +127,20 @@ export interface ProductConfig {
   aliases: string[];
   /** Regex sources tried when no alias matches. Anchored and case-insensitive at compile time. */
   patterns: string[];
+  /**
+   * The acquired brand this product belongs to, as written in `affected[].vendor`
+   * — "Splunk" under Cisco, "CyberArk" under Palo Alto. An entry naming that
+   * brand is matched against this brand's products alone, so a Splunk SOAR
+   * connector cannot be filed as the Cisco product whose name it borrows.
+   */
+  brand: string | null;
+  /**
+   * Catch anything from this brand that no sibling product claimed. Only ever
+   * consulted for an entry that names the brand, so it cannot swallow the
+   * vendor's own strings. Opt-in per brand: without one, an unrecognised product
+   * goes to the review queue instead.
+   */
+  brandFallback: boolean;
 }
 
 /** A resolved link between a CVE and one of our canonical products. */

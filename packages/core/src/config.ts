@@ -82,6 +82,27 @@ export interface VendorFileConfig extends VendorConfig {
   discoveryNote: string | null;
 }
 
+/**
+ * `brands:` is a map of canonical brand name -> every spelling upstream uses.
+ * Every spelling must be listed: matching is exact, as it is for vendor aliases,
+ * because a fuzzy rule cannot know that "Idira" is CyberArk.
+ */
+function parseBrands(value: unknown, path: string): Record<string, string[]> {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new ConfigError(`${path}: expected a map of brand name to spellings`);
+  }
+  const out: Record<string, string[]> = {};
+  for (const [name, spellings] of Object.entries(value as Record<string, unknown>)) {
+    const list = stringArray(spellings, `${path}.${name}`);
+    if (!list.length) throw new ConfigError(`${path}.${name}: needs at least one spelling`);
+    // The canonical name must itself be matchable, or a product declaring
+    // `brand: Splunk` would scope to a key no entry can ever reach.
+    out[name] = list.includes(name) ? list : [name, ...list];
+  }
+  return out;
+}
+
 const ADAPTERS = new Set(['cvelist', 'json', 'csaf', 'rss', 'scrape']);
 
 export function parseVendor(raw: unknown, sourcePath: string): VendorFileConfig {
@@ -97,6 +118,10 @@ export function parseVendor(raw: unknown, sourcePath: string): VendorFileConfig 
 
   const cnaShortNames = stringArray(obj.cnaShortNames, `${sourcePath}.cnaShortNames`);
   const aliases = stringArray(obj.aliases, `${sourcePath}.aliases`);
+  const brands = parseBrands(obj.brands, `${sourcePath}.brands`);
+  // A brand's spellings are vendor aliases as well: a CVE naming "Splunk" is
+  // Cisco's. Folding them in here means the two lists cannot drift apart.
+  for (const spellings of Object.values(brands)) aliases.push(...spellings);
   if (!cnaShortNames.length && !aliases.length) {
     throw new ConfigError(
       `${sourcePath}: needs at least one cnaShortName or alias, or its CVEs can never be matched`,
@@ -108,6 +133,7 @@ export function parseVendor(raw: unknown, sourcePath: string): VendorFileConfig 
     name: requireString(obj.name, `${sourcePath}.name`),
     cnaShortNames: cnaShortNames.map((n) => n.toLowerCase()),
     aliases,
+    brands,
     psirtHosts: stringArray(obj.psirtHosts, `${sourcePath}.psirtHosts`).map((h) => h.toLowerCase()),
     psirtUrl: optionalString(obj.psirtUrl, `${sourcePath}.psirtUrl`),
     homepage: optionalString(obj.homepage, `${sourcePath}.homepage`),
@@ -141,6 +167,12 @@ export function parseProducts(
       throw new ConfigError(`${path}.categorySlug: unknown category "${categorySlug}"`);
     }
 
+    const brand = optionalString(item.brand, `${path}.brand`);
+    const brandFallback = item.brandFallback === true;
+    if (brandFallback && !brand) {
+      throw new ConfigError(`${path}.brandFallback: only meaningful alongside a \`brand\``);
+    }
+
     const patterns = stringArray(item.patterns, `${path}.patterns`);
     for (const [j, source] of patterns.entries()) {
       try {
@@ -157,6 +189,8 @@ export function parseProducts(
       categorySlug,
       aliases: stringArray(item.aliases, `${path}.aliases`),
       patterns,
+      brand,
+      brandFallback,
     };
   });
 }
@@ -169,6 +203,7 @@ export function validateBundle(
   const vendorSlugs = new Set(vendors.map((v) => v.slug));
   const productSlugs = new Set<string>();
   const cnaOwners = new Map<string, string>();
+  const brandsByVendor = new Map(vendors.map((v) => [v.slug, new Set(Object.keys(v.brands))]));
 
   for (const vendor of vendors) {
     for (const cna of vendor.cnaShortNames) {
@@ -190,5 +225,30 @@ export function validateBundle(
       throw new ConfigError(`duplicate product slug "${product.slug}"`);
     }
     productSlugs.add(product.slug);
+
+    // A brand the vendor never declared is a scope no affected-entry can reach,
+    // so the product would silently match nothing at all — the exact failure
+    // mode this whole mechanism exists to prevent.
+    if (product.brand && !brandsByVendor.get(product.vendorSlug)?.has(product.brand)) {
+      throw new ConfigError(
+        `product "${product.slug}": brand "${product.brand}" is not declared under ` +
+          `\`brands\` in vendors/${product.vendorSlug}.yaml`,
+      );
+    }
+  }
+
+  // Two products cannot both catch a brand's long tail; which one won would
+  // depend on file order.
+  const fallbacks = new Map<string, string>();
+  for (const product of products) {
+    if (!product.brandFallback || !product.brand) continue;
+    const key = `${product.vendorSlug}::${product.brand}`;
+    const existing = fallbacks.get(key);
+    if (existing) {
+      throw new ConfigError(
+        `brand "${product.brand}" has two fallbacks: "${existing}" and "${product.slug}"`,
+      );
+    }
+    fallbacks.set(key, product.slug);
   }
 }

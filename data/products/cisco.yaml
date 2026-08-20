@@ -361,61 +361,90 @@ products:
   # so without the aliases in data/vendors/cisco.yaml they resolve to no vendor
   # and vanish.
   #
-  # ORDER MATTERS. resolveProductName tries exact aliases first, then patterns
-  # in the order they appear in this file, taking the first hit. The specific
-  # entries must therefore precede the catch-all at the end, or "Splunk
-  # Enterprise Cloud" lands on Splunk Enterprise and "Splunk SOAR" on an app.
+  # `brand: Splunk` scopes the whole block: an affected entry whose vendor reads
+  # "Splunk" is matched against these products and nothing else. That is not a
+  # tidiness measure. Splunk names each SOAR connector after the system it talks
+  # to — "Cisco Webex app for Splunk SOAR", "CrowdStrike OAuth API app for
+  # Splunk SOAR" — and against the vendor-wide list those matched on the
+  # borrowed name, so CVE-2026-76379 was published as a Cisco Webex
+  # collaboration bug. It also stops the deliberately bare CPE patterns below
+  # ("^cloud$", "^enterprise security$") reaching a Cisco string.
+  #
+  # ORDER STILL MATTERS within the brand: aliases are tried first, then patterns
+  # in file order, first hit wins. Enterprise Security precedes Enterprise, and
+  # Cloud precedes both, or "Splunk Enterprise Security (ES)" lands on Splunk
+  # Enterprise — which is what it did until 2026-08.
   - slug: splunk-soar
     name: Splunk SOAR
+    brand: Splunk
     # No SOAR category exists in the taxonomy. Filed under SIEM & Log Management
     # as part of the same SOC platform rather than invented as its own category
     # for a single product — worth revisiting if more SOAR products are tracked.
     categorySlug: siem-logging
     aliases: [Splunk SOAR, Splunk Phantom]
-    patterns: ['^splunk soar\b', '\bphantom\b']
+    # Anchored: the platform itself, not the connectors that run on it. An
+    # unanchored '\bphantom\b' claimed "Phantom app for Splunk SOAR", which is
+    # an app — those belong in splunk-apps with their siblings.
+    patterns: ['^splunk soar\b', '^phantom$', '^splunk phantom\b']
 
   - slug: splunk-universal-forwarder
     name: Splunk Universal Forwarder
+    brand: Splunk
     categorySlug: siem-logging
     aliases: [Splunk Universal Forwarder, Splunk/UniversalForwarder for Windows]
     patterns: ['universal ?forwarder']
 
   - slug: splunk-secure-gateway
     name: Splunk Secure Gateway
+    brand: Splunk
     categorySlug: siem-logging
     aliases: [Splunk Secure Gateway]
     patterns: ['^splunk secure gateway\b']
 
+  - slug: splunk-enterprise-security
+    name: Splunk Enterprise Security
+    brand: Splunk
+    categorySlug: siem-logging
+    aliases: [Splunk Enterprise Security]
+    # "^enterprise security$" is exact-anchored because the string also arrives
+    # as a bare CPE product component — the vendor half of the CPE carries
+    # "splunk", so the product half is just "enterprise_security".
+    patterns: ['^splunk enterprise security\b', '^enterprise security$']
+
   - slug: splunk-cloud-platform
     name: Splunk Cloud Platform
+    brand: Splunk
     categorySlug: siem-logging
     aliases: [Splunk Cloud Platform, Splunk Enterprise Cloud, Splunk Cloud]
     patterns: ['^splunk (cloud platform|enterprise cloud)\b', '^splunk cloud\b', '^cloud$']
 
   - slug: splunk-enterprise
     name: Splunk Enterprise
+    brand: Splunk
     categorySlug: siem-logging
     aliases: [Splunk Enterprise]
-    patterns: ['^splunk enterprise\b']
+    # Bare "splunk" is the CPE form of Splunk Enterprise
+    # (cpe:2.3:a:splunk:splunk:*:*:*:*:enterprise), not an add-on.
+    patterns: ['^splunk enterprise\b', '^splunk$']
 
-  - slug: splunk-enterprise-security
-    name: Splunk Enterprise Security
-    categorySlug: siem-logging
-    aliases: [Splunk Enterprise Security]
-    # Exact-anchored because these two arrive as bare CPE product components —
-    # the vendor half of the CPE carries "splunk", so the product half is just
-    # "enterprise_security". Anchored so they cannot swallow a Cisco product
-    # whose name merely contains the words.
-    patterns: ['^enterprise security$']
-
-  # Catch-all for the long tail of first-party apps, add-ons and toolkits that
-  # ship on the Splunk platform. Anchored on "splunk" so that, for example,
-  # "Splunk Add-on for Palo Alto Networks" is counted as the Splunk product it
-  # is rather than attributed to Palo Alto.
+  # The long tail of apps, add-ons, toolkits and SOAR connectors that ship on
+  # the Splunk platform. `brandFallback` makes this the home for any Splunk
+  # product no entry above claimed, which is what finally counted the SVD-2026-
+  # 0806 connectors — "AD LDAP app for Splunk SOAR", "FireAMP", "Nmap Scanner",
+  # "Cisco Talos Intelligence for Enterprise Security Cloud" — fifteen CVEs that
+  # were held under no product at all because their names carry no Splunk token.
+  #
+  # The cost is deliberate and worth naming: a genuinely new Splunk *platform*
+  # product now lands here rather than in the review queue. Counted under the
+  # right vendor and category with a coarse product name beats counted nowhere.
   - slug: splunk-apps
     name: Splunk Apps & Add-ons
+    brand: Splunk
+    brandFallback: true
     categorySlug: siem-logging
     aliases: []
+    # Kept for the unbranded path — an entry that names no vendor at all, where
+    # the leading "Splunk" is the only evidence we have.
     patterns: ['^splunk\b']
 
   # --- added from the review queue, 2026-08 backfill ---
@@ -536,3 +565,14 @@ products:
     # product, so it stays out of the vendor comparison.
     aliases: [openh264]
     patterns: ['^openh264\b']
+
+  # --- added from the review queue, 2026-08 audit ---
+
+  - slug: cisco-industrial-ethernet
+    name: Cisco Industrial Ethernet Switches
+    categorySlug: routing-switching
+    # Cisco's advisories name the specific line ("Industrial Ethernet 1000
+    # Series Switches") while the affected[] entry carries the family, so the
+    # pattern matches the family word rather than either exact form.
+    aliases: [Cisco Industrial Ethernet Switches]
+    patterns: ['\bindustrial ethernet\b']

@@ -83,7 +83,7 @@ export async function ingestRecords(
   // config, not of this batch, so the whole pending queue can be re-tested here
   // and a delta sync retires a mapping added since the last full backfill.
   const stale = (await repo.listPendingUnmapped())
-    .filter((row) => resolver.resolveProductName(row.vendor_slug, row.product_raw))
+    .filter((row) => resolver.resolveProductName(row.vendor_slug, row.product_raw, row.vendor_raw))
     .map((row) => ({ vendorSlug: row.vendor_slug, productKey: row.product_key }));
   const retired = await repo.clearResolvedUnmapped(stale);
 

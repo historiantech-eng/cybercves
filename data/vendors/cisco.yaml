@@ -11,12 +11,21 @@ aliases:
   - Cisco
   - Cisco Systems
   - Cisco Systems, Inc.
-  # Acquired by Cisco in March 2024 and now assigned under Cisco's CNA, but the
-  # affected-entry vendor string is still "Splunk". Without these aliases every
-  # Splunk CVE resolves to no vendor at all — 69 of them were being dropped.
-  - Splunk
-  - Splunk Inc.
-  - Splunk LLC
+
+# Splunk, acquired March 2024. Now assigned under Cisco's CNA, but the
+# affected-entry vendor string is still "Splunk". Without these spellings every
+# Splunk CVE resolves to no vendor at all — 69 of them were being dropped.
+#
+# These are vendor aliases as well — the loader folds them into `aliases` — and
+# they additionally scope product resolution: an entry naming Splunk is matched
+# only against products marked `brand: Splunk` in products/cisco. Splunk names
+# its SOAR connectors after the systems they integrate with ("Cisco Webex app
+# for Splunk SOAR"), and without the scope those matched Cisco's own patterns.
+brands:
+  Splunk:
+    - Splunk
+    - Splunk Inc.
+    - Splunk LLC
 
 psirtHosts:
   - sec.cloudapps.cisco.com

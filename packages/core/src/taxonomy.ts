@@ -50,11 +50,31 @@ export class TaxonomyResolver {
   readonly #byAlias = new Map<string, string>();
   readonly #byHost = new Map<string, string>();
 
-  /** vendorSlug -> (normalized product alias -> productSlug) */
-  readonly #productAliases = new Map<string, Map<string, string>>();
-  /** vendorSlug -> compiled patterns, evaluated only when no alias matches */
-  readonly #productPatterns = new Map<string, Array<{ re: RegExp; slug: string }>>();
   readonly #products = new Map<string, ProductConfig>();
+
+  /**
+   * Product lookup, indexed three ways by how much we know about the entry:
+   *
+   *   `cisco`          every Cisco product — used when the entry names no
+   *                    vendor at all and its own name is the only evidence
+   *   `cisco::`        only the products carrying no brand, i.e. Cisco's own
+   *   `cisco::splunk`  only the products of the Splunk brand
+   *
+   * The narrowest scope the entry supports wins. Keeping them separate is what
+   * stops a Cisco entry reaching Splunk's deliberately bare patterns ('^cloud$')
+   * and a Splunk entry reaching Cisco's ('\bwebex\b').
+   */
+  readonly #aliases = new Map<string, Map<string, string>>();
+  /** Same keys; compiled patterns, evaluated only when no alias matches. */
+  readonly #patterns = new Map<string, Array<{ re: RegExp; slug: string }>>();
+  /**
+   * `vendorSlug::<normalized spelling>` -> the brand's canonical key, for every
+   * spelling the vendor declares. This is what turns the raw vendor string on an
+   * affected-entry into the scope its products are looked up in.
+   */
+  readonly #brandOfSpelling = new Map<string, string>();
+  /** `vendorSlug::brandKey` -> the product that catches the brand's long tail. */
+  readonly #brandFallback = new Map<string, string>();
 
   constructor(vendors: readonly VendorConfig[], products: readonly ProductConfig[]) {
     for (const vendor of vendors) {
@@ -62,28 +82,46 @@ export class TaxonomyResolver {
       for (const cna of vendor.cnaShortNames) this.#byCna.set(cna.toLowerCase(), vendor.slug);
       for (const alias of vendor.aliases) this.#byAlias.set(normalizeKey(alias), vendor.slug);
       for (const host of vendor.psirtHosts) this.#byHost.set(host.toLowerCase(), vendor.slug);
+
+      for (const [name, spellings] of Object.entries(vendor.brands ?? {})) {
+        const key = normalizeKey(name);
+        for (const spelling of spellings) {
+          this.#brandOfSpelling.set(`${vendor.slug}::${normalizeKey(spelling)}`, key);
+        }
+      }
     }
 
     for (const product of products) {
       this.#products.set(product.slug, product);
 
-      let aliases = this.#productAliases.get(product.vendorSlug);
-      if (!aliases) {
-        aliases = new Map();
-        this.#productAliases.set(product.vendorSlug, aliases);
-      }
-      aliases.set(normalizeKey(product.name), product.slug);
-      for (const alias of product.aliases) aliases.set(normalizeKey(alias), product.slug);
+      const brand = product.brand ? normalizeKey(product.brand) : '';
+      // The vendor-wide scope holds everything; the second scope is the brand's,
+      // or the vendor's own when the product carries no brand.
+      const scopes = [product.vendorSlug, `${product.vendorSlug}::${brand}`];
 
-      if (product.patterns.length) {
-        let patterns = this.#productPatterns.get(product.vendorSlug);
-        if (!patterns) {
-          patterns = [];
-          this.#productPatterns.set(product.vendorSlug, patterns);
+      for (const scope of scopes) {
+        let aliases = this.#aliases.get(scope);
+        if (!aliases) {
+          aliases = new Map();
+          this.#aliases.set(scope, aliases);
         }
-        for (const source of product.patterns) {
-          patterns.push({ re: new RegExp(source, 'i'), slug: product.slug });
+        aliases.set(normalizeKey(product.name), product.slug);
+        for (const alias of product.aliases) aliases.set(normalizeKey(alias), product.slug);
+
+        if (product.patterns.length) {
+          let patterns = this.#patterns.get(scope);
+          if (!patterns) {
+            patterns = [];
+            this.#patterns.set(scope, patterns);
+          }
+          for (const source of product.patterns) {
+            patterns.push({ re: new RegExp(source, 'i'), slug: product.slug });
+          }
         }
+      }
+
+      if (brand && product.brandFallback) {
+        this.#brandFallback.set(`${product.vendorSlug}::${brand}`, product.slug);
       }
     }
   }
@@ -140,18 +178,43 @@ export class TaxonomyResolver {
     return matches;
   }
 
-  /** Map one raw product string to a canonical product slug for a known vendor. */
-  resolveProductName(vendorSlug: string, productRaw: string): string | null {
+  /**
+   * Map one raw product string to a canonical product slug for a known vendor.
+   *
+   * `vendorRaw` is the vendor string the affected-entry itself carried. When it
+   * names a brand we track separately under this vendor — "Splunk" under Cisco —
+   * only that brand's products are considered. Splunk ships SOAR connectors
+   * named after other companies ("Cisco Webex app for Splunk SOAR"), and the
+   * vendor-wide index matched those on the borrowed name, filing a Splunk
+   * connector bug as a Cisco Webex vulnerability.
+   */
+  resolveProductName(
+    vendorSlug: string,
+    productRaw: string,
+    vendorRaw?: string | null,
+  ): string | null {
     const key = normalizeKey(productRaw);
     if (!key) return null;
 
-    const exact = this.#productAliases.get(vendorSlug)?.get(key);
+    // With a vendor string in hand the search narrows: to the acquired brand's
+    // products when it names one, otherwise to the vendor's own. Only an entry
+    // that names no vendor at all searches everything, because there the
+    // product name is the only evidence available.
+    const brand = vendorRaw
+      ? (this.#brandOfSpelling.get(`${vendorSlug}::${normalizeKey(vendorRaw)}`) ?? '')
+      : null;
+    const scope = brand === null ? vendorSlug : `${vendorSlug}::${brand}`;
+
+    const exact = this.#aliases.get(scope)?.get(key);
     if (exact) return exact;
 
-    for (const { re, slug } of this.#productPatterns.get(vendorSlug) ?? []) {
+    for (const { re, slug } of this.#patterns.get(scope) ?? []) {
       if (re.test(key)) return slug;
     }
-    return null;
+
+    // Deliberately no widening on a miss: a string this brand does not
+    // recognise is not one of the parent vendor's products either.
+    return this.#brandFallback.get(scope) ?? null;
   }
 
   /**
@@ -216,9 +279,13 @@ export class TaxonomyResolver {
           continue;
         }
 
+        // The brand the entry names, not the vendor it rolls up to — see
+        // resolveProductName for why the distinction decides the product.
+        const entryVendor = affected.vendorRaw ?? this.#cpeVendorOf(affected);
+
         let hit = false;
         for (const candidate of candidates) {
-          const productSlug = this.resolveProductName(vendorSlug, candidate);
+          const productSlug = this.resolveProductName(vendorSlug, candidate, entryVendor);
           if (!productSlug) continue;
           const product = this.#products.get(productSlug);
           if (!product) continue;
@@ -280,12 +347,17 @@ export class TaxonomyResolver {
     if (affected.vendorRaw) {
       return this.#byAlias.get(normalizeKey(affected.vendorRaw)) === vendorSlug;
     }
+    const cpeVendor = this.#cpeVendorOf(affected);
+    if (cpeVendor) return this.#byAlias.get(normalizeKey(cpeVendor)) === vendorSlug;
+    return matchSignal === 'cna-assigner';
+  }
+
+  /** The vendor component of the entry's first parseable CPE, if it has one. */
+  #cpeVendorOf(affected: NormalizedCve['affected'][number]): string | null {
     for (const cpe of affected.cpes) {
       const parsed = parseCpe(cpe);
-      if (parsed?.vendor) {
-        return this.#byAlias.get(normalizeKey(parsed.vendor)) === vendorSlug;
-      }
+      if (parsed?.vendor) return parsed.vendor;
     }
-    return matchSignal === 'cna-assigner';
+    return null;
   }
 }

@@ -86,8 +86,8 @@ export class Repository {
 
     for (const v of vendors) {
       statements.push({
-        sql: `INSERT INTO vendor (slug, name, cna_short_names, aliases, psirt_hosts, psirt_url, homepage, adapter, discovery_note)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        sql: `INSERT INTO vendor (slug, name, cna_short_names, aliases, psirt_hosts, psirt_url, homepage, adapter, discovery_note, brands)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(slug) DO UPDATE SET
                 name = excluded.name,
                 cna_short_names = excluded.cna_short_names,
@@ -96,7 +96,8 @@ export class Repository {
                 psirt_url = excluded.psirt_url,
                 homepage = excluded.homepage,
                 adapter = excluded.adapter,
-                discovery_note = excluded.discovery_note`,
+                discovery_note = excluded.discovery_note,
+                brands = excluded.brands`,
         params: [
           v.slug,
           v.name,
@@ -107,21 +108,37 @@ export class Repository {
           v.homepage,
           v.adapter,
           v.discoveryNote,
+          json(v.brands ?? {}),
         ],
       });
     }
 
-    for (const p of products) {
+    // The index is the product's position in the config, which resolveProductName
+    // treats as precedence — see 0004_product_brand.sql.
+    for (const [sort, p] of products.entries()) {
       statements.push({
-        sql: `INSERT INTO product (slug, vendor_slug, name, category_slug, aliases, patterns)
-              VALUES (?, ?, ?, ?, ?, ?)
+        sql: `INSERT INTO product (slug, vendor_slug, name, category_slug, aliases, patterns, brand, brand_fallback, sort)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(slug) DO UPDATE SET
                 vendor_slug = excluded.vendor_slug,
                 name = excluded.name,
                 category_slug = excluded.category_slug,
                 aliases = excluded.aliases,
-                patterns = excluded.patterns`,
-        params: [p.slug, p.vendorSlug, p.name, p.categorySlug, json(p.aliases), json(p.patterns)],
+                patterns = excluded.patterns,
+                brand = excluded.brand,
+                brand_fallback = excluded.brand_fallback,
+                sort = excluded.sort`,
+        params: [
+          p.slug,
+          p.vendorSlug,
+          p.name,
+          p.categorySlug,
+          json(p.aliases),
+          json(p.patterns),
+          p.brand ?? null,
+          p.brandFallback ? 1 : 0,
+          sort,
+        ],
       });
     }
 
@@ -166,12 +183,14 @@ export class Repository {
         psirt_url: string | null;
         homepage: string | null;
         adapter: string;
+        brands: string;
       }>('SELECT * FROM vendor ORDER BY slug')
     ).map((row) => ({
       slug: row.slug,
       name: row.name,
       cnaShortNames: JSON.parse(row.cna_short_names) as string[],
       aliases: JSON.parse(row.aliases) as string[],
+      brands: JSON.parse(row.brands) as Record<string, string[]>,
       psirtHosts: JSON.parse(row.psirt_hosts) as string[],
       psirtUrl: row.psirt_url,
       homepage: row.homepage,
@@ -191,8 +210,14 @@ export class Repository {
         category_slug: string;
         aliases: string;
         patterns: string;
+        brand: string | null;
+        brand_fallback: number;
       }>(
-        'SELECT slug, vendor_slug, name, category_slug, aliases, patterns FROM product ORDER BY slug',
+        // ORDER BY sort, not slug: pattern precedence is positional, so
+        // alphabetising here made the Worker resolve differently from the Node
+        // pipeline. See 0004_product_brand.sql.
+        `SELECT slug, vendor_slug, name, category_slug, aliases, patterns, brand, brand_fallback
+           FROM product ORDER BY sort, slug`,
       )
     ).map((row) => ({
       slug: row.slug,
@@ -201,6 +226,8 @@ export class Repository {
       categorySlug: row.category_slug,
       aliases: JSON.parse(row.aliases) as string[],
       patterns: JSON.parse(row.patterns) as string[],
+      brand: row.brand,
+      brandFallback: row.brand_fallback === 1,
     }));
 
     return { categories, vendors, products };
@@ -463,8 +490,15 @@ export class Repository {
 
   /** Every pending gap, for re-testing against the current taxonomy. */
   async listPendingUnmapped() {
-    return this.#db.all<{ vendor_slug: string; product_key: string; product_raw: string }>(
-      `SELECT vendor_slug, product_key, product_raw
+    return this.#db.all<{
+      vendor_slug: string;
+      product_key: string;
+      product_raw: string;
+      vendor_raw: string | null;
+    }>(
+      // vendor_raw comes along because resolution depends on it: an entry
+      // naming an acquired brand resolves against that brand's products alone.
+      `SELECT vendor_slug, product_key, product_raw, vendor_raw
          FROM unmapped_product
         WHERE status = 'pending'`,
     );

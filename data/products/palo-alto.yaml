@@ -159,12 +159,21 @@ products:
 
   # --- CyberArk, acquired 2026 (see the vendor aliases in vendors/palo-alto.yaml) ---
   #
-  # ORDER MATTERS: patterns are evaluated top-down, so the narrower Endpoint
-  # Privilege Manager rule must sit above the general PAM rule, or "Idira
-  # Endpoint Privilege Manager" is swallowed by it.
+  # `brand: CyberArk` scopes this block: an affected entry whose vendor reads
+  # "CyberArk" is matched against these products and nothing else, and a Palo
+  # Alto entry never reaches them. The patterns below are deliberately broad —
+  # "\bvault\b", "^idp$", "^(cyberark )?identity\b" — because CyberArk writes
+  # bare product names, and out of scope they would claim Palo Alto strings.
+  # Unlike Splunk under Cisco there is no brandFallback here: an unrecognised
+  # CyberArk product still goes to the review queue to be named properly.
+  #
+  # ORDER MATTERS within the brand: patterns are evaluated top-down, so the
+  # narrower Endpoint Privilege Manager rule must sit above the general PAM
+  # rule, or "Idira Endpoint Privilege Manager" is swallowed by it.
 
   - slug: cyberark-epm
     name: CyberArk Endpoint Privilege Manager
+    brand: CyberArk
     categorySlug: endpoint
     aliases:
       - Endpoint Privilege Manager
@@ -174,6 +183,7 @@ products:
 
   - slug: cyberark-conjur
     name: CyberArk Conjur
+    brand: CyberArk
     categorySlug: identity
     aliases:
       - Conjur
@@ -185,6 +195,7 @@ products:
 
   - slug: cyberark-pam
     name: CyberArk Privileged Access Manager
+    brand: CyberArk
     categorySlug: identity
     aliases:
       - PAM Self-Hosted, Privilege Cloud
@@ -197,6 +208,7 @@ products:
 
   - slug: cyberark-identity
     name: CyberArk Identity
+    brand: CyberArk
     categorySlug: identity
     # Covers the pre-acquisition CVEs too: these were filed by other CNAs (INCD,
     # GovTech CSG) against "CyberArk Identity Management" years before Palo Alto
