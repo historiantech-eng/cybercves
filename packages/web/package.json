@@ -13,6 +13,6 @@
   "dependencies": {
     "@cybercves/core": "*",
     "@cybercves/db": "*",
-    "astro": "^5.1.1"
+    "astro": "^7.2.2"
   }
 }

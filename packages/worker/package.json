@@ -14,7 +14,7 @@
     "@cybercves/core": "*",
     "@cybercves/db": "*",
     "@cybercves/ingest": "*",
-    "hono": "^4.6.14"
+    "hono": "^4.13.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241230.0",
