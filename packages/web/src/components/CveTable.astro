@@ -16,6 +16,11 @@ interface Row {
   date_added?: string | null;
   days?: number | null;
   ransomware_known?: number;
+  /**
+   * Rendered but hidden. Lets a page ship every row and filter client-side,
+   * while the build still decides what a reader without JS sees.
+   */
+  hidden?: boolean;
 }
 
 interface Props {
@@ -57,8 +62,9 @@ const { rows, showVendor = true, caption, showKevTiming = false } = Astro.props;
     </thead>
     <tbody>
       {
+        /* data-cve-id is the handle client-side filtering toggles; inert elsewhere. */
         rows.map((row) => (
-          <tr>
+          <tr data-cve-id={row.cve_id} hidden={row.hidden}>
             <td>
               <a class="cve-id" href={`/cve/${row.cve_id}`}>
                 {row.cve_id}

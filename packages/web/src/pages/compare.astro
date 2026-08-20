@@ -8,6 +8,8 @@ const vendors = repo ? await repo.listVendors() : [];
 const categories = repo ? await repo.listCategories() : [];
 
 // Server-rendered default so the page is indexable and useful without JS.
+// getCategoryBreakdown orders by the category's own `sort`, where firewall is
+// first, so the seed already leads with the same category the chart pins.
 const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
 ---
 
@@ -159,6 +161,9 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
      */
     const slotOf = new Map(boxes.map((b, i) => [b.value, (i % 8) + 1]));
     const nameOf = new Map(boxes.map((b) => [b.value, (b.parentElement?.textContent ?? b.value).trim()]));
+
+    /** Pinned to the top of the comparison; see the sort below. */
+    const LEAD_CATEGORY = 'firewall';
 
     const num = (v: unknown) => (typeof v === 'number' ? v : Number(v ?? 0));
     /**
@@ -396,7 +401,15 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
         })
         // Hidden when every selected vendor is zero — an all-empty row is noise.
         .filter((g) => g.total > 0)
-        .sort((a, b) => b.total - a.total);
+        // Firewalls lead, then the rest by size. It is the category these
+        // vendors are most comparable in and the one the vendor ranking already
+        // defaults to, so burying it under whichever category happened to be
+        // largest this year made the page open on a different question each time.
+        .sort((a, b) => {
+          if (a.slug === LEAD_CATEGORY) return -1;
+          if (b.slug === LEAD_CATEGORY) return 1;
+          return b.total - a.total;
+        });
 
       if (!groups.length) {
         chart!.innerHTML = '<p class="empty">No CVEs for these vendors in this year.</p>';

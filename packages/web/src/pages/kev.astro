@@ -9,6 +9,7 @@ import {
   aggregateBy,
   categoriesIn,
   countCves,
+  filterRows,
   yearsIn,
 } from '../lib/kev-timing';
 
@@ -23,17 +24,31 @@ const vendorNames = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
 const years = yearsIn(timing);
 const categories = categoriesIn(timing);
 
-// Server renders the unfiltered view — every year, every category, no
-// comparison. The filters re-render client-side from /data/kev-timing.json
-// using these same functions, so the two cannot disagree about a shape.
-const byVendor = aggregateBy(timing, 'vendor', { labels: vendorNames });
-const byDiscovery = aggregateBy(timing, 'discovery');
+/**
+ * The page opens on firewalls, not on everything.
+ *
+ * It is the category the vendor ranking already defaults to, and the one where
+ * these three vendors are genuinely comparable — a pure-play firewall vendor
+ * against a broad portfolio is not a like-for-like read. Falls back to all
+ * categories if the corpus ever has no firewall CVEs, so the default cannot
+ * silently become an empty page.
+ */
+const DEFAULT_CATEGORY = categories.some((c) => c.slug === 'firewall') ? 'firewall' : '';
 
-const productVendors = vendors
-  .filter((v) => aggregateBy(timing, 'product', { vendorSlug: v.slug }).length > 0)
-  .sort((a, b) => a.name.localeCompare(b.name));
-const defaultVendor = productVendors[0]?.slug ?? '';
-const byProduct = aggregateBy(timing, 'product', { vendorSlug: defaultVendor });
+const scope = { categorySlug: DEFAULT_CATEGORY || null };
+const shown = filterRows(timing, scope);
+
+// Server renders the default view: all vendors, all years, firewalls. The
+// filters re-render client-side with these same functions, so the two cannot
+// disagree about a shape.
+const byVendor = aggregateBy(timing, 'vendor', { ...scope, labels: vendorNames });
+const byProduct = aggregateBy(timing, 'product', scope);
+const byDiscovery = aggregateBy(timing, 'discovery', scope);
+
+// Every row ships; the ones outside the default scope ship hidden, so a reader
+// without JS sees the same selection the controls claim is active.
+const visibleIds = new Set(shown.map((r) => r.cve_id));
+const tableRows = rows.map((r) => ({ ...r, hidden: !visibleIds.has(r.cve_id) }));
 
 const trackedCves = countCves(timing);
 const linkedCves = countCves(timing.filter((r) => r.product_slug));
@@ -63,7 +78,29 @@ const cohortByVendor = vendors
     ransomware campaign use.
   </p>
 
-  <div class="filters" role="group" aria-label="Exploitation timing filters">
+  {/* One control group for the whole page — every chart below and the table at
+      the bottom read from it, so a reader never has two competing selections. */}
+  <div class="filters" role="group" aria-label="Exploitation filters">
+    <div>
+      <label for="kev-vendor">Vendor</label>
+      <select id="kev-vendor" data-kev-vendor>
+        <option value="">All vendors</option>
+        {vendors.map((v) => <option value={v.slug}>{v.name}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="kev-category">Category</label>
+      <select id="kev-category" data-kev-category>
+        <option value="">All categories</option>
+        {
+          categories.map((c) => (
+            <option value={c.slug} selected={c.slug === DEFAULT_CATEGORY}>
+              {c.name}
+            </option>
+          ))
+        }
+      </select>
+    </div>
     <div>
       <label for="kev-year">Published</label>
       <select id="kev-year" data-kev-year>
@@ -78,14 +115,9 @@ const cohortByVendor = vendors
         <option value="prev">vs previous year</option>
       </select>
     </div>
-    <div>
-      <label for="kev-category">Category</label>
-      <select id="kev-category" data-kev-category>
-        <option value="">All categories</option>
-        {categories.map((c) => <option value={c.slug}>{c.name}</option>)}
-      </select>
-    </div>
-    <span class="filter-count" data-kev-count></span>
+    <span class="filter-count" data-kev-count>
+      {countCves(shown).toLocaleString()} exploited {countCves(shown) === 1 ? 'CVE' : 'CVEs'}
+    </span>
   </div>
 
   {/* Written by the script, because the warning names the year it is about. */}
@@ -104,29 +136,13 @@ const cohortByVendor = vendors
         id="vendor"
         series={byVendor}
         caption="Vendor"
-        note={`${trackedCves.toLocaleString()} exploited CVEs across ${byVendor.length} vendors. Medians this close together, at these counts, are not a ranking — the distributions overlap almost entirely.`}
+        note="Medians this close together, at these counts, are not a ranking — the distributions overlap almost entirely."
       />
     </div>
   </section>
 
   <section class="section">
-    <div class="section-head">
-      <h2>By product</h2>
-      <div class="filters" role="group" aria-label="Product comparison controls">
-        <div>
-          <label for="kev-vendor">Vendor</label>
-          <select id="kev-vendor" data-kev-vendor>
-            {
-              productVendors.map((v) => (
-                <option value={v.slug} selected={v.slug === defaultVendor}>
-                  {v.name}
-                </option>
-              ))
-            }
-          </select>
-        </div>
-      </div>
-    </div>
+    <h2>By product</h2>
     <p class="lede small">
       Which products attackers actually reach for. A product whose bars pile up in the first
       bucket is one being exploited the day it is disclosed.
@@ -159,15 +175,15 @@ const cohortByVendor = vendors
       linkedCves < trackedCves && (
         <p class="muted small">
           {(trackedCves - linkedCves).toLocaleString()} of {trackedCves.toLocaleString()} exploited
-          CVEs are not yet mapped to a product, so they appear here and in the table below but
-          in no vendor or product panel.
+          CVEs are not yet mapped to a product, so they carry no vendor or category and appear
+          only when both of those filters are set to all.
         </p>
       )
     }
   </section>
 
   {/*
-    The honest year-over-year comparison, and the reason the filters above are
+    The honest year-over-year comparison, and the reason the year filter above is
     not one. Cohorts have not been observed for equal time — CVEs published this
     year have had months in which to be exploited where 2024's have had years —
     so their long-lag buckets are emptier for reasons that have nothing to do
@@ -179,7 +195,7 @@ const cohortByVendor = vendors
       Share of each year's CVEs exploited within {COHORT_WINDOW_DAYS} days of publication. Every
       year is measured over the same {COHORT_WINDOW_DAYS}-day window and counts only CVEs old
       enough to have been watched for all of it, so these years are comparable in a way that
-      filtering the charts above is not.
+      filtering the charts above is not. Whole portfolio, not affected by the filters.
     </p>
     <div class="card">
       <div class="table-scroll">
@@ -232,13 +248,17 @@ const cohortByVendor = vendors
   </section>
 
   <section class="section">
-    <h2>Every exploited CVE we track</h2>
+    <div class="section-head">
+      <h2>Every exploited CVE we track</h2>
+      <p class="small muted" data-kev-table-note></p>
+    </div>
     <p class="lede small">
-      Newest KEV additions first, and not affected by the filters above. "Days to exploit" is the
-      same measure the charts bucket.
+      Newest KEV additions first, narrowed by the same filters. "Days to exploit" is the measure
+      the charts bucket.
     </p>
     <div class="card">
-      <CveTable rows={rows} caption="Known exploited CVEs" showKevTiming />
+      <CveTable rows={tableRows} caption="Known exploited CVEs" showKevTiming />
+      <p class="empty" data-kev-table-empty hidden>No exploited CVEs match these filters.</p>
     </div>
   </section>
 </Base>
@@ -249,18 +269,23 @@ const cohortByVendor = vendors
   import { renderRunway } from '../lib/kev-runway-html';
 
   /**
-   * Year / category / comparison filters for the three runway panels.
+   * One filter set driving three charts and the CVE table.
    *
-   * Re-aggregates the shipped rows and re-renders with renderRunway — the same
-   * functions that produced the server's markup, so switching a filter and
-   * switching back lands on exactly what the build emitted.
+   * The charts re-aggregate and re-render with renderRunway — the same functions
+   * that produced the server's markup, so switching a filter and switching back
+   * lands on exactly what the build emitted. The table is not re-rendered: every
+   * row is already in the DOM and only its `hidden` flag moves, which keeps the
+   * CVE links and their formatting owned by one place.
    */
+  const vendorSel = document.querySelector<HTMLSelectElement>('[data-kev-vendor]');
+  const catSel = document.querySelector<HTMLSelectElement>('[data-kev-category]');
   const yearSel = document.querySelector<HTMLSelectElement>('[data-kev-year]');
   const cmpSel = document.querySelector<HTMLSelectElement>('[data-kev-compare]');
-  const catSel = document.querySelector<HTMLSelectElement>('[data-kev-category]');
-  const vendorSel = document.querySelector<HTMLSelectElement>('[data-kev-vendor]');
   const countEl = document.querySelector<HTMLElement>('[data-kev-count]');
   const censorEl = document.querySelector<HTMLElement>('[data-kev-censor]');
+  const tableNote = document.querySelector<HTMLElement>('[data-kev-table-note]');
+  const tableEmpty = document.querySelector<HTMLElement>('[data-kev-table-empty]');
+  const tableRows = Array.from(document.querySelectorAll<HTMLTableRowElement>('tr[data-cve-id]'));
 
   const vendorPanel = document.querySelector<HTMLElement>('[data-runway="vendor"]');
   const productPanel = document.querySelector<HTMLElement>('[data-runway="product"]');
@@ -270,32 +295,32 @@ const cohortByVendor = vendors
     'Products are listed alphabetically, every one with at least one exploited CVE. Counts sum to more than the vendor total: a CVE affecting five products is a real vulnerability in each of them.';
   const DISCOVERY_NOTE =
     'Vulnerabilities a vendor finds itself reach documented exploitation substantially later than ones reported from outside.';
+  const VENDOR_NOTE =
+    'Medians this close together, at these counts, are not a ranking — the distributions overlap almost entirely.';
 
-  if (yearSel && catSel && vendorPanel) {
+  if (vendorSel && catSel && yearSel && vendorPanel) {
     let rows: KevTimingRow[] = [];
     let vendorNames: Record<string, string> = {};
 
     const render = () => {
-      const year = yearSel.value ? Number(yearSel.value) : null;
+      const vendorSlug = vendorSel.value || undefined;
       const categorySlug = catSel.value || null;
+      const year = yearSel.value ? Number(yearSel.value) : null;
       // A comparison needs a year to compare against, so the control only goes
       // live once a single cohort is selected.
       if (cmpSel) cmpSel.disabled = year === null;
       const comparing = year !== null && cmpSel?.value === 'prev';
       const prevYear = comparing ? year - 1 : null;
 
-      const scope = { year, categorySlug };
-      const prevScope = { year: prevYear, categorySlug };
+      const scope = { vendorSlug, categorySlug, year };
+      const prevScope = { vendorSlug, categorySlug, year: prevYear };
       const currentLabel = year === null ? 'All years' : String(year);
       const compareLabel = prevYear === null ? '' : String(prevYear);
 
-      const shownCount = countCves(filterRows(rows, scope));
+      const matched = filterRows(rows, scope);
+      const n = countCves(matched);
       if (countEl) {
-        const where = categorySlug ? ` in ${catSel.options[catSel.selectedIndex].text}` : '';
-        const when = year === null ? '' : ` published in ${year}`;
-        countEl.textContent = `${shownCount.toLocaleString()} exploited ${
-          shownCount === 1 ? 'CVE' : 'CVEs'
-        }${when}${where}`;
+        countEl.textContent = `${n.toLocaleString()} exploited ${n === 1 ? 'CVE' : 'CVEs'}`;
       }
 
       // Only true when a single cohort is on screen; with all years pooled
@@ -311,22 +336,20 @@ const cohortByVendor = vendors
         }
       }
 
-      if (vendorPanel) {
-        vendorPanel.innerHTML = renderRunway({
-          series: aggregateBy(rows, 'vendor', { ...scope, labels: vendorNames }),
-          compare: comparing
-            ? aggregateBy(rows, 'vendor', { ...prevScope, labels: vendorNames })
-            : null,
-          currentLabel,
-          compareLabel,
-          caption: 'Vendor',
-        });
-      }
+      vendorPanel.innerHTML = renderRunway({
+        series: aggregateBy(rows, 'vendor', { ...scope, labels: vendorNames }),
+        compare: comparing
+          ? aggregateBy(rows, 'vendor', { ...prevScope, labels: vendorNames })
+          : null,
+        currentLabel,
+        compareLabel,
+        caption: 'Vendor',
+        note: VENDOR_NOTE,
+      });
       if (productPanel) {
-        const vendorSlug = vendorSel?.value;
         productPanel.innerHTML = renderRunway({
-          series: aggregateBy(rows, 'product', { ...scope, vendorSlug }),
-          compare: comparing ? aggregateBy(rows, 'product', { ...prevScope, vendorSlug }) : null,
+          series: aggregateBy(rows, 'product', scope),
+          compare: comparing ? aggregateBy(rows, 'product', prevScope) : null,
           currentLabel,
           compareLabel,
           caption: 'Product',
@@ -343,6 +366,21 @@ const cohortByVendor = vendors
           note: DISCOVERY_NOTE,
         });
       }
+
+      // The table follows the same selection. A comparison widens it to both
+      // cohorts, so the rows on screen are the ones the charts are drawn from.
+      const visible = new Set(matched.map((r) => r.cve_id));
+      if (comparing) for (const r of filterRows(rows, prevScope)) visible.add(r.cve_id);
+      let listed = 0;
+      for (const tr of tableRows) {
+        const show = visible.has(tr.dataset.cveId ?? '');
+        tr.hidden = !show;
+        if (show) listed++;
+      }
+      if (tableNote) {
+        tableNote.textContent = `${listed.toLocaleString()} of ${tableRows.length.toLocaleString()} shown`;
+      }
+      if (tableEmpty) tableEmpty.hidden = listed > 0;
     };
 
     fetch('/data/kev-timing.json')
@@ -351,13 +389,15 @@ const cohortByVendor = vendors
         if (!data) return;
         rows = data.rows as KevTimingRow[];
         vendorNames = data.vendorNames ?? {};
-        for (const el of [yearSel, cmpSel, catSel, vendorSel]) {
+        for (const el of [vendorSel, catSel, yearSel, cmpSel]) {
           el?.addEventListener('change', render);
         }
-        if (cmpSel) cmpSel.disabled = !yearSel.value;
+        // Bring the table note and the disabled state in line with the markup
+        // the build already produced, without repainting the charts.
+        render();
       })
       // The server-rendered panels stay on screen if this fails, so a reader
-      // still sees the unfiltered truth rather than an empty card.
+      // still sees the build's selection rather than an empty card.
       .catch(() => {});
   }
 </script>
