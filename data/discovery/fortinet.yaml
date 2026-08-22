@@ -13,7 +13,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-08-15T13:46:58.948Z
+generated: 2026-08-22T13:47:59.115Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -2005,5 +2005,5 @@ cves:
 unresolved:
   CVE-2025-59921:
     advisory: FG-IR-23-434
-    lastChecked: 2026-08-15T13:46:58.948Z
-    attempts: 2
+    lastChecked: 2026-08-22T13:47:59.115Z
+    attempts: 3
