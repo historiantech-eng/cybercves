@@ -13,7 +13,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-08-22T13:47:59.115Z
+generated: 2026-08-24T14:06:39.588Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -2003,6 +2003,10 @@ cves:
     credit: Fortinet is pleased to thank Iván Domínguez from Zerolynx for reporting this vulnerability
       under responsible disclosure.
 unresolved:
+  CVE-2023-50176:
+    advisory: FG-IR-23-475
+    lastChecked: 2026-08-24T14:06:39.588Z
+    attempts: 1
   CVE-2025-59921:
     advisory: FG-IR-23-434
     lastChecked: 2026-08-22T13:47:59.115Z
