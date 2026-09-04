@@ -138,14 +138,16 @@ export class Repository {
     // treats as precedence — see 0004_product_brand.sql.
     for (const [sort, p] of products.entries()) {
       statements.push({
-        sql: `INSERT INTO product (slug, vendor_slug, name, category_slug, aliases, patterns, brand, brand_fallback, sort)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        sql: `INSERT INTO product (slug, vendor_slug, name, category_slug, aliases, patterns,
+                                   description_patterns, brand, brand_fallback, sort)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(slug) DO UPDATE SET
                 vendor_slug = excluded.vendor_slug,
                 name = excluded.name,
                 category_slug = excluded.category_slug,
                 aliases = excluded.aliases,
                 patterns = excluded.patterns,
+                description_patterns = excluded.description_patterns,
                 brand = excluded.brand,
                 brand_fallback = excluded.brand_fallback,
                 sort = excluded.sort`,
@@ -156,6 +158,7 @@ export class Repository {
           p.categorySlug,
           json(p.aliases),
           json(p.patterns),
+          json(p.descriptionPatterns),
           p.brand ?? null,
           p.brandFallback ? 1 : 0,
           sort,
@@ -231,13 +234,15 @@ export class Repository {
         category_slug: string;
         aliases: string;
         patterns: string;
+        description_patterns: string;
         brand: string | null;
         brand_fallback: number;
       }>(
         // ORDER BY sort, not slug: pattern precedence is positional, so
         // alphabetising here made the Worker resolve differently from the Node
         // pipeline. See 0004_product_brand.sql.
-        `SELECT slug, vendor_slug, name, category_slug, aliases, patterns, brand, brand_fallback
+        `SELECT slug, vendor_slug, name, category_slug, aliases, patterns, description_patterns,
+                brand, brand_fallback
            FROM product ORDER BY sort, slug`,
       )
     ).map((row) => ({
@@ -247,6 +252,16 @@ export class Repository {
       categorySlug: row.category_slug,
       aliases: JSON.parse(row.aliases) as string[],
       patterns: JSON.parse(row.patterns) as string[],
+      // Null-tolerant where its siblings are not. The column arrived in
+      // 0005 with a DEFAULT, so every row written through syncTaxonomy has a
+      // value — but a row predating it, or written by anything that bypassed
+      // that path, reads back null, and no rule at all is the correct reading
+      // of that. (A missing COLUMN is a different failure and fails in the
+      // SELECT above, before this runs; migrations apply ahead of the Worker
+      // on every deploy so that ordering holds.)
+      descriptionPatterns: row.description_patterns
+        ? (JSON.parse(row.description_patterns) as string[])
+        : [],
       brand: row.brand,
       brandFallback: row.brand_fallback === 1,
     }));
@@ -562,6 +577,38 @@ export class Repository {
        ORDER BY seen_count DESC, product_raw ASC
        LIMIT ?`,
       [limit],
+    );
+  }
+
+  /**
+   * Descriptions that state applicability in prose, with the products already
+   * linked to each CVE.
+   *
+   * Feeds `taxonomy:review --prose`, which looks for the next product in
+   * Panorama's position: named in the description, absent from `affected[]`,
+   * and therefore counted in no category at all. Returns the raw text and lets
+   * the caller do the matching — the phrasing rules live in core/description.ts
+   * beside the ones ingest uses, so the detector and the thing it detects
+   * cannot drift apart.
+   *
+   * Filtered in SQL to descriptions long enough to contain a real statement,
+   * because scanning all of them for a review pass is wasted work.
+   */
+  async getDescriptionsForProseReview() {
+    return this.#db.all<{
+      cve_id: string;
+      description: string;
+      vendor_slugs: string;
+      product_slugs: string;
+    }>(
+      `SELECT c.cve_id, c.description,
+              group_concat(DISTINCT cp.vendor_slug)  AS vendor_slugs,
+              group_concat(DISTINCT cp.product_slug) AS product_slugs
+         FROM cve c
+         JOIN cve_product cp ON cp.cve_id = c.cve_id
+        WHERE c.description IS NOT NULL AND length(c.description) > 40
+        GROUP BY c.cve_id
+        ORDER BY c.cve_id`,
     );
   }
 

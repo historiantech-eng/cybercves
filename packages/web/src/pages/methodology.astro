@@ -301,6 +301,33 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
         security vendor's firewall CVEs would be meaningless. Non-security categories are
         tracked and browsable but excluded from the default comparison.
       </p>
+
+      <h3 style="margin-top:18px">When the product is named in the description</h3>
+      <p class="muted">
+        A CVE record has a structured list of affected products, and it is normally the only
+        thing we read. But some products run the same software as the product they manage, and
+        the vendor files the advisory under that software's name. Palo Alto's Panorama runs
+        PAN-OS, so its advisories list &ldquo;PAN-OS&rdquo; and mention Panorama only in a
+        sentence: <em>this issue is applicable to PAN-OS software on PA-Series and VM-Series
+        firewalls and on Panorama</em>. Read literally, the record says firewall and nothing
+        else.
+      </p>
+      <p class="muted">
+        So a small number of products carry rules that read the description as well. Two things
+        make that safe enough to publish. The rules are matched one sentence at a time, and a
+        sentence that <em>denies</em> never counts &mdash; most descriptions naming a product
+        name it to say it is not affected, and treating those as evidence is precisely the error
+        this is designed to avoid. And the rules are written per product by hand rather than
+        derived from product names, because a name is not a claim: the string
+        &ldquo;Cisco IOS Software&rdquo; appears in hundreds of descriptions that are really
+        about IOS XE or IOS XR.
+      </p>
+      <p class="muted">
+        A description can only ever add a product, never remove one the structured record
+        established, and every link made this way is labelled
+        <strong>description</strong> in the &ldquo;Matched by&rdquo; column on the CVE's own
+        page. If you think one of them is wrong, it is visible and you can tell us.
+      </p>
     </div>
   </section>
 
@@ -362,6 +389,13 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
           <strong>Acquisitions lag.</strong> Splunk counts under Cisco, and CyberArk and Venafi
           under Palo Alto, from the whole period we cover — not from the acquisition date. A
           newly acquired brand is invisible until its name is added to the taxonomy.
+        </li>
+        <li>
+          <strong>A product stated only in prose may be missing.</strong> We read the structured
+          affected-product list, plus hand-written rules for the handful of products vendors
+          describe in a sentence instead. Where no such rule exists yet, the product is counted
+          nowhere &mdash; it does not appear as a gap, it simply is not there. Palo Alto's
+          Panorama sat at zero CVEs for exactly this reason until a reader pointed it out.
         </li>
         <li>
           <strong>Product categories are our judgement.</strong> Vendors do not publish a category

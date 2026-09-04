@@ -182,6 +182,20 @@ export function parseProducts(
       }
     }
 
+    const descriptionPatterns = stringArray(
+      item.descriptionPatterns,
+      `${path}.descriptionPatterns`,
+    );
+    for (const [j, source] of descriptionPatterns.entries()) {
+      try {
+        new RegExp(source, 'i');
+      } catch (err) {
+        throw new ConfigError(
+          `${path}.descriptionPatterns[${j}]: invalid regex — ${(err as Error).message}`,
+        );
+      }
+    }
+
     return {
       slug: requireSlug(item.slug, `${path}.slug`),
       vendorSlug,
@@ -189,6 +203,7 @@ export function parseProducts(
       categorySlug,
       aliases: stringArray(item.aliases, `${path}.aliases`),
       patterns,
+      descriptionPatterns,
       brand,
       brandFallback,
     };

@@ -84,11 +84,31 @@ products:
     # spaced spelling.
     patterns: ['^global ?protect\b']
 
+  # Panorama is Palo Alto's management platform, and it runs PAN-OS. So its
+  # advisories list the affected product as "PAN-OS" and name Panorama only in
+  # the description — which is why this product had zero CVEs while ten 2026
+  # advisories applied to it.
+  #
+  # `descriptionPatterns` are matched per sentence against the description, and
+  # a sentence that denies never counts (description.ts). That distinction is
+  # the whole rule here: 14 of the 29 CVEs mentioning Panorama mention it only
+  # to say it is NOT affected, and they must stay off this product.
+  #
+  # Both forms below are deliberately narrow:
+  #   "on Panorama"          "...and on Panorama (virtual and M-Series)"
+  #                          "...web interface on Panorama appliances"
+  #   "Panorama <noun>"      "in Palo Alto Networks Panorama software"
+  #
+  # Neither matches "Panorama administrator", the role named as the ATTACKER in
+  # CVE-2024-5920 where the vulnerable component is a PAN-OS node.
   - slug: palo-alto-panorama
     name: Panorama
     categorySlug: network-management
     aliases: [Panorama, Panorama Interconnect]
     patterns: ['^panorama\b']
+    descriptionPatterns:
+      - '\bon Panorama\b'
+      - '\bPanorama (?:software|appliances?|server|management server)\b'
 
   - slug: palo-alto-expedition
     name: Expedition

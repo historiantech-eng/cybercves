@@ -1,5 +1,7 @@
 import { resolvableEntries } from './affected.js';
 import { parseCpe } from './cpe.js';
+import { denyPatterns, productsInDescription } from './description.js';
+import type { DescriptionRule } from './description.js';
 import type {
   MatchSignal,
   NormalizedCve,
@@ -19,6 +21,7 @@ const SIGNAL_RANK: Readonly<Record<MatchSignal, number>> = {
   'affected-vendor': 1,
   cpe: 2,
   'reference-host': 3,
+  description: 4,
 };
 
 /**
@@ -75,6 +78,12 @@ export class TaxonomyResolver {
   readonly #brandOfSpelling = new Map<string, string>();
   /** `vendorSlug::brandKey` -> the product that catches the brand's long tail. */
   readonly #brandFallback = new Map<string, string>();
+  /**
+   * `vendorSlug` -> the products that declare `descriptionPatterns`. Almost
+   * always empty for a vendor; consulted only after the structured pass, and
+   * only for a vendor the CVE already matched.
+   */
+  readonly #descriptionRules = new Map<string, DescriptionRule[]>();
 
   constructor(vendors: readonly VendorConfig[], products: readonly ProductConfig[]) {
     for (const vendor of vendors) {
@@ -122,6 +131,20 @@ export class TaxonomyResolver {
 
       if (brand && product.brandFallback) {
         this.#brandFallback.set(`${product.vendorSlug}::${brand}`, product.slug);
+      }
+
+      if (product.descriptionPatterns.length) {
+        const rules = this.#descriptionRules.get(product.vendorSlug) ?? [];
+        rules.push({
+          productSlug: product.slug,
+          affirm: product.descriptionPatterns.map((source) => new RegExp(source, 'i')),
+          // Derived, never configured: the denying side has to catch every
+          // spelling of the name, and asking an author to remember that is how
+          // a bare "Panorama is not impacted" would slip through. See
+          // denyPatterns for why the two sides are built differently.
+          deny: denyPatterns([product.name, ...product.aliases]),
+        });
+        this.#descriptionRules.set(product.vendorSlug, rules);
       }
     }
   }
@@ -307,6 +330,42 @@ export class TaxonomyResolver {
             vendorSlug,
           });
         }
+      }
+    }
+
+    /**
+     * Second pass: products the vendor named in the description but not in
+     * `affected[]`.
+     *
+     * Runs only for vendors the structured data already attributed this CVE to,
+     * so prose can never introduce a vendor — it can only fill in a product for
+     * one already established. And it never overwrites: a product resolved above
+     * keeps the stronger signal it was resolved with, because `resolved` is
+     * keyed by slug and we skip anything already present.
+     *
+     * This is what puts Panorama on the ten 2026 PAN-OS advisories whose text
+     * says the issue applies to it, without touching the fourteen that say it
+     * does not. See description.ts.
+     */
+    for (const [vendorSlug, matchSignal] of vendorMatches) {
+      // A description is the CNA's own words about their own product. When the
+      // only thing tying this vendor to the CVE is a link to their site, the
+      // text is somebody else writing about them, and it is not theirs to make
+      // claims with. Every Panorama record here is 'cna-assigner', so nothing
+      // real is lost by refusing the weakest signal.
+      if (matchSignal === 'reference-host') continue;
+      const rules = this.#descriptionRules.get(vendorSlug);
+      if (!rules?.length) continue;
+      for (const productSlug of productsInDescription(cve.description, rules)) {
+        if (resolved.has(productSlug)) continue;
+        const product = this.#products.get(productSlug);
+        if (!product) continue;
+        resolved.set(productSlug, {
+          productSlug,
+          vendorSlug,
+          categorySlug: product.categorySlug,
+          matchSignal: 'description',
+        });
       }
     }
 

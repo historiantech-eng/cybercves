@@ -15,10 +15,26 @@ export interface CvssResult {
 }
 
 /**
- * How a CVE was attributed to a vendor. Recorded per row so mis-attribution is
- * auditable: not every CVE affecting a vendor is assigned by that vendor's CNA.
+ * What evidence tied a CVE to a vendor or product. Recorded per row so
+ * mis-attribution is auditable: not every CVE affecting a vendor is assigned by
+ * that vendor's CNA.
+ *
+ * The first four describe how the VENDOR was matched, and a product link
+ * inherits its vendor's. `description` is the exception and is set on the
+ * product link itself, because there the vendor was never in doubt — only which
+ * of their products the record was talking about.
  */
-export type MatchSignal = 'cna-assigner' | 'affected-vendor' | 'cpe' | 'reference-host';
+export type MatchSignal =
+  | 'cna-assigner'
+  | 'affected-vendor'
+  | 'cpe'
+  | 'reference-host'
+  /**
+   * The vendor named this product in the description rather than in
+   * `affected[]` — see description.ts. Weakest signal, and the only one that
+   * comes from prose, so it is recorded separately and shown on the CVE page.
+   */
+  | 'description';
 
 export interface NormalizedAffected {
   vendorRaw: string | null;
@@ -127,6 +143,13 @@ export interface ProductConfig {
   aliases: string[];
   /** Regex sources tried when no alias matches. Anchored and case-insensitive at compile time. */
   patterns: string[];
+  /**
+   * Regex sources matched against each SENTENCE of the CVE description, for
+   * products the vendor states in prose instead of in `affected[]`. Opt-in per
+   * product and empty for almost all of them; see description.ts for why
+   * deriving these from the product name produces false positives at scale.
+   */
+  descriptionPatterns: string[];
   /**
    * The acquired brand this product belongs to, as written in `affected[].vendor`
    * — "Splunk" under Cisco, "CyberArk" under Palo Alto. An entry naming that

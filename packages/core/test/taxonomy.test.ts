@@ -210,6 +210,63 @@ describe('product resolution', () => {
   });
 });
 
+/**
+ * The end-to-end shape of the reported bug: a product stated only in prose.
+ *
+ * Runs the whole resolver over the committed /data config, so it fails if the
+ * patterns move, if the signal is renamed, or if Panorama's category changes.
+ */
+describe('CVE-2026-0281 — Panorama, named in the description and nowhere else', () => {
+  it('has PAN-OS and only PAN-OS in the structured record', () => {
+    // The premise. Every product in `affected[]` that survives the unaffected
+    // filter is a firewall product; nothing there says "management platform".
+    const { resolved } = resolver.resolve(fixture('CVE-2026-0281'));
+    const structured = resolved.filter((r) => r.matchSignal !== 'description');
+    expect(structured.map((r) => r.productSlug)).toEqual(['palo-alto-pan-os']);
+  });
+
+  it('adds Panorama from the description, under the management category', () => {
+    const { resolved } = resolver.resolve(fixture('CVE-2026-0281'));
+    const panorama = resolved.find((r) => r.productSlug === 'palo-alto-panorama');
+    expect(panorama).toMatchObject({
+      vendorSlug: 'palo-alto',
+      categorySlug: 'network-management',
+      matchSignal: 'description',
+    });
+  });
+
+  it('keeps PAN-OS rather than replacing it', () => {
+    // The advisory says the issue applies to PAN-OS software ON Panorama and on
+    // PA-Series and VM-Series firewalls. Both are true; the CVE belongs in both
+    // categories, and prose must never delete what affected[] established.
+    const { resolved } = resolver.resolve(fixture('CVE-2026-0281'));
+    const panOs = resolved.find((r) => r.productSlug === 'palo-alto-pan-os');
+    expect(panOs?.categorySlug).toBe('firewall');
+    expect(panOs?.matchSignal).not.toBe('description');
+  });
+
+  it('ignores the description when only a reference URL ties the vendor in', () => {
+    // A CVE that merely links to the vendor's site is somebody else writing
+    // about their product. The prose is not theirs to make claims with.
+    const cve = {
+      cveId: 'CVE-2026-99999',
+      assignerShortName: 'mitre',
+      description: 'This issue is applicable to PAN-OS software on Panorama (virtual and M-Series).',
+      affected: [],
+      references: [{ url: 'https://security.paloaltonetworks.com/CVE-2026-0281' }],
+    } as unknown as Parameters<TaxonomyResolver['resolve']>[0];
+
+    const { resolved, vendors } = resolver.resolve(cve);
+    expect(vendors.get('palo-alto')).toBe('reference-host');
+    expect(resolved.map((r) => r.productSlug)).not.toContain('palo-alto-panorama');
+  });
+
+  it('does not add Panorama to CVE-2024-3400, which says it is not impacted', () => {
+    const { resolved } = resolver.resolve(fixture('CVE-2024-3400'));
+    expect(resolved.map((r) => r.productSlug)).not.toContain('palo-alto-panorama');
+  });
+});
+
 describe('unrecognised vendor on a CNA-assigned CVE', () => {
   // Cisco acquired Splunk and began assigning Splunk CVEs under its own CNA
   // while the affected entries still read vendor "Splunk". Every one of those
@@ -258,6 +315,7 @@ describe('unrecognised vendor on a CNA-assigned CVE', () => {
         categorySlug: 'firewall',
         aliases: ['Cisco Secure Firewall'],
         patterns: [],
+        descriptionPatterns: [],
       },
     ],
   );

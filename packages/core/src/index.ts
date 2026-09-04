@@ -1,5 +1,6 @@
 export * from './affected.js';
 export * from './cve-schema.js';
+export * from './description.js';
 export * from './types.js';
 export * from './config.js';
 export * from './cvss.js';

@@ -1,0 +1,20 @@
+-- Applicability stated in prose instead of in `affected[]`.
+--
+-- Some vendors name an affected product only in the CVE description. Panorama
+-- is the case that forced this: it runs PAN-OS, so Palo Alto files its
+-- advisories with `affected[].product = "PAN-OS"` and mentions Panorama only in
+-- a sentence ("...and on Panorama (virtual and M-Series)"). The product had
+-- zero CVEs while ten 2026 advisories applied to it, and Network & Security
+-- Management read as empty for the vendor.
+--
+-- Stored on the product for the same reason `patterns` and `sort` are: the
+-- Worker rebuilds the resolver from D1, and a rule the Node pipeline has but
+-- the Worker does not means the two disagree about the same CVE depending on
+-- which one saw it first. See loadTaxonomy and 0004_product_brand.sql.
+--
+-- Defaults to an empty JSON array: this is opt-in per product, and stays empty
+-- for almost all of them. Matching a bare product name against descriptions
+-- generally is not safe — "Cisco IOS Software" occurs in 214 descriptions that
+-- are about IOS XE or IOS XR — so only a product a human wrote a rule for
+-- participates at all.
+ALTER TABLE product ADD COLUMN description_patterns TEXT NOT NULL DEFAULT '[]';
