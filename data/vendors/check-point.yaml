@@ -1,0 +1,97 @@
+slug: check-point
+name: Check Point
+homepage: https://www.checkpoint.com
+
+# Verified against the 2024-2026 CVE List: 29 of the 30 records we hold carry
+# assignerShortName "checkpoint" — one word, no separator or underscore. The
+# thirtieth is assigned by ZDI and reaches us through the aliases below.
+cnaShortNames:
+  - checkpoint
+
+# Both spellings occur in affected[].vendor on real records: the CNA writes
+# "checkpoint" on some and "Check Point" on others, and ZDI writes "Check Point".
+# Matching is exact, so every spelling has to be listed.
+aliases:
+  - Check Point
+  - checkpoint
+  - Check Point Software Technologies
+  - Check Point Software Technologies Ltd.
+  - Check Point Software Technologies Ltd
+
+# ONLY the support host, deliberately.
+#
+# blog.checkpoint.com and research.checkpoint.com appear in these CVEs'
+# references too, but Check Point Research publishes about OTHER vendors'
+# vulnerabilities. Treating those hosts as advisory evidence would attribute a
+# Microsoft or Fortinet CVE to Check Point on the strength of a blog post about
+# it — the reference-host signal cannot tell "our advisory" from "our writeup of
+# someone else's bug".
+psirtHosts:
+  - support.checkpoint.com
+
+# No psirtUrl: their advisories are individual SecureKnowledge articles
+# (support.checkpoint.com/results/sk/skNNNNNN) with no public index page that
+# lists them, and the vendor page renders this link only when it is set. A real
+# index URL would be better than none — omitted rather than guessed.
+advisoryIdPattern: 'sk\d+'
+
+# `adapter` is validated and stored but never dispatched anywhere — the only
+# PSIRT scraper in the codebase is Fortinet-specific — so this is the same
+# position Cisco and Palo Alto are in, and no adapter code is needed.
+adapter: cvelist
+
+# Check Point Research, their in-house team.
+internalBrandMarkers:
+  - Check Point Research
+
+# Check Point populates neither `source.discovery` nor, with one exception,
+# `credits[]`: across the 29 records they assigned, discovery is absent on all
+# 29 and credits appear on exactly one. So almost every Check Point CVE is
+# "not disclosed", and without saying why that reads as a company hiding
+# something rather than one that does not fill in an optional CVE field.
+# Same situation, and the same remedy, as Fortinet's note.
+discoveryNote: >-
+  Check Point does not populate the CVE record's discovery field, and rarely
+  lists credits. Their CVEs are therefore almost all counted as "not disclosed"
+  here — that is a gap in the published data, not evidence about how the
+  vulnerabilities were found.
+
+# Categories this vendor competes in.
+#
+# Declared, not derived from the products in products/check-point.yaml. A
+# category with no mapped product is ambiguous — it can mean "they had no CVEs
+# here" or "they do not sell this" — and those are opposite claims about a named
+# company. A 0 under a category a vendor does not compete in reads as a clean
+# record rather than an absence, which is the bug this list exists to fix.
+#
+# Where a call is genuinely uncertain this list errs towards INCLUDING the
+# category. The two errors are not symmetric: including one they do not sell
+# shows a 0, which is the pre-existing behaviour, while omitting one they do
+# sell publishes "they do not compete here" about a real company.
+#
+# validateBundle refuses to start if any product lands in a category missing
+# from this list, so the declaration cannot silently rot. Categories absent
+# here render as N/A.
+portfolio:
+  - firewall
+  - endpoint
+  - sase-sse
+  - vpn-remote-access
+  # Harmony Email & Collaboration, formerly Avanan.
+  - email-security
+  - identity
+  # Infinity Events and SmartEvent.
+  - siem-logging
+  # ThreatCloud and the Threat Emulation sandbox.
+  - threat-detection
+  # Check Point External Risk Management, formerly Cyberint — external attack
+  # surface management, which this taxonomy files here.
+  - vulnerability-management
+  # CloudGuard WAF, formerly CloudGuard AppSec.
+  - web-app-security
+  - cloud-security
+  # Quantum IoT Protect and the Quantum Rugged appliances.
+  - ot-iot-security
+  - network-management
+  # Absent: routing-switching and other. Check Point sells no routers or
+  # switches, and no collaboration, telephony, or general-purpose software.

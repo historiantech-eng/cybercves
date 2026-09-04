@@ -107,7 +107,7 @@ describe('parseEpssCsv', () => {
 describe('committed config loads through the Node loader', () => {
   it('produces a working resolver from /data', () => {
     const config = loadConfig();
-    expect(config.vendors.map((v) => v.slug).sort()).toEqual(['cisco', 'fortinet', 'palo-alto']);
+    expect(config.vendors.map((v) => v.slug).sort()).toEqual(['check-point', 'cisco', 'fortinet', 'palo-alto']);
     expect(config.resolver.resolveProductName('fortinet', 'FortiGate')).toBe('fortinet-fortigate');
     expect(config.resolver.getProduct('palo-alto-pan-os')?.categorySlug).toBe('firewall');
   });

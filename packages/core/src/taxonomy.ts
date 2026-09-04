@@ -47,6 +47,44 @@ function hostOf(url: string): string | null {
   }
 }
 
+/**
+ * Split an `affected[].product` string that names several products at once.
+ *
+ * ONLY when the string contains a comma. `" and "` is split as the tail
+ * conjunction of a comma list ("A, B and C") and never on its own, because on
+ * its own it is almost always part of one product's name. Every comma-free
+ * `" and "` string in the corpus is exactly that:
+ *
+ *   Cisco Unified Communications Manager IM and Presence Service
+ *   Cisco Secure Email and Web Manager
+ *   Cisco Small Business Smart and Managed Switches
+ *   Cisco Enterprise Chat and Email
+ *   WildFire WF-500 and WF-500-B
+ *
+ * Splitting those yields "Web Manager", "Managed Switches" and "Email", which
+ * match other products' patterns and would file one CVE against unrelated SKUs.
+ * The comma gate is what makes this safe, and it is load-bearing — do not
+ * "simplify" it into an unconditional split. A test pins all five strings.
+ *
+ * Runs on the RAW string, before normalizeKey, which folds commas to spaces and
+ * would leave nothing to split on. Check Point writes lists with no space after
+ * the comma ("ZoneAlarmExtremeSecurityNextGen,IdentityAgentforWindows,..."), so
+ * the separator absorbs surrounding whitespace rather than requiring it.
+ */
+const LIST_SEPARATOR = /\s*,\s*|\s+and\s+/i;
+
+/** A list longer than this is malformed input, not a product matrix. */
+const MAX_LIST_PARTS = 16;
+
+export function splitProductList(raw: string): string[] {
+  if (!raw.includes(',')) return [];
+  const parts = raw
+    .split(LIST_SEPARATOR)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 1);
+  return parts.length > 1 ? parts.slice(0, MAX_LIST_PARTS) : [];
+}
+
 export class TaxonomyResolver {
   readonly #vendors = new Map<string, VendorConfig>();
   readonly #byCna = new Map<string, string>();
@@ -218,26 +256,87 @@ export class TaxonomyResolver {
   ): string | null {
     const key = normalizeKey(productRaw);
     if (!key) return null;
+    const scope = this.#scopeFor(vendorSlug, vendorRaw);
+    // Deliberately no widening on a miss: a string this brand does not
+    // recognise is not one of the parent vendor's products either.
+    return this.#lookup(scope, key) ?? this.#brandFallback.get(scope) ?? null;
+  }
 
-    // With a vendor string in hand the search narrows: to the acquired brand's
-    // products when it names one, otherwise to the vendor's own. Only an entry
-    // that names no vendor at all searches everything, because there the
-    // product name is the only evidence available.
+  /**
+   * The alias/pattern scope one affected-entry searches.
+   *
+   * With a vendor string in hand the search narrows: to the acquired brand's
+   * products when it names one, otherwise to the vendor's own. Only an entry
+   * that names no vendor at all searches everything, because there the product
+   * name is the only evidence available.
+   */
+  #scopeFor(vendorSlug: string, vendorRaw?: string | null): string {
     const brand = vendorRaw
       ? (this.#brandOfSpelling.get(`${vendorSlug}::${normalizeKey(vendorRaw)}`) ?? '')
       : null;
-    const scope = brand === null ? vendorSlug : `${vendorSlug}::${brand}`;
+    return brand === null ? vendorSlug : `${vendorSlug}::${brand}`;
+  }
 
+  /** Alias then pattern within one scope. No brand fallback — see resolveProductNames. */
+  #lookup(scope: string, key: string): string | null {
     const exact = this.#aliases.get(scope)?.get(key);
     if (exact) return exact;
-
     for (const { re, slug } of this.#patterns.get(scope) ?? []) {
       if (re.test(key)) return slug;
     }
+    return null;
+  }
 
-    // Deliberately no widening on a miss: a string this brand does not
-    // recognise is not one of the parent vendor's products either.
-    return this.#brandFallback.get(scope) ?? null;
+  /**
+   * Every product one affected-entry names, not just the first.
+   *
+   * The whole string resolves FIRST, so an alias that deliberately contains a
+   * comma still wins outright — "PAM Self-Hosted, Privilege Cloud" is one
+   * CyberArk SKU as CyberArk writes it, not two. Only then is the string split
+   * and each part resolved, and the results unioned.
+   *
+   * Check Point files up to seven products in a single `affected[].product`
+   * field, spanning two categories. Taking only the first left six of them
+   * counted nowhere, and nothing anywhere reported a problem — the same shape of
+   * silent gap that Panorama had.
+   *
+   * The brand fallback applies only when NOTHING matched. Applied per part it
+   * would attach a brand's catch-all product to every list containing one
+   * unrecognised item, alongside the items that did resolve.
+   *
+   * `unmatchedParts` exists so a half-resolved list still reaches the review
+   * queue: without it the one product in a seven-item list that we cannot place
+   * is invisible forever, which is exactly how a taxonomy rots.
+   */
+  resolveProductNames(
+    vendorSlug: string,
+    productRaw: string,
+    vendorRaw?: string | null,
+  ): { slugs: string[]; unmatchedParts: string[] } {
+    const scope = this.#scopeFor(vendorSlug, vendorRaw);
+    const slugs = new Set<string>();
+    const unmatchedParts: string[] = [];
+
+    const wholeKey = normalizeKey(productRaw);
+    const whole = wholeKey ? this.#lookup(scope, wholeKey) : null;
+    if (whole) slugs.add(whole);
+
+    for (const part of splitProductList(productRaw)) {
+      const key = normalizeKey(part);
+      if (!key) continue;
+      const hit = this.#lookup(scope, key);
+      if (hit) slugs.add(hit);
+      else unmatchedParts.push(part);
+    }
+
+    if (!slugs.size) {
+      const fallback = this.#brandFallback.get(scope);
+      if (fallback) slugs.add(fallback);
+      // Nothing matched, so the parts are not a partial gap — the caller queues
+      // the whole string, which is the thing a human would write an alias for.
+      return { slugs: [...slugs], unmatchedParts: [] };
+    }
+    return { slugs: [...slugs], unmatchedParts };
   }
 
   /**
@@ -308,17 +407,39 @@ export class TaxonomyResolver {
 
         let hit = false;
         for (const candidate of candidates) {
-          const productSlug = this.resolveProductName(vendorSlug, candidate, entryVendor);
-          if (!productSlug) continue;
-          const product = this.#products.get(productSlug);
-          if (!product) continue;
-          resolved.set(productSlug, {
-            productSlug,
+          // Plural: one candidate string can name several products. See
+          // resolveProductNames and splitProductList.
+          const { slugs, unmatchedParts } = this.resolveProductNames(
             vendorSlug,
-            categorySlug: product.categorySlug,
-            matchSignal,
-          });
-          hit = true;
+            candidate,
+            entryVendor,
+          );
+          if (!slugs.length) continue;
+
+          for (const productSlug of slugs) {
+            const product = this.#products.get(productSlug);
+            if (!product) continue;
+            resolved.set(productSlug, {
+              productSlug,
+              vendorSlug,
+              categorySlug: product.categorySlug,
+              matchSignal,
+            });
+            hit = true;
+          }
+          if (!hit) continue;
+
+          // A named part of a list we could not place. Queued under the PART
+          // rather than the whole string, because the part is what a human
+          // would add an alias for — queueing the seven-item string instead
+          // would be unactionable and would never retire.
+          for (const part of unmatchedParts) {
+            unmapped.set(`${vendorSlug}::${normalizeKey(part)}`, {
+              vendorRaw: affected.vendorRaw,
+              productRaw: part,
+              vendorSlug,
+            });
+          }
           break;
         }
 

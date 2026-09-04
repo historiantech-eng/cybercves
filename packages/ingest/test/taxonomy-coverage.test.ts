@@ -98,6 +98,96 @@ describe('CPE-form coverage', () => {
   }
 });
 
+/**
+ * Raw `affected[].product` strings, for vendors whose records carry no CPEs.
+ *
+ * The CPE probe above has nothing to test for Check Point: across the 30 CVEs
+ * we hold for them, not one record carries a single CPE. The free-text product
+ * string is the only surface their CVEs ever present, so it is the only thing
+ * worth pinning — and it is unusually hostile, carrying comma lists, spellings
+ * with no spaces at all, and one of the vendor's own typos.
+ *
+ * Every string below is quoted verbatim from a real record.
+ */
+const RAW_FORMS: Record<string, string[]> = {
+  'check-point': [
+    'Quantum Security Gateway',
+    'Quantum Security Management',
+    'Check Point Mobile Access',
+    'Check Point SmartConsole',
+    'Identity Agent',
+    'Identity Awareness',
+    'Multi-Domain Security Management',
+    'Multi-Domain Security Management Server',
+    'Security Management Server',
+    'Spark Firewalls',
+    'ZoneAlarm Extreme Security',
+    'Harmony Endpoint Security Client for Windows',
+    'Check Point Harmony SASE',
+    // Check Point's own misspelling of Harmony, on CVE-2025-9142.
+    'Hramony SASE',
+    'Check Point Management Log Server',
+  ],
+};
+
+describe('raw product-string coverage', () => {
+  for (const [vendorSlug, forms] of Object.entries(RAW_FORMS)) {
+    it(`resolves every observed product string for ${vendorSlug}`, () => {
+      const unresolved = forms.filter(
+        (form) => resolver.resolveProductNames(vendorSlug, form).slugs.length === 0,
+      );
+      expect(unresolved).toEqual([]);
+    });
+  }
+});
+
+/**
+ * The strings that name several products at once.
+ *
+ * Each of these used to resolve to exactly one product, silently discarding the
+ * rest — the seven-product string below would have counted as a firewall CVE
+ * and nothing else, when it is equally a management-platform CVE.
+ */
+describe('multi-product strings fan out', () => {
+  const cases: Array<[string, string[]]> = [
+    [
+      'ClusterXL, Multi-Domain Security Management, Quantum Appliances, Quantum Maestro, Quantum Scalable Chassis, Quantum Security Gateways, Quantum Security Management',
+      [
+        'check-point-multi-domain-management',
+        'check-point-quantum-gateway',
+        'check-point-security-management',
+      ],
+    ],
+    [
+      'ZoneAlarmExtremeSecurityNextGen,IdentityAgentforWindows,IdentityAgentforWindowsTerminalServer',
+      ['check-point-identity-agent', 'check-point-zonealarm'],
+    ],
+    [
+      'Check Point Quantum Gateway, Spark Gateway and CloudGuard Network',
+      ['check-point-cloudguard', 'check-point-quantum-gateway', 'check-point-spark'],
+    ],
+    [
+      'Multi-Domain Security Management, Quantum Security Management',
+      ['check-point-multi-domain-management', 'check-point-security-management'],
+    ],
+  ];
+
+  for (const [raw, expected] of cases) {
+    it(`resolves ${expected.length} products from "${raw.slice(0, 44)}…"`, () => {
+      expect(resolver.resolveProductNames('check-point', raw).slugs.sort()).toEqual(expected);
+    });
+  }
+
+  it('puts the seven-product string in two categories, not one', () => {
+    const { slugs } = resolver.resolveProductNames(
+      'check-point',
+      'ClusterXL, Multi-Domain Security Management, Quantum Appliances, Quantum Maestro, Quantum Scalable Chassis, Quantum Security Gateways, Quantum Security Management',
+    );
+    const categories = new Set(slugs.map((s) => resolver.getProduct(s)!.categorySlug));
+    expect([...categories].sort()).toEqual(['firewall', 'network-management']);
+  });
+});
+
 describe('pattern precedence', () => {
   it('does not let a broad pattern swallow a more specific product', () => {
     // Patterns are tried in file order, so a bare `^unified\b` on the

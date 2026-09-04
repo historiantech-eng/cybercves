@@ -14,7 +14,7 @@ import { loadConfig } from '../node/config-loader.js';
 /**
  * End-to-end smoke test against live data.
  *
- * Pulls real, well-known advisories from all three mandatory vendors, runs them
+ * Pulls real, well-known advisories from all four mandatory vendors, runs them
  * through the full pipeline, and prints the rollups the site will render. This
  * is the check that the whole chain — fetch, normalize, attribute, categorize,
  * enrich, score — agrees with reality, not just with our fixtures.
@@ -29,6 +29,11 @@ const SAMPLE_CVES = [
   'CVE-2025-0108', // Palo Alto PAN-OS auth bypass
   'CVE-2023-20198', // Cisco IOS XE web UI, CRITICAL 10.0
   'CVE-2024-20353', // Cisco ASA / FTD
+  'CVE-2024-24919', // Check Point Quantum Gateway path traversal, exploited
+  // Seven products in one affected[] string, spanning firewall and management —
+  // the case that proves list-splitting survives the real pipeline, not just
+  // the resolver unit tests.
+  'CVE-2024-24914',
 ];
 
 const { values } = parseArgs({

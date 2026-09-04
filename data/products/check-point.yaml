@@ -1,0 +1,177 @@
+# Check Point product -> category mappings.
+#
+# Check Point's CVE records carry NO CPEs at all — the same situation as Palo
+# Alto — so every match here runs against the free-text `affected[].product`
+# string, and there is no cleaner second candidate to fall back on.
+#
+# That string is frequently a comma-separated LIST. One record names seven
+# products spanning two categories:
+#
+#   "ClusterXL, Multi-Domain Security Management, Quantum Appliances, Quantum
+#    Maestro, Quantum Scalable Chassis, Quantum Security Gateways, Quantum
+#    Security Management"
+#
+# See splitProductList in core/src/taxonomy.ts for how those are fanned out, and
+# note that splitting happens on the raw string: a pattern here only ever sees
+# one product's name, never the list.
+
+vendorSlug: check-point
+products:
+  # ORDER MATTERS. Everything down to SmartConsole must sit above the Quantum
+  # gateway entry, whose '^(check point )?quantum\b' would otherwise swallow
+  # "Quantum Security Management" and file a management bug as a firewall bug.
+
+  - slug: check-point-multi-domain-management
+    name: Multi-Domain Security Management
+    categorySlug: network-management
+    aliases:
+      - Multi-Domain Security Management
+      - Multi-Domain Security Management Server
+      - Multi-Domain Management
+      - Provider-1
+    patterns: ['^multi.?domain\b']
+
+  - slug: check-point-security-management
+    name: Quantum Security Management
+    categorySlug: network-management
+    aliases:
+      - Quantum Security Management
+      - Security Management Server
+      - Check Point Security Management
+      - SmartCenter
+    patterns: ['^(check point )?(quantum )?security management\b']
+
+  - slug: check-point-log-server
+    name: Management Log Server
+    categorySlug: network-management
+    aliases:
+      - Check Point Management Log Server
+      - Management Log Server
+      - Log Server
+      - SmartEvent
+    patterns: ['\bmanagement log server\b', '^smartevent\b']
+
+  - slug: check-point-smartconsole
+    name: SmartConsole
+    categorySlug: network-management
+    aliases: [Check Point SmartConsole, SmartConsole]
+    patterns: ['^(check point )?smartconsole\b']
+
+  # Spark is the SMB gateway line and is branded "Quantum Spark", so it needs to
+  # sit above the Quantum gateway entry for the same reason the management
+  # products do.
+  - slug: check-point-spark
+    name: Quantum Spark
+    categorySlug: firewall
+    aliases:
+      - Spark Gateway
+      - Spark Firewalls
+      - Spark Firewall
+      - Quantum Spark
+      - Quantum Spark Appliances
+    patterns: ['^(check point )?(quantum )?spark\b']
+
+  # ClusterXL, Maestro, Scalable Chassis and "Quantum Appliances" are ways of
+  # deploying the same gateway rather than separate products, so they are folded
+  # in here — a clustering bug lands on the gateway it actually affects.
+  - slug: check-point-quantum-gateway
+    name: Quantum Security Gateway
+    categorySlug: firewall
+    aliases:
+      - Quantum Security Gateway
+      - Quantum Security Gateways
+      - Check Point Quantum Gateway
+      - Quantum Gateway
+      - Quantum Appliances
+      - Quantum Maestro
+      - Quantum Scalable Chassis
+      - ClusterXL
+      - Security Gateway
+    patterns:
+      - '^(check point )?quantum\b'
+      - '^clusterxl\b'
+      - '^(check point )?security gateways?\b'
+
+  - slug: check-point-mobile-access
+    name: Mobile Access
+    categorySlug: vpn-remote-access
+    aliases:
+      - Check Point Mobile Access
+      - Mobile Access
+      - Mobile Access Blade
+      - Remote Access VPN
+    patterns: ['\bmobile access\b', '^remote access vpn\b']
+
+  # The squashed spellings below are upstream's, verbatim. Check Point files
+  # "IdentityAgentforWindows" with no spaces at all, and normalizeKey does not
+  # insert word breaks, so a spaced alias or pattern can never reach it.
+  - slug: check-point-identity-agent
+    name: Identity Agent
+    categorySlug: identity
+    aliases:
+      - Identity Agent
+      - Identity Agent for Windows
+      - Identity Agent for Windows Terminal Server
+      - IdentityAgentforWindows
+      - IdentityAgentforWindowsTerminalServer
+    patterns: ['^identity ?agent\b', '^identityagentfor']
+
+  - slug: check-point-identity-awareness
+    name: Identity Awareness
+    categorySlug: identity
+    aliases: [Identity Awareness, Identity Awareness Blade]
+    patterns: ['^identity awareness\b']
+
+  - slug: check-point-harmony-endpoint
+    name: Harmony Endpoint
+    categorySlug: endpoint
+    aliases:
+      - Harmony Endpoint
+      - Harmony Endpoint Security Client
+      - Harmony Endpoint Security Client for Windows
+      - Endpoint Security Client
+    patterns: ['^(check point )?harmony endpoint\b', '^endpoint security client\b']
+
+  # "Hramony SASE" is a typo in Check Point's own record for CVE-2025-9142.
+  # Listed as an alias rather than matched with a fuzzy pattern: a rule loose
+  # enough to tolerate one transposition tolerates a great many strings that are
+  # not this product.
+  - slug: check-point-harmony-sase
+    name: Harmony SASE
+    categorySlug: sase-sse
+    aliases:
+      - Check Point Harmony SASE
+      - Harmony SASE
+      - Hramony SASE
+      - Perimeter 81
+    patterns: ['^(check point )?harmony sase\b']
+
+  # '^zonealarm' is deliberately not word-anchored at the end: upstream files
+  # "ZoneAlarmExtremeSecurityNextGen" as a single word.
+  - slug: check-point-zonealarm
+    name: ZoneAlarm
+    categorySlug: endpoint
+    aliases:
+      - ZoneAlarm
+      - ZoneAlarm Extreme Security
+      - ZoneAlarm Extreme Security NextGen
+      - ZoneAlarmExtremeSecurityNextGen
+    patterns: ['^zonealarm']
+
+  # The WAF must precede the general CloudGuard entry, or '^cloudguard\b' claims
+  # it and an application-security bug is filed as cloud security.
+  - slug: check-point-cloudguard-waf
+    name: CloudGuard WAF
+    categorySlug: web-app-security
+    aliases: [CloudGuard WAF, CloudGuard AppSec]
+    patterns: ['^cloudguard (waf|appsec)\b']
+
+  - slug: check-point-cloudguard
+    name: CloudGuard
+    categorySlug: cloud-security
+    aliases:
+      - CloudGuard
+      - CloudGuard Network
+      - CloudGuard Network Security
+      - Dome9
+    patterns: ['^cloudguard\b']

@@ -4,7 +4,7 @@ Tracks CVEs across leading cybersecurity vendors, broken down by product categor
 firewall vs. endpoint vs. SASE vs. identity — with a live year-to-date counter,
 risk-weighted vendor rankings, and AI-written trend commentary.
 
-Mandatory coverage: **Fortinet, Palo Alto Networks, Cisco**. Expanding to ~15–20
+Mandatory coverage: **Fortinet, Palo Alto Networks, Cisco, Check Point**. Expanding to ~15–20
 category leaders.
 
 Live at **[cybercve.com](https://cybercve.com)** — see [DEPLOY.md](DEPLOY.md).

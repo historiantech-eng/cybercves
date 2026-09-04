@@ -50,7 +50,7 @@ beforeAll(() => {
 describe('committed config', () => {
   it('loads and cross-validates without error', () => {
     expect(categories.length).toBeGreaterThan(0);
-    expect(vendors.map((v) => v.slug).sort()).toEqual(['cisco', 'fortinet', 'palo-alto']);
+    expect(vendors.map((v) => v.slug).sort()).toEqual(['check-point', 'cisco', 'fortinet', 'palo-alto']);
     expect(products.length).toBeGreaterThan(50);
   });
 
@@ -264,6 +264,38 @@ describe('CVE-2026-0281 — Panorama, named in the description and nowhere else'
   it('does not add Panorama to CVE-2024-3400, which says it is not impacted', () => {
     const { resolved } = resolver.resolve(fixture('CVE-2024-3400'));
     expect(resolved.map((r) => r.productSlug)).not.toContain('palo-alto-panorama');
+  });
+});
+
+/**
+ * Check Point, whose records are shaped unlike the other three vendors'.
+ *
+ * No CPEs at all, and a single `affected[].product` naming seven products
+ * across two categories. Before splitting, six of the seven were counted
+ * nowhere and nothing reported a problem.
+ */
+describe('CVE-2024-24914 — seven products in one affected[] string', () => {
+  it('attributes the CVE to Check Point by their CNA short name', () => {
+    expect(resolver.matchVendors(fixture('CVE-2024-24914')).get('check-point')).toBe(
+      'cna-assigner',
+    );
+  });
+
+  it('resolves all three distinct products the string names', () => {
+    const { resolved } = resolver.resolve(fixture('CVE-2024-24914'));
+    expect(resolved.map((r) => r.productSlug).sort()).toEqual([
+      'check-point-multi-domain-management',
+      'check-point-quantum-gateway',
+      'check-point-security-management',
+    ]);
+  });
+
+  it('lands in both firewall and management, not just the first one matched', () => {
+    const { resolved } = resolver.resolve(fixture('CVE-2024-24914'));
+    expect([...new Set(resolved.map((r) => r.categorySlug))].sort()).toEqual([
+      'firewall',
+      'network-management',
+    ]);
   });
 });
 

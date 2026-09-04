@@ -302,6 +302,31 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
         tracked and browsable but excluded from the default comparison.
       </p>
 
+      <h3 style="margin-top:18px">Categories a vendor does not compete in</h3>
+      <p class="muted">
+        A vendor with no CVEs in a category and a vendor that sells nothing in that category
+        look identical in the raw data, and they are opposite claims. Palo Alto showed
+        <strong>0</strong> under Web &amp; Application Security, which reads as
+        &ldquo;they ship a WAF and it is clean&rdquo;. They do not ship a WAF. Those cells now
+        read <strong>N/A</strong>.
+      </p>
+      <p class="muted">
+        Which categories each vendor competes in is <em>declared</em> in the same
+        version-controlled config as everything else, not inferred from which products we
+        happen to have mapped. Inferring would have published &ldquo;Cisco has no
+        vulnerability management product&rdquo; purely because nobody has written a matching
+        rule for Kenna yet &mdash; a claim about a company caused by a gap in our own
+        taxonomy. The build refuses to start if a product is filed in a category missing from
+        its vendor's list, so the declaration cannot drift away from the data beneath it.
+      </p>
+      <p class="muted">
+        The distinction is worth the trouble in both directions. A real <strong>0</strong>
+        &mdash; they compete there and had no CVEs this year &mdash; is a genuinely good
+        result, and it used to be invisible because the row was dropped entirely. These are
+        editorial judgements about real companies, so if one is wrong,
+        <a href="/feedback">tell us</a>.
+      </p>
+
       <h3 style="margin-top:18px">When the product is named in the description</h3>
       <p class="muted">
         A CVE record has a structured list of affected products, and it is normally the only
@@ -376,8 +401,15 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
           implying a longer history is not. Earlier years are intended but not yet loaded.
         </li>
         <li>
-          <strong>Three vendors.</strong> Fortinet, Palo Alto Networks and Cisco. A vendor absent
-          from a category ranking may simply not be tracked yet.
+          <strong>Four vendors.</strong> Fortinet, Palo Alto Networks, Cisco and Check Point. A
+          vendor absent from a category ranking may simply not be tracked yet.
+        </li>
+        <li>
+          <strong>Coverage depth differs enormously between them.</strong> Cisco has published
+          roughly thirty times as many CVEs as Check Point over the same period. On any chart
+          with a shared scale, the smaller vendor's bar is a sliver — which is a fact about how
+          much each company discloses, not a measure of how secure their products are. Read the
+          numbers, not the bar lengths, when comparing vendors of very different size.
         </li>
         <li>
           <strong>Some held records are counted nowhere.</strong> When one of these vendors acts
