@@ -42,3 +42,39 @@ discoveryNote: >-
   Fortinet publishes discovery attribution in the Acknowledgement section of each
   PSIRT advisory rather than in the machine-readable CVE record. Collecting it
   requires reading those pages individually, which we have not completed.
+
+# Categories this vendor competes in.
+#
+# Declared, not derived from the products in products/fortinet.yaml. A category
+# with no mapped product is ambiguous — it can mean "they had no CVEs here" or
+# "they do not sell this" — and those are opposite claims about a named company.
+# A 0 under a category a vendor does not compete in reads as a clean record
+# rather than an absence, which is the bug this list exists to fix.
+#
+# Deriving instead of declaring would have published "Cisco has no vulnerability
+# management" purely because nobody has written a rule for Kenna yet. Same
+# reason `security` on a category is declared rather than inferred.
+#
+# validateBundle refuses to start if any product lands in a category missing
+# from this list, so the declaration cannot silently rot. Categories absent
+# here render as N/A.
+portfolio:
+  - firewall
+  - endpoint
+  - sase-sse
+  - vpn-remote-access
+  - email-security
+  - identity
+  - siem-logging
+  - threat-detection
+  - vulnerability-management
+  - web-app-security
+  # FortiCNAPP (Lacework, acquired 2024) and FortiCWP.
+  - cloud-security
+  # FortiGate Rugged and the OT Security Service.
+  - ot-iot-security
+  - network-management
+  - routing-switching
+  - other
+  # Nothing absent. Fortinet is unusually broad, and a vendor with no N/A at
+  # all is a real finding rather than a missing declaration.

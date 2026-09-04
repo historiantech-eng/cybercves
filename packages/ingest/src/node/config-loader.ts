@@ -26,12 +26,20 @@ export function loadConfig(dataDir = DEFAULT_DATA_DIR): LoadedConfig {
   const categories = parseCategories(read('categories.yaml'));
   const categorySlugs = new Set(categories.map((c) => c.slug));
 
+  // .sort() because readdirSync returns directory order, not alphabetical, and
+  // syncTaxonomy turns a product's position in this array into `product.sort`,
+  // which 0004_product_brand.sql documents as load-bearing pattern precedence.
+  // Within one vendor the file's own order is what matters and that is
+  // preserved either way, but leaving the file order to the filesystem means
+  // two machines can write different `sort` values for the same config.
   const vendors = readdirSync(join(dataDir, 'vendors'))
     .filter((file) => file.endsWith('.yaml'))
-    .map((file) => parseVendor(read(join('vendors', file)), `vendors/${file}`));
+    .sort()
+    .map((file) => parseVendor(read(join('vendors', file)), `vendors/${file}`, categorySlugs));
 
   const products = readdirSync(join(dataDir, 'products'))
     .filter((file) => file.endsWith('.yaml'))
+    .sort()
     .flatMap((file) => parseProducts(read(join('products', file)), `products/${file}`, categorySlugs));
 
   // Cross-file checks: duplicate slugs, a CNA claimed by two vendors, a product

@@ -50,3 +50,39 @@ notes: >-
 # Cisco's in-house research organisation.
 internalBrandMarkers:
   - Talos
+
+# Categories this vendor competes in.
+#
+# Declared, not derived from the products in products/cisco.yaml. A category
+# with no mapped product is ambiguous — it can mean "they had no CVEs here" or
+# "they do not sell this" — and those are opposite claims about a named company.
+# A 0 under a category a vendor does not compete in reads as a clean record
+# rather than an absence, which is the bug this list exists to fix.
+#
+# Deriving instead of declaring would have published "Cisco has no vulnerability
+# management" purely because nobody has written a rule for Kenna yet. Same
+# reason `security` on a category is declared rather than inferred.
+#
+# validateBundle refuses to start if any product lands in a category missing
+# from this list, so the declaration cannot silently rot. Categories absent
+# here render as N/A.
+portfolio:
+  - firewall
+  - endpoint
+  - sase-sse
+  - vpn-remote-access
+  - email-security
+  - identity
+  - siem-logging
+  - threat-detection
+  # Cisco Vulnerability Management, formerly Kenna Security. No product mapped
+  # yet, so this category renders a real 0 rather than N/A — which is the
+  # distinction the whole list exists to make.
+  - vulnerability-management
+  - cloud-security
+  - ot-iot-security
+  - network-management
+  - routing-switching
+  - other
+  # Absent: web-app-security. Cisco has shipped no WAF or application delivery
+  # controller since the ACE line was discontinued.

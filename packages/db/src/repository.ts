@@ -107,8 +107,9 @@ export class Repository {
 
     for (const v of vendors) {
       statements.push({
-        sql: `INSERT INTO vendor (slug, name, cna_short_names, aliases, psirt_hosts, psirt_url, homepage, adapter, discovery_note, brands)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        sql: `INSERT INTO vendor (slug, name, cna_short_names, aliases, psirt_hosts, psirt_url,
+                                  homepage, adapter, discovery_note, brands, portfolio)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(slug) DO UPDATE SET
                 name = excluded.name,
                 cna_short_names = excluded.cna_short_names,
@@ -118,7 +119,8 @@ export class Repository {
                 homepage = excluded.homepage,
                 adapter = excluded.adapter,
                 discovery_note = excluded.discovery_note,
-                brands = excluded.brands`,
+                brands = excluded.brands,
+                portfolio = excluded.portfolio`,
         params: [
           v.slug,
           v.name,
@@ -130,6 +132,7 @@ export class Repository {
           v.adapter,
           v.discoveryNote,
           json(v.brands ?? {}),
+          json(v.portfolio ?? []),
         ],
       });
     }
@@ -208,10 +211,15 @@ export class Repository {
         homepage: string | null;
         adapter: string;
         brands: string;
+        portfolio: string | null;
       }>('SELECT * FROM vendor ORDER BY slug')
     ).map((row) => ({
       slug: row.slug,
       name: row.name,
+      // Null-tolerant: the column arrived in 0006 with a DEFAULT, and an empty
+      // list is the "not declared" state anyway, so a row that predates it
+      // degrades to today's behaviour rather than to N/A everywhere.
+      portfolio: row.portfolio ? (JSON.parse(row.portfolio) as string[]) : [],
       cnaShortNames: JSON.parse(row.cna_short_names) as string[],
       aliases: JSON.parse(row.aliases) as string[],
       brands: JSON.parse(row.brands) as Record<string, string[]>,
@@ -805,7 +813,10 @@ export class Repository {
       psirt_url: string | null;
       homepage: string | null;
       discovery_note: string | null;
-    }>('SELECT slug, name, psirt_url, homepage, discovery_note FROM vendor ORDER BY name');
+      portfolio: string | null;
+    }>(
+      'SELECT slug, name, psirt_url, homepage, discovery_note, portfolio FROM vendor ORDER BY name',
+    );
   }
 
   async listCategories() {

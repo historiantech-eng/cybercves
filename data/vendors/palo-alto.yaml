@@ -49,3 +49,40 @@ advisoryIdPattern: 'PAN-SA-\d{4}-\d+'
 # Palo Alto's in-house threat research team.
 internalBrandMarkers:
   - Unit 42
+
+# Categories this vendor competes in.
+#
+# Declared, not derived from the products in products/palo-alto.yaml. A category
+# with no mapped product is ambiguous — it can mean "they had no CVEs here" or
+# "they do not sell this" — and those are opposite claims about a named company.
+# A 0 under a category a vendor does not compete in reads as a clean record
+# rather than an absence, which is the bug this list exists to fix.
+#
+# Deriving instead of declaring would have published "Cisco has no vulnerability
+# management" purely because nobody has written a rule for Kenna yet. Same
+# reason `security` on a category is declared rather than inferred.
+#
+# validateBundle refuses to start if any product lands in a category missing
+# from this list, so the declaration cannot silently rot. Categories absent
+# here render as N/A.
+portfolio:
+  - firewall
+  - endpoint
+  - sase-sse
+  - vpn-remote-access
+  - identity
+  - siem-logging
+  - threat-detection
+  # Cortex Xpanse is attack-surface management, which this taxonomy files here
+  # (see the category description in categories.yaml).
+  - vulnerability-management
+  - cloud-security
+  - ot-iot-security
+  - network-management
+  # Absent, and each one is a deliberate claim:
+  #   web-app-security   no WAF — this is the case a reader reported as a
+  #                      misleading 0
+  #   email-security     no standalone secure email gateway
+  #   routing-switching  no switching or routing line
+  #   other              a pure-play security portfolio, no collaboration,
+  #                      telephony, or general-purpose software

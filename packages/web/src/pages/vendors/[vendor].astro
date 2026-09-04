@@ -22,9 +22,8 @@ export async function getStaticPaths() {
   // Current year only — the chart's year follows YearFilter, like every other
   // year-scoped figure on this page.
   const currentYearRows = toCompactRows(await repo.listCveIndex(CURRENT_YEAR));
-  const categoryNames = Object.fromEntries(
-    (await repo.listCategories()).map((c) => [c.slug, c.name]),
-  );
+  const allCategories = await repo.listCategories();
+  const categoryNames = Object.fromEntries(allCategories.map((c) => [c.slug, c.name]));
   const discoveryByVendor = new Map(
     (await repo.getDiscoveryBreakdown()).map((row) => [row.vendor_slug, row]),
   );
@@ -44,7 +43,41 @@ export async function getStaticPaths() {
       // from the prebuilt stats bundle.
       const products = await repo.getProductRollup(vendor.slug, CURRENT_YEAR);
       const discovery = discoveryByVendor.get(vendor.slug) ?? null;
-      const categories = await repo.getCategoryBreakdown(CURRENT_YEAR, vendor.slug);
+      /**
+       * Every category, not only the ones with CVEs.
+       *
+       * getCategoryBreakdown omits empty categories, which made two opposite
+       * facts look identical: "sells nothing here" and "sells here, clean
+       * year". The vendor's declared portfolio is what tells them apart, so the
+       * breakdown is left-joined onto the full category list here rather than
+       * changed in SQL — every other caller of that query still wants the
+       * compact form.
+       */
+      const breakdown = new Map(
+        (await repo.getCategoryBreakdown(CURRENT_YEAR, vendor.slug)).map((r) => [
+          r.category_slug,
+          r,
+        ]),
+      );
+      // Empty means the vendor declared no portfolio, which is "no opinion" and
+      // must render exactly as it did before this existed — never as N/A.
+      const portfolio = new Set<string>(
+        vendor.portfolio ? (JSON.parse(vendor.portfolio) as string[]) : [],
+      );
+      const categories = allCategories.map((cat) => {
+        const row = breakdown.get(cat.slug);
+        return {
+          category_slug: cat.slug,
+          name: cat.name,
+          is_security: cat.is_security,
+          risk: row?.risk ?? 0,
+          cve_count: row?.cve_count ?? 0,
+          kev_count: row?.kev_count ?? 0,
+          // Never print N/A over a number we are also showing: a count that
+          // exists outranks the declaration, whatever the declaration says.
+          applicable: !portfolio.size || portfolio.has(cat.slug) || (row?.cve_count ?? 0) > 0,
+        };
+      });
       const cves = (byVendor.get(vendor.slug) ?? []).slice(0, 300);
 
       return {
@@ -66,6 +99,10 @@ export async function getStaticPaths() {
 
 const { vendor, products, categories, cves, discovery, years, categoryNames, severityRows } =
   Astro.props;
+/** Why a cell reads N/A. Carried on the cell itself, not only in the footnote. */
+const naTitle = `${vendor.name} ships no product in this category`;
+const anyNa = categories.some((c) => !c.applicable);
+const anyCves = categories.some((c) => c.cve_count > 0);
 // Discovery is the only all-years figure on this page, so the lede uses it.
 const totalCves = discovery?.total ?? 0;
 const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
@@ -159,23 +196,49 @@ const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
               <th scope="col">Counts toward risk</th>
             </tr>
           </thead>
-          <tbody data-stat-table="categories" data-stat-vendor={vendor.slug}>
+          <tbody
+            data-stat-table="categories"
+            data-stat-vendor={vendor.slug}
+            data-stat-vendor-name={vendor.name}
+          >
             {
               categories.map((row) => (
                 <tr>
                   <td>
                     <a href={`/categories/${row.category_slug}`}>{row.name}</a>
                   </td>
-                  <td class="num">{row.risk.toFixed(1)}</td>
-                  <td class="num">{row.cve_count.toLocaleString()}</td>
-                  <td class="num">{row.kev_count.toLocaleString()}</td>
-                  <td class="small muted">{row.is_security === 1 ? 'Yes' : 'No — non-security line'}</td>
+                  {row.applicable ? (
+                    <>
+                      <td class="num">{row.risk.toFixed(1)}</td>
+                      <td class="num">{row.cve_count.toLocaleString()}</td>
+                      <td class="num">{row.kev_count.toLocaleString()}</td>
+                      <td class="small muted">
+                        {row.is_security === 1 ? 'Yes' : 'No — non-security line'}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td class="num muted" title={naTitle}>N/A</td>
+                      <td class="num muted" title={naTitle}>N/A</td>
+                      <td class="num muted" title={naTitle}>N/A</td>
+                      <td class="small muted">Not applicable</td>
+                    </>
+                  )}
                 </tr>
               ))
             }
           </tbody>
         </table>
-        {categories.length === 0 && <p class="empty">No categorized CVEs for this year yet.</p>}
+        {/* Rendered always and toggled, because the client repaints this table
+            on a year change and cannot un-emit an element the server withheld. */}
+        <p class="small muted" data-cat-empty hidden={anyCves}>
+          No categorized CVEs for this year yet.
+        </p>
+        <p class="small muted" data-cat-na-note hidden={!anyNa}>
+          N/A marks a category {vendor.name} does not compete in. A zero there would read as
+          a clean record rather than an absence; a real 0 means they ship products in that
+          category and had no CVEs this year.
+        </p>
       </div>
     </div>
   </section>

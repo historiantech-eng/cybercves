@@ -110,6 +110,12 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
     </div>
   </details>
 
+  {/* Toggled by the client; rendered always so a repaint can show or hide it. */}
+  <p class="small muted" data-cmp-na-note hidden>
+    N/A means that vendor ships no product in the category, so there is nothing to count. It
+    is not the same as 0, which means they compete there and had no CVEs that year.
+  </p>
+
   <p class="small muted">
     Categories where every selected vendor has zero are hidden. Non-security categories —
     routing, collaboration — are excluded by default so a broad-portfolio vendor is not
@@ -147,10 +153,22 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
   const cmpSel = document.querySelector<HTMLSelectElement>('[data-cmp-compare]');
   const metricSel = document.querySelector<HTMLSelectElement>('[data-cmp-metric]');
   const scopeSel = document.querySelector<HTMLSelectElement>('[data-cmp-scope]');
+  const naNoteEl = document.querySelector<HTMLElement>('[data-cmp-na-note]');
   const vendorBox = document.querySelector<HTMLElement>('[data-cmp-vendors]');
 
   if (chart && yearSel && vendorBox) {
-    let bundle: { years: number[]; byYear: Record<string, YearBundle> } | null = null;
+    /**
+     * `portfolios` is top-level and optional: it does not vary by year, and the
+     * bundle carries an hour of cache-control so a browser may hold a copy
+     * written before the field existed. Missing means "not declared" and every
+     * category falls back to a number — blanking the page to N/A for an hour of
+     * stale cache would be far worse than the 0 this feature replaces.
+     */
+    let bundle: {
+      years: number[];
+      byYear: Record<string, YearBundle>;
+      portfolios?: Record<string, string[]>;
+    } | null = null;
 
     const boxes = Array.from(vendorBox.querySelectorAll<HTMLInputElement>('input[type=checkbox]'));
     /**
@@ -364,6 +382,7 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
         chart!.innerHTML = '<p class="empty">Select at least one vendor.</p>';
         if (legendEl) legendEl.innerHTML = '';
         if (tableEl) tableEl.innerHTML = '';
+        if (naNoteEl) naNoteEl.hidden = true;
         return;
       }
 
@@ -392,12 +411,37 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
       const groups = [...cats.entries()]
         .filter(([, meta]) => (securityOnly ? meta.security : true))
         .map(([slug, meta]) => {
-          const values = vendors.map((v) => ({
-            vendor: v,
-            value: curByVendor.get(v)!.get(slug)?.value ?? 0,
-            prev: prev ? (prevByVendor.get(v)!.get(slug)?.value ?? 0) : null,
-          }));
-          return { slug, name: meta.name, values, total: values.reduce((s, x) => s + x.value, 0) };
+          /**
+           * A missing cell is no longer automatically a zero.
+           *
+           * This union takes every category any selected vendor has data in, so
+           * a vendor who ships nothing there still got a row — and filling it
+           * with 0 said "they make one and it is clean". Palo Alto read as 0
+           * under Web & Application Security; they do not make a WAF. `null`
+           * is that case, and it renders as N/A.
+           */
+          const values = vendors.map((v) => {
+            const cell = curByVendor.get(v)!.get(slug);
+            const declared = bundle?.portfolios?.[v];
+            const value = cell
+              ? cell.value
+              : !declared?.length
+                ? 0 // portfolio not declared — behave as before
+                : declared.includes(slug)
+                  ? 0 // competes here, no CVEs this year
+                  : null; // ships nothing here
+            return {
+              vendor: v,
+              value,
+              prev: value === null ? null : prev ? (prevByVendor.get(v)!.get(slug)?.value ?? 0) : null,
+            };
+          });
+          return {
+            slug,
+            name: meta.name,
+            values,
+            total: values.reduce((s, x) => s + (x.value ?? 0), 0),
+          };
         })
         // Hidden when every selected vendor is zero — an all-empty row is noise.
         .filter((g) => g.total > 0)
@@ -414,12 +458,20 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
       if (!groups.length) {
         chart!.innerHTML = '<p class="empty">No CVEs for these vendors in this year.</p>';
         if (tableEl) tableEl.innerHTML = '';
+        if (naNoteEl) naNoteEl.hidden = true;
         return;
+      }
+
+      // Explain the dash only when there is one — the note is noise otherwise,
+      // and it must be reset on every repaint or it survives a vendor change
+      // that removed the last N/A cell.
+      if (naNoteEl) {
+        naNoteEl.hidden = !groups.some((g) => g.values.some((v) => v.value === null));
       }
 
       // One shared scale across all groups, so bar lengths are comparable between
       // categories as well as within them.
-      const max = Math.max(1, ...groups.flatMap((g) => g.values.map((v) => v.value)));
+      const max = Math.max(1, ...groups.flatMap((g) => g.values.map((v) => v.value ?? 0)));
 
       chart!.innerHTML = groups
         .map(
@@ -430,15 +482,28 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
             </div>
             <div class="cmp-rows">
               ${g.values
-                .map(
-                  (v) => `<button type="button" class="cmp-row" data-drill-vendor="${esc(v.vendor)}" data-drill-category="${esc(g.slug)}" data-drill-label="${esc(nameOf.get(v.vendor) ?? v.vendor)} · ${esc(g.name)}" data-drill-value="${fmt(v.value)}" aria-expanded="false"${v.value === 0 ? ' disabled' : ''}>
-                    <span class="cmp-name">${esc(nameOf.get(v.vendor) ?? v.vendor)}</span>
+                .map((v) => {
+                  const label = nameOf.get(v.vendor) ?? v.vendor;
+                  if (v.value === null) {
+                    // No bar element at all: .cmp-bar carries min-width 2px, so a
+                    // zero-width bar still paints a stub, and an absence must
+                    // leave no ink. The accessible name says "not applicable"
+                    // rather than letting a screen reader announce a bare N/A.
+                    const why = `${label} ships no product in ${g.name}`;
+                    return `<button type="button" class="cmp-row" disabled aria-label="${esc(`${label} · ${g.name}: not applicable — ${why}`)}">
+                    <span class="cmp-name">${esc(label)}</span>
+                    <span class="cmp-track"></span>
+                    <span class="cmp-value muted" title="${esc(why)}">N/A</span>
+                  </button>`;
+                  }
+                  return `<button type="button" class="cmp-row" data-drill-vendor="${esc(v.vendor)}" data-drill-category="${esc(g.slug)}" data-drill-label="${esc(label)} · ${esc(g.name)}" data-drill-value="${fmt(v.value)}" aria-expanded="false"${v.value === 0 ? ' disabled' : ''}>
+                    <span class="cmp-name">${esc(label)}</span>
                     <span class="cmp-track">
                       <span class="cmp-bar" style="width: ${(v.value / max) * 100}%; background: var(--cat-${slotOf.get(v.vendor)})"></span>
                     </span>
                     <span class="cmp-value">${fmt(v.value)}${deltaText(v.value, v.prev)}</span>
-                  </button>`,
-                )
+                  </button>`;
+                })
                 .join('')}
             </div>
             <div class="cmp-drill" data-drill-panel="${esc(g.slug)}" hidden></div>
@@ -455,7 +520,11 @@ const seed = repo ? await repo.getCategoryBreakdown(CURRENT_YEAR) : [];
             .map(
               (g) =>
                 `<tr><td>${esc(g.name)}</td>${g.values
-                  .map((v) => `<td class="num">${fmt(v.value)}${deltaText(v.value, v.prev)}</td>`)
+                  .map((v) =>
+                    v.value === null
+                      ? `<td class="num muted" title="${esc(`${nameOf.get(v.vendor) ?? v.vendor} ships no product in ${g.name}`)}">N/A</td>`
+                      : `<td class="num">${fmt(v.value)}${deltaText(v.value, v.prev)}</td>`,
+                  )
                   .join('')}</tr>`,
             )
             .join('')}</tbody>

@@ -105,7 +105,11 @@ function parseBrands(value: unknown, path: string): Record<string, string[]> {
 
 const ADAPTERS = new Set(['cvelist', 'json', 'csaf', 'rss', 'scrape']);
 
-export function parseVendor(raw: unknown, sourcePath: string): VendorFileConfig {
+export function parseVendor(
+  raw: unknown,
+  sourcePath: string,
+  knownCategories: ReadonlySet<string> = new Set(),
+): VendorFileConfig {
   const obj = raw as Record<string, unknown>;
   const slug = requireSlug(obj.slug, `${sourcePath}.slug`);
 
@@ -128,9 +132,34 @@ export function parseVendor(raw: unknown, sourcePath: string): VendorFileConfig 
     );
   }
 
+  /**
+   * The categories this vendor competes in.
+   *
+   * Declared, not derived. The obvious alternative — treat "has a product in
+   * this category" as the answer — reads a gap in our own matching rules as a
+   * statement about a company: Cisco ships Kenna, we have never written a rule
+   * for it, and deriving would publish "Cisco has no vulnerability management".
+   * Same reason `security` on a category is declared rather than inferred.
+   *
+   * OPTIONAL, and an empty list means "not declared" rather than "competes in
+   * nothing". A vendor added without one must render exactly as it does today;
+   * the alternative is a new vendor silently claiming N/A in every category.
+   */
+  const portfolio = stringArray(obj.portfolio, `${sourcePath}.portfolio`);
+  for (const [i, categorySlug] of portfolio.entries()) {
+    // Only checked when the caller supplied the category list — parseVendor is
+    // also called directly by tests with no categories to check against.
+    if (knownCategories.size && !knownCategories.has(categorySlug)) {
+      throw new ConfigError(
+        `${sourcePath}.portfolio[${i}]: unknown category "${categorySlug}"`,
+      );
+    }
+  }
+
   return {
     slug,
     name: requireString(obj.name, `${sourcePath}.name`),
+    portfolio,
     cnaShortNames: cnaShortNames.map((n) => n.toLowerCase()),
     aliases,
     brands,
@@ -232,9 +261,29 @@ export function validateBundle(
     }
   }
 
+  // The rule that stops `portfolio` rotting into a lie.
+  //
+  // A vendor who ships a firewall product but leaves `firewall` out of their
+  // portfolio would render N/A over a category we hold CVEs for. That is worse
+  // than the bug this feature fixes, and it fails silently — so it is a config
+  // error instead. Vendors with no portfolio declared are skipped: the empty
+  // list means "not declared", and the site keeps today's behaviour for them.
+  const portfolioOf = new Map(
+    vendors.filter((v) => v.portfolio.length).map((v) => [v.slug, new Set(v.portfolio)]),
+  );
+
   for (const product of products) {
     if (!vendorSlugs.has(product.vendorSlug)) {
       throw new ConfigError(`product "${product.slug}": unknown vendor "${product.vendorSlug}"`);
+    }
+
+    const portfolio = portfolioOf.get(product.vendorSlug);
+    if (portfolio && !portfolio.has(product.categorySlug)) {
+      throw new ConfigError(
+        `product "${product.slug}": category "${product.categorySlug}" is missing from ` +
+          `\`portfolio\` in vendors/${product.vendorSlug}.yaml — the vendor page would ` +
+          `render "N/A" for a category this product puts CVEs in`,
+      );
     }
     if (productSlugs.has(product.slug)) {
       throw new ConfigError(`duplicate product slug "${product.slug}"`);

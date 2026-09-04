@@ -101,7 +101,18 @@ const nonSecurity = (categories ?? []).filter((c) => c.is_security !== 1);
   const tables = Array.from(document.querySelectorAll<HTMLElement>('[data-stat-table]'));
   const races = Array.from(document.querySelectorAll<HTMLElement>('[data-stat-race]'));
   if (yearSel && (tables.length || races.length)) {
-    let bundle: { years: number[]; byYear: Record<string, YearBundle> } | null = null;
+    /**
+     * `categoryList` and `portfolios` are top-level: neither varies by year.
+     * Both are optional here because the bundle is served with an hour of
+     * cache-control, so a browser can be holding a copy written before they
+     * existed — see the fallback in renderCategories.
+     */
+    let bundle: {
+      years: number[];
+      byYear: Record<string, YearBundle>;
+      categoryList?: { slug: string; name: string; is_security: number }[];
+      portfolios?: Record<string, string[]>;
+    } | null = null;
 
     const num = (v: unknown) => (typeof v === 'number' ? v : Number(v ?? 0));
     const fmt = (n: number) => n.toLocaleString();
@@ -215,20 +226,95 @@ const nonSecurity = (categories ?? []).filter((c) => c.is_security !== 1);
         .join('');
     }
 
+    /**
+     * The client twin of the vendor page's category table.
+     *
+     * This is where the N/A state would be lost. The server renders every
+     * category — a number, a real 0, or N/A — but the bundle's
+     * `categoriesByVendor` carries only categories that had a CVE, so repainting
+     * straight from it would silently delete both the zero rows and the N/A
+     * rows on the first year change.
+     */
     function renderCategories(el: HTMLElement, cur: YearBundle, prev: YearBundle | null) {
       const vendor = el.dataset.statVendor;
-      const rows = vendor ? (cur.categoriesByVendor[vendor] ?? []) : cur.categories;
       const prevRows = vendor ? prev?.categoriesByVendor[vendor] : prev?.categories;
 
+      // The all-vendor table on /categories keeps its old shape: it has no
+      // portfolio to speak of and already hides empties.
+      if (!vendor) {
+        renderCategoryRows(el, cur.categories, prevRows, false, '');
+        return;
+      }
+
+      const declared = bundle?.portfolios?.[vendor];
+      const catalog = bundle?.categoryList;
+      const byYearRows = new Map(
+        (cur.categoriesByVendor[vendor] ?? []).map((r) => [String(r.category_slug), r]),
+      );
+
+      // A bundle predating categoryList/portfolios, or a vendor with nothing
+      // declared: fall back to exactly the old behaviour. Showing the numbers we
+      // have beats blanking a whole page to N/A for an hour of cache.
+      if (!catalog || !declared?.length) {
+        renderCategoryRows(el, cur.categoriesByVendor[vendor] ?? [], prevRows, false, '');
+        return;
+      }
+
+      const inPortfolio = new Set(declared);
+      const vendorName = el.dataset.statVendorName ?? 'This vendor';
+      const rows = catalog.map((cat) => {
+        const row = byYearRows.get(cat.slug);
+        return {
+          row: row ?? {
+            category_slug: cat.slug,
+            name: cat.name,
+            is_security: cat.is_security,
+            risk: 0,
+            cve_count: 0,
+            kev_count: 0,
+          },
+          // Never N/A over a number, same rule as the server render.
+          applicable: inPortfolio.has(cat.slug) || num(row?.cve_count ?? 0) > 0,
+        };
+      });
+
+      renderCategoryRows(
+        el,
+        rows.map((r) => r.row),
+        prevRows,
+        true,
+        `${vendorName} ships no product in this category`,
+        rows.map((r) => r.applicable),
+      );
+
+      const note = document.querySelector<HTMLElement>('[data-cat-na-note]');
+      if (note) note.hidden = rows.every((r) => r.applicable);
+      const empty = document.querySelector<HTMLElement>('[data-cat-empty]');
+      if (empty) empty.hidden = rows.some((r) => num(r.row.cve_count) > 0);
+    }
+
+    function renderCategoryRows(
+      el: HTMLElement,
+      rows: Row[],
+      prevRows: Row[] | undefined,
+      perVendor: boolean,
+      naTitle: string,
+      applicable?: boolean[],
+    ) {
       el.innerHTML = rows
-        .map((r) => {
+        .map((r, i) => {
           const slug = String(r.category_slug);
+          const link = `<td><a href="/categories/${encodeURIComponent(slug)}">${esc(String(r.name))}</a></td>`;
+          if (applicable && !applicable[i]) {
+            const na = `<td class="num muted" title="${esc(naTitle)}">N/A</td>`;
+            return `<tr>${link}${na}${na}${na}<td class="small muted">Not applicable</td></tr>`;
+          }
           const p = prevRow(prevRows, 'category_slug', slug);
-          const scopeCell = vendor
+          const scopeCell = perVendor
             ? `<td class="small muted">${num(r.is_security) === 1 ? 'Yes' : 'No — non-security line'}</td>`
             : `<td class="small muted">${num(r.is_security) === 1 ? 'Security' : 'Non-security'}</td>`;
           return `<tr>
-            <td><a href="/categories/${encodeURIComponent(slug)}">${esc(String(r.name))}</a></td>
+            ${link}
             <td class="num">${num(r.risk).toFixed(1)}${delta(Math.round(num(r.risk)), p ? Math.round(num(p.risk)) : null)}</td>
             <td class="num">${fmt(num(r.cve_count))}${delta(num(r.cve_count), p ? num(p.cve_count) : null)}</td>
             <td class="num">${fmt(num(r.kev_count))}${delta(num(r.kev_count), p ? num(p.kev_count) : null)}</td>

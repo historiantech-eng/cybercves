@@ -26,6 +26,29 @@ export const GET: APIRoute = async () => {
   const vendors = await repo.listVendors();
   const byYear: Record<string, unknown> = {};
 
+  /**
+   * Which categories each vendor competes in, and the full category list.
+   *
+   * Both are TOP-LEVEL rather than repeated inside `byYear`: a portfolio is a
+   * property of the company and the category list is a property of the
+   * taxonomy, and nesting them per year would imply Palo Alto might grow a WAF
+   * in 2025.
+   *
+   * The category list is here because `categoriesByVendor` only carries
+   * categories that had a CVE — the client cannot render a row for a category a
+   * vendor competes in but had a clean year without knowing the category
+   * exists. See renderCategories in YearFilter.astro.
+   */
+  const categoryList = (await repo.listCategories()).map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    is_security: c.is_security,
+  }));
+  const portfolios: Record<string, string[]> = {};
+  for (const vendor of vendors) {
+    portfolios[vendor.slug] = vendor.portfolio ? (JSON.parse(vendor.portfolio) as string[]) : [];
+  }
+
   for (const year of years) {
     const [security, all, categories, discovery] = await Promise.all([
       repo.getVendorRollup(year, true),
@@ -67,7 +90,7 @@ export const GET: APIRoute = async () => {
     };
   }
 
-  return new Response(JSON.stringify({ years, byYear }), {
+  return new Response(JSON.stringify({ years, byYear, categoryList, portfolios }), {
     headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' },
   });
 };

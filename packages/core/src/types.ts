@@ -113,6 +113,13 @@ export interface Category {
 export interface VendorConfig {
   slug: string;
   name: string;
+  /**
+   * Category slugs this vendor competes in, as declared in their YAML.
+   *
+   * Empty means NOT DECLARED — the UI must fall back to today's behaviour
+   * rather than reading it as "competes in nothing". See parseVendor.
+   */
+  portfolio: string[];
   /** CVE Program CNA shortNames that assign on this vendor's behalf. */
   cnaShortNames: string[];
   /** Strings seen in `affected[].vendor` and in CPE vendor fields. Lowercased on load. */

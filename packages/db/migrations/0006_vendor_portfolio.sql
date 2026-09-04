@@ -1,0 +1,24 @@
+-- Which product categories a vendor actually competes in.
+--
+-- Without this, a vendor with no CVEs in a category is indistinguishable from a
+-- vendor that does not sell anything in it. /compare filled the gap with `0`,
+-- which reads as "they ship one and it is clean" — a flattering claim about a
+-- named company that we had no basis for. Palo Alto showed 0 under Web &
+-- Application Security; they do not make a WAF.
+--
+-- Declared in data/vendors/*.yaml rather than derived from the `product` table.
+-- That table is the products we have written matching rules for, not a
+-- catalogue: deriving would have published "Cisco has no vulnerability
+-- management" purely because nobody has mapped Kenna yet. Same reasoning as
+-- `is_security` on category, which is also declared rather than inferred.
+--
+-- Stored here, not just read from YAML at build time, because the Worker
+-- rebuilds its view of the taxonomy from D1 and /api/v1/* must answer the same
+-- way the static pages do.
+--
+-- DEFAULT '[]' is deliberately the NOT-DECLARED state, not the competes-in-
+-- nothing state. Every consumer treats an empty list as "no opinion" and keeps
+-- the pre-existing behaviour, so rows written before this migration — and any
+-- future vendor added without a portfolio — render exactly as they do today
+-- instead of silently claiming N/A in all fifteen categories.
+ALTER TABLE vendor ADD COLUMN portfolio TEXT NOT NULL DEFAULT '[]';
