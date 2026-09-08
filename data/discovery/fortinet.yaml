@@ -13,7 +13,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-09-05T14:29:47.022Z
+generated: 2026-09-08T18:50:21.163Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -2011,3 +2011,39 @@ unresolved:
     advisory: FG-IR-23-434
     lastChecked: 2026-09-05T14:29:47.022Z
     attempts: 5
+  CVE-2026-22575:
+    advisory: FG-IR-26-171
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-26084:
+    advisory: FG-IR-26-166
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-84385:
+    advisory: FG-IR-26-164
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-84386:
+    advisory: FG-IR-26-165
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-84387:
+    advisory: FG-IR-26-167
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-84389:
+    advisory: FG-IR-26-169
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-84391:
+    advisory: FG-IR-26-172
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-84392:
+    advisory: FG-IR-26-173
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
+  CVE-2026-84393:
+    advisory: FG-IR-26-174
+    lastChecked: 2026-09-08T18:50:21.163Z
+    attempts: 1
