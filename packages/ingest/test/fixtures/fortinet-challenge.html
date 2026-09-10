@@ -1,0 +1,43 @@
+<!-- Verbatim excerpt of what https://www.fortiguard.com/psirt/FG-IR-26-172 returned
+     on 2026-09-10, with HTTP 200. Styles and the trailing scripts are cut; nothing
+     else is edited. Committed so the interstitial can never again be mistaken for an
+     advisory that credits nobody. -->
+<!doctype html>
+<html lang="en">
+<head>
+    <script async defer src="https://filestore.fortinet.com/fortiguard/dist/altcha.min.js" type="module"></script>
+  <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Just a moment</title>
+  <link rel="shortcut icon" href="https://filestore.fortinet.com/fortiguard/static/images/favicon.ico?v=53368" type="image/x-icon" />
+  </head>
+<body>
+  <div class="container">
+    <div class="security-panel" role="dialog" aria-labelledby="domain-title" aria-describedby="security-review">
+      <h1 id="domain-title" class="domain-title">Loading domain...</h1>
+      <p class="subtitle">Just a moment — verifying connection security.</p>
+
+      <div id="connection-check" class="message">We are checking that your connection to this site is secure.</div>
+
+      <div class="captcha-wrap">
+        <form method="POST" id="security-form" action="/psirt/FG-IR-26-172">
+          <input type="hidden" name="screen_id" value="SC-AC09F983E1D6" />
+          <div class="mb-2 mt-2">
+            <altcha-widget
+                  id="altcha"
+                  challengeurl="/v1/challenge"
+                  hidelogo
+                  hidefooter
+                  auto="onload"
+                  style="display:none"
+              ></altcha-widget>
+          </div>
+        </form>
+      </div>
+
+      <p id="security-review" class="message"></p>
+
+      <hr class="divider" aria-hidden="true" />
+  </div>
+</body>
+</html>

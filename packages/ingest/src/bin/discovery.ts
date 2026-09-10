@@ -155,7 +155,8 @@ try {
   console.log(
     `classified ${written}: ${internal} internal, ${external} external · ` +
       `${fromField} from the published Discovered field, ${results.length - fromField} from prose · ` +
-      `${run.missing} CVE(s) with no usable attribution · ${run.failed} failed`,
+      `${run.missing} CVE(s) with no usable attribution · ${run.failed} failed` +
+      (run.blocked ? ` (${run.blocked} of them served a bot challenge, not an advisory)` : ''),
   );
 
   // A run that mostly failed produced a biased sample, not a finding. Exit

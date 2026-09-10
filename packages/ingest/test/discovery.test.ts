@@ -7,6 +7,8 @@ import { classifyAcknowledgement, classifyPsirtDiscovered, selfFoundRate } from 
 import {
   advisoryUrlFromRefs,
   classifyAdvisoryPage,
+  fetchAcknowledgements,
+  isAdvisoryPage,
   parseAcknowledgement,
   parseDiscoveredField,
 } from '../src/sources/psirt-fortinet.js';
@@ -14,6 +16,12 @@ import { mergeDiscoveryFile, readDiscoveryFile } from '../src/node/discovery-sto
 
 const fixture = readFileSync(
   fileURLToPath(new URL('./fixtures/fortinet-FG-IR-25-254.html', import.meta.url)),
+  'utf8',
+);
+
+/** fortiguard.com's ALTCHA interstitial, served with HTTP 200 in place of an advisory. */
+const challenge = readFileSync(
+  fileURLToPath(new URL('./fixtures/fortinet-challenge.html', import.meta.url)),
   'utf8',
 );
 
@@ -161,6 +169,58 @@ describe('classifyAcknowledgement', () => {
     expect(classifyAcknowledgement('Thanks to everyone involved.', 'Fortinet').discovery).toBeNull();
     expect(classifyAcknowledgement(null, 'Fortinet').discovery).toBeNull();
     expect(classifyAcknowledgement('   ', 'Fortinet').discovery).toBeNull();
+  });
+});
+
+describe('isAdvisoryPage', () => {
+  it('accepts a real advisory page', () => {
+    expect(isAdvisoryPage(fixture)).toBe(true);
+  });
+
+  it('rejects the bot challenge that fortiguard.com serves in place of one', () => {
+    expect(isAdvisoryPage(challenge)).toBe(false);
+  });
+
+  it('is needed because the challenge page classifies cleanly as "nobody credited"', () => {
+    // This is the whole bug, pinned. The interstitial arrives with HTTP 200 and
+    // parses without complaint into a null verdict, which the caller previously
+    // read as "the advisory names no finder" and put on a seven-day backoff.
+    expect(classifyAdvisoryPage(challenge, 'Fortinet')).toEqual({
+      discovery: null,
+      source: null,
+      creditText: null,
+    });
+  });
+});
+
+describe('fetchAcknowledgements', () => {
+  const target = [{ cveId: 'CVE-2026-22575', url: 'https://www.fortiguard.com/psirt/FG-IR-26-171' }];
+
+  it('counts a challenge page as unread, not as an advisory that credits nobody', async () => {
+    const run = await fetchAcknowledgements(target, {
+      delayMs: 0,
+      fetchPage: async () => ({ html: challenge }),
+    });
+
+    expect(run.results).toEqual([]);
+    expect(run.blocked).toBe(1);
+    expect(run.failed).toBe(1);
+    // `missing` is what feeds the unresolved backoff. A refused scrape must never
+    // land there, or one blocked afternoon suppresses a real advisory for a week.
+    expect(run.missing).toBe(0);
+    expect(run.failedCveIds).toEqual(['CVE-2026-22575']);
+  });
+
+  it('still reads a real advisory', async () => {
+    const run = await fetchAcknowledgements(target, {
+      delayMs: 0,
+      fetchPage: async () => ({ html: fixture }),
+    });
+
+    expect(run.blocked).toBe(0);
+    expect(run.failed).toBe(0);
+    expect(run.results).toHaveLength(1);
+    expect(run.results[0]?.discovery).toBe('INTERNAL');
   });
 });
 

@@ -130,13 +130,22 @@ const merged = mergeDiscoveryFile(
 
 console.log(
   `resolved ${run.results.length} · ${run.missing} with no usable attribution · ` +
-    `${run.failed} failed · file now holds ${merged.total} attributed, ` +
+    `${run.failed} failed` +
+    (run.blocked ? ` (${run.blocked} served a bot challenge, not an advisory)` : '') +
+    ` · file now holds ${merged.total} attributed, ` +
     `${merged.unresolved} on backoff (+${merged.added} new, ${merged.changed} changed)`,
 );
 
 // A run where most requests failed is a blocked scrape, not a finding. Exit
 // non-zero so the job surfaces it rather than committing a thin result.
 if (run.failed > targets.length * 0.5) {
-  console.error(`\n${run.failed}/${targets.length} requests failed — treating this run as invalid.`);
+  console.error(
+    `\n${run.failed}/${targets.length} requests failed — treating this run as invalid.` +
+      (run.blocked
+        ? `\n${run.blocked} of them were answered with fortiguard.com's bot challenge rather than ` +
+          `an advisory. The scrape is being refused, not coming up empty; nothing has been ` +
+          `written to the backoff, so these advisories stay due.`
+        : ''),
+  );
   process.exitCode = 2;
 }

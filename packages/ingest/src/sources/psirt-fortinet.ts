@@ -110,6 +110,47 @@ export function parseDiscoveredField(html: string): string | null {
   return value.length ? value : null;
 }
 
+/**
+ * Did we get an advisory page at all?
+ *
+ * fortiguard.com answers /psirt/* with an ALTCHA proof-of-work interstitial —
+ * "Just a moment - verifying connection security" — when it does not like the
+ * client. That page is served with HTTP 200, so `fetchText` returns it happily,
+ * and it carries neither a Discovered field nor an Acknowledgement. To
+ * `classifyAdvisoryPage` that is indistinguishable from a real advisory that
+ * credits nobody, and the difference matters enormously: one is "Fortinet did
+ * not say", the other is "we never read it".
+ *
+ * That mistake has already happened. On 2026-09-08 the hourly refresh read nine
+ * advisories, got nine challenge pages, recorded all nine as carrying no
+ * attribution, put them on a seven-day backoff and exited 0. The site went on
+ * publishing "not disclosed" for CVEs whose advisory states the answer.
+ *
+ * The test is positive — every real advisory page carries the summary table's
+ * "IR Number" row — rather than a list of challenge markers, which the operator
+ * of the challenge can change at will. The failure direction is deliberate: if
+ * Fortinet ever drops that row, every page reads as unreadable and the run fails
+ * loudly, instead of quietly reclassifying the vendor's whole record.
+ */
+export function isAdvisoryPage(html: string): boolean {
+  return /IR\s+Number/i.test(html);
+}
+
+/**
+ * Thrown when a fetch succeeded but did not return an advisory.
+ *
+ * Deliberately routed into the same bin as a transport failure: both mean the
+ * advisory was not read, and neither is evidence about what it says. In
+ * particular this keeps such pages OUT of the unresolved backoff, which exists
+ * for advisories that genuinely answer with nothing.
+ */
+export class UnreadableAdvisoryError extends Error {
+  constructor(url: string) {
+    super(`not an advisory page (challenge or error page?): ${url}`);
+    this.name = 'UnreadableAdvisoryError';
+  }
+}
+
 export interface AcknowledgementResult extends DiscoveryResult {
   cveId: string;
   url: string;
@@ -121,6 +162,13 @@ export interface AcknowledgementRun {
   missing: number;
   /** Requests that never returned. Counted separately — see below. */
   failed: number;
+  /**
+   * The subset of `failed` that answered 200 with something other than an
+   * advisory — in practice fortiguard.com's bot challenge. Reported separately
+   * because "we are being challenged" and "the network is flaky" call for
+   * different responses, and the first one looks like success from the outside.
+   */
+  blocked: number;
   /**
    * CVEs whose advisory could not be fetched at all.
    *
@@ -190,6 +238,7 @@ export async function fetchAcknowledgements(
 
   let missing = 0;
   let failed = 0;
+  let blocked = 0;
   const failedCveIds: string[] = [];
 
   // One fetch per advisory, not per CVE. A Fortinet advisory routinely covers
@@ -213,6 +262,12 @@ export async function fetchAcknowledgements(
       // After, not before: this is the gap the next request in this worker
       // waits out, and a cached page owes the origin no gap at all.
       if (!loaded.fromCache) await sleep(delayMs);
+      // Before classifying: a challenge page classifies perfectly well, as
+      // "nobody is credited". See isAdvisoryPage.
+      if (!isAdvisoryPage(loaded.html)) {
+        blocked += page.cveIds.length;
+        throw new UnreadableAdvisoryError(page.url);
+      }
       const verdict = classifyAdvisoryPage(loaded.html, vendorName, brandMarkers);
       if (!verdict.discovery) {
         missing += page.cveIds.length;
@@ -229,5 +284,5 @@ export async function fetchAcknowledgements(
     }
   });
 
-  return { results: settled.flat(), missing, failed, failedCveIds };
+  return { results: settled.flat(), missing, failed, blocked, failedCveIds };
 }
