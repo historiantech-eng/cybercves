@@ -178,6 +178,16 @@ export interface AcknowledgementRun {
    * a real advisory for a week.
    */
   failedCveIds: string[];
+  /**
+   * The subset of `failedCveIds` that was refused rather than lost in transit.
+   *
+   * Separate from `failedCveIds` because the two want opposite retry policies. A
+   * transport blip is worth trying again in an hour; a bot challenge is not —
+   * the origin has decided, and asking again every hour neither changes its mind
+   * nor tells us anything new. Callers back these off on their own schedule so a
+   * standing refusal reports itself once rather than once per run.
+   */
+  blockedCveIds: string[];
 }
 
 /**
@@ -240,6 +250,7 @@ export async function fetchAcknowledgements(
   let failed = 0;
   let blocked = 0;
   const failedCveIds: string[] = [];
+  const blockedCveIds: string[] = [];
 
   // One fetch per advisory, not per CVE. A Fortinet advisory routinely covers
   // several CVEs, and refetching the same page once per CVE would add ~15
@@ -264,25 +275,28 @@ export async function fetchAcknowledgements(
       if (!loaded.fromCache) await sleep(delayMs);
       // Before classifying: a challenge page classifies perfectly well, as
       // "nobody is credited". See isAdvisoryPage.
-      if (!isAdvisoryPage(loaded.html)) {
-        blocked += page.cveIds.length;
-        throw new UnreadableAdvisoryError(page.url);
-      }
+      if (!isAdvisoryPage(loaded.html)) throw new UnreadableAdvisoryError(page.url);
       const verdict = classifyAdvisoryPage(loaded.html, vendorName, brandMarkers);
       if (!verdict.discovery) {
         missing += page.cveIds.length;
         return [];
       }
       return page.cveIds.map((cveId) => ({ ...verdict, cveId, url: page.url }));
-    } catch {
+    } catch (err) {
       // Never conflated with "no acknowledgement": a transport failure tells us
       // nothing about the advisory, and treating it as an answer would bias every
       // aggregate built on top.
       failed += page.cveIds.length;
       failedCveIds.push(...page.cveIds);
+      // Classified in one place rather than at the throw site, so every way a
+      // page can turn out unreadable lands in the same bucket.
+      if (err instanceof UnreadableAdvisoryError) {
+        blocked += page.cveIds.length;
+        blockedCveIds.push(...page.cveIds);
+      }
       return [];
     }
   });
 
-  return { results: settled.flat(), missing, failed, blocked, failedCveIds };
+  return { results: settled.flat(), missing, failed, blocked, failedCveIds, blockedCveIds };
 }

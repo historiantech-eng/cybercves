@@ -52,11 +52,37 @@ export interface UnresolvedRecord {
   attempts: number;
 }
 
+/**
+ * An advisory we could not read at all.
+ *
+ * The distinction from UnresolvedRecord is the entire point, and it is not a
+ * nuance: `unresolved` means "Fortinet published this and credited nobody",
+ * `blocked` means "fortiguard.com refused us and we know nothing". Recording a
+ * refusal as the former is exactly the bug that made the site publish "not
+ * disclosed" for nine CVEs whose advisories state the answer.
+ *
+ * It exists to pace the *alarm*, not to suppress the work. A standing refusal
+ * is one fact, and an hourly job rediscovering it twenty-four times a day
+ * produces twenty-four identical failures — which is how the original bug went
+ * unnoticed for two days. Backing off means the refusal still reports itself,
+ * once a day, loudly enough to be read.
+ *
+ * Never consulted for attribution. Nothing downstream may treat a CVE's
+ * presence here as evidence about who found it.
+ */
+export interface BlockedRecord {
+  advisory?: string;
+  /** When the origin last refused us. Ages out — see the fetcher's --blocked-retry-hours. */
+  lastBlocked: string;
+  attempts: number;
+}
+
 export interface DiscoveryFile {
   vendor: string;
   generated: string;
   cves: Record<string, DiscoveryRecord>;
   unresolved?: Record<string, UnresolvedRecord>;
+  blocked?: Record<string, BlockedRecord>;
 }
 
 const HEADER = `# Discovery attribution — who found each vulnerability.
@@ -67,6 +93,11 @@ const HEADER = `# Discovery attribution — who found each vulnerability.
 #
 # "unresolved" lists advisories that were read and carried no attribution — often
 # withdrawn pages. They are retried on a slow backoff rather than every run.
+#
+# "blocked" lists advisories the origin refused to serve us — a bot challenge,
+# not an answer. It says nothing about who found the CVE, and is never read as
+# attribution; it only paces retries so a standing refusal reports itself once a
+# day instead of every hour. Entries clear themselves once a page is read.
 #
 # discovery: INTERNAL (the vendor's own team) | EXTERNAL | USER | UNKNOWN
 # source:    psirt-field          — the vendor's labelled "Discovered" value
@@ -88,6 +119,7 @@ export function readDiscoveryFile(path: string): DiscoveryFile | null {
     generated: parsed.generated ?? '',
     cves: parsed.cves,
     unresolved: parsed.unresolved ?? {},
+    blocked: parsed.blocked ?? {},
   };
 }
 
@@ -110,10 +142,20 @@ export function mergeDiscoveryFile(
   now = new Date(),
   /** Advisories read this run that yielded nothing — see UnresolvedRecord. */
   unresolvedNow: ReadonlyArray<{ cveId: string; advisory?: string }> = [],
-): { added: number; changed: number; unchanged: number; total: number; unresolved: number } {
+  /** Advisories the origin refused this run — see BlockedRecord. */
+  blockedNow: ReadonlyArray<{ cveId: string; advisory?: string }> = [],
+): {
+  added: number;
+  changed: number;
+  unchanged: number;
+  total: number;
+  unresolved: number;
+  blocked: number;
+} {
   const existing = readDiscoveryFile(path);
   const cves: Record<string, DiscoveryRecord> = { ...(existing?.cves ?? {}) };
   const unresolved: Record<string, UnresolvedRecord> = { ...(existing?.unresolved ?? {}) };
+  const blocked: Record<string, BlockedRecord> = { ...(existing?.blocked ?? {}) };
 
   let added = 0;
   let changed = 0;
@@ -129,8 +171,9 @@ export function mergeDiscoveryFile(
       unchanged++;
     }
     cves[cveId] = record;
-    // It answered — stop counting it against the backoff.
+    // It answered — stop counting it against either backoff.
     delete unresolved[cveId];
+    delete blocked[cveId];
   }
 
   for (const { cveId, advisory } of unresolvedNow) {
@@ -139,6 +182,18 @@ export function mergeDiscoveryFile(
     unresolved[cveId] = {
       ...(advisory ? { advisory } : {}),
       lastChecked: now.toISOString(),
+      attempts: (prior?.attempts ?? 0) + 1,
+    };
+    // We read this one, so whatever refused us before has stopped.
+    delete blocked[cveId];
+  }
+
+  for (const { cveId, advisory } of blockedNow) {
+    if (cves[cveId]) continue;
+    const prior = blocked[cveId];
+    blocked[cveId] = {
+      ...(advisory ? { advisory } : {}),
+      lastBlocked: now.toISOString(),
       attempts: (prior?.attempts ?? 0) + 1,
     };
   }
@@ -150,6 +205,9 @@ export function mergeDiscoveryFile(
   const sortedUnresolved: Record<string, UnresolvedRecord> = {};
   for (const key of Object.keys(unresolved).sort())
     sortedUnresolved[key] = unresolved[key] as UnresolvedRecord;
+  const sortedBlocked: Record<string, BlockedRecord> = {};
+  for (const key of Object.keys(blocked).sort())
+    sortedBlocked[key] = blocked[key] as BlockedRecord;
 
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(
@@ -160,6 +218,7 @@ export function mergeDiscoveryFile(
         generated: now.toISOString(),
         cves: sorted,
         ...(Object.keys(sortedUnresolved).length ? { unresolved: sortedUnresolved } : {}),
+        ...(Object.keys(sortedBlocked).length ? { blocked: sortedBlocked } : {}),
       },
       { lineWidth: 100 },
     )}`,
@@ -171,5 +230,6 @@ export function mergeDiscoveryFile(
     unchanged,
     total: Object.keys(sorted).length,
     unresolved: Object.keys(sortedUnresolved).length,
+    blocked: Object.keys(sortedBlocked).length,
   };
 }

@@ -209,6 +209,24 @@ describe('fetchAcknowledgements', () => {
     // land there, or one blocked afternoon suppresses a real advisory for a week.
     expect(run.missing).toBe(0);
     expect(run.failedCveIds).toEqual(['CVE-2026-22575']);
+    // Reported separately from failedCveIds so the caller can back a refusal off
+    // on its own clock. A transport blip is worth retrying in an hour; an origin
+    // that has decided to refuse us is not.
+    expect(run.blockedCveIds).toEqual(['CVE-2026-22575']);
+  });
+
+  it('does not call a transport failure a refusal', async () => {
+    const run = await fetchAcknowledgements(target, {
+      delayMs: 0,
+      fetchPage: async () => {
+        throw new Error('socket hang up');
+      },
+    });
+
+    expect(run.failed).toBe(1);
+    expect(run.failedCveIds).toEqual(['CVE-2026-22575']);
+    expect(run.blocked).toBe(0);
+    expect(run.blockedCveIds).toEqual([]);
   });
 
   it('still reads a real advisory', async () => {
@@ -219,6 +237,7 @@ describe('fetchAcknowledgements', () => {
 
     expect(run.blocked).toBe(0);
     expect(run.failed).toBe(0);
+    expect(run.blockedCveIds).toEqual([]);
     expect(run.results).toHaveLength(1);
     expect(run.results[0]?.discovery).toBe('INTERNAL');
   });
@@ -355,6 +374,74 @@ describe('discovery store', () => {
     const back = readDiscoveryFile(path);
     expect(back?.unresolved?.['CVE-2025-59921']).toBeUndefined();
     expect(back?.cves['CVE-2025-59921']?.discovery).toBe('EXTERNAL');
+  });
+
+  it('keeps a refused scrape out of the unresolved backoff', () => {
+    // The distinction the whole bucket exists for. `unresolved` is a claim about
+    // the advisory — "Fortinet credited nobody". A refusal is a claim about our
+    // access and nothing more, and conflating them is what made the site publish
+    // "not disclosed" for CVEs whose advisories state the answer.
+    const path = tmp();
+    const r = mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [
+      { cveId: 'CVE-2026-22575', advisory: 'FG-IR-26-171' },
+    ]);
+    expect(r.blocked).toBe(1);
+    expect(r.unresolved).toBe(0);
+    const back = readDiscoveryFile(path);
+    expect(back?.blocked?.['CVE-2026-22575']).toMatchObject({
+      advisory: 'FG-IR-26-171',
+      attempts: 1,
+    });
+    expect(back?.unresolved?.['CVE-2026-22575']).toBeUndefined();
+  });
+
+  it('counts repeat refusals so a standing block is visible in the file', () => {
+    const path = tmp();
+    const target = [{ cveId: 'CVE-2026-22575', advisory: 'FG-IR-26-171' }];
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], target);
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], target);
+    expect(readDiscoveryFile(path)?.blocked?.['CVE-2026-22575']?.attempts).toBe(2);
+  });
+
+  it('clears the refusal backoff once the page is finally read', () => {
+    const path = tmp();
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [
+      { cveId: 'CVE-2026-22575', advisory: 'FG-IR-26-171' },
+    ]);
+    const r = mergeDiscoveryFile(path, 'fortinet', {
+      'CVE-2026-22575': { discovery: 'EXTERNAL', source: 'psirt-field' },
+    });
+    expect(r.blocked).toBe(0);
+    expect(readDiscoveryFile(path)?.blocked?.['CVE-2026-22575']).toBeUndefined();
+  });
+
+  it('clears the refusal backoff when the page is read and simply says nothing', () => {
+    // The other way out. Once we have actually read the page, whatever was
+    // refusing us has stopped, and the CVE belongs on the slow no-attribution
+    // backoff instead — not on both at once.
+    const path = tmp();
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [
+      { cveId: 'CVE-2026-22575', advisory: 'FG-IR-26-171' },
+    ]);
+    const r = mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [
+      { cveId: 'CVE-2026-22575', advisory: 'FG-IR-26-171' },
+    ]);
+    expect(r.blocked).toBe(0);
+    expect(r.unresolved).toBe(1);
+  });
+
+  it('preserves an existing refusal backoff across an unrelated merge', () => {
+    // mergeDiscoveryFile rewrites the whole file. If the reader dropped the new
+    // bucket, every refresh would silently reset the backoff and the hourly
+    // failures would come straight back.
+    const path = tmp();
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [
+      { cveId: 'CVE-2026-22575', advisory: 'FG-IR-26-171' },
+    ]);
+    mergeDiscoveryFile(path, 'fortinet', {
+      'CVE-2025-32756': { discovery: 'EXTERNAL', source: 'psirt-field' },
+    });
+    expect(readDiscoveryFile(path)?.blocked?.['CVE-2026-22575']).toBeDefined();
   });
 
   it('treats a missing file as empty rather than throwing', () => {
