@@ -39,9 +39,10 @@ internalBrandMarkers:
 # note the vendor page would imply they disclose less than their peers, which is
 # not what the data says.
 discoveryNote: >-
-  Fortinet publishes discovery attribution in the Acknowledgement section of each
-  PSIRT advisory rather than in the machine-readable CVE record. Collecting it
-  requires reading those pages individually, which we have not completed.
+  Fortinet publishes discovery attribution in each PSIRT advisory — and in the
+  CSAF document behind it — rather than in the machine-readable CVE record. We
+  read the CSAF feed, which covers recent advisories; older ones are not listed
+  there and are still missing here.
 
 # Categories this vendor competes in.
 #

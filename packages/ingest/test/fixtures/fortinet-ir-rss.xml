@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+<title>FortiGuard Labs | IR Advisories</title>
+<item><title>Arbitrary process termination from exposed minifilter communication port</title><link>https://fortiguard.fortinet.com/psirt/FG-IR-26-165</link><description><![CDATA[<p>
+ <strong>
+  CVSSv3 Score:
+ </strong>
+ 4.7
+</p>
+<p>
+ An Unverified Ownership Vulnerability [CWE-283] in FortiClient Windows fortimon3 driver may allow an authenticated attacker to terminate arbitrary processes via an exposed minifilter communication port.
+</p>
+<p>
+ <em>
+  Revised on 2026-09-08 00:00:00
+ </em>
+</p>
+]]></description><guid isPermaLink="true">https://fortiguard.fortinet.com/psirt/FG-IR-26-165</guid><pubDate>Tue, 08 Sep 2026 00:00:00 -0700</pubDate></item>
+<item><title>Unauthenticated Control of NAT Rules Leading to Exposure of Sensitive Information</title><link>https://fortiguard.fortinet.com/psirt/FG-IR-26-166</link><description><![CDATA[<p>
+ <strong>
+  CVSSv3 Score:
+ </strong>
+ 8.9
+</p>
+<p>
+ An improper access control vulnerability [CWE-284] in FortiSandbox, FortiSandbox Cloud and FortiSandbox PaaS WEB UI may allow an unauthenticated attacker to access sensitive information via crafted HTTP requests.
+</p>
+<p>
+ <em>
+  Revised on 2026-09-08 00:00:00
+ </em>
+</p>
+]]></description><guid isPermaLink="true">https://fortiguard.fortinet.com/psirt/FG-IR-26-166</guid><pubDate>Tue, 08 Sep 2026 00:00:00 -0700</pubDate></item>
+</channel></rss>

@@ -2,8 +2,9 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { fetchJson } from '../http.js';
+import { fetchJson, fetchText } from '../http.js';
 import { fetchAcknowledgements } from '../sources/psirt-fortinet.js';
+import { fetchCsafAcknowledgements, parseRssAdvisoryTitles } from '../sources/csaf-fortinet.js';
 import { loadConfig } from '../node/config-loader.js';
 import { mergeDiscoveryFile, readDiscoveryFile } from '../node/discovery-store.js';
 import { discoveryDir } from '../node/paths.js';
@@ -55,6 +56,16 @@ const { values } = parseArgs({
      * everyone to ignore the one that matters.
      */
     'blocked-retry-hours': { type: 'string', default: '24' },
+    /** Escape hatch: scrape advisory pages only, as this job did before CSAF. */
+    'no-csaf': { type: 'boolean', default: false },
+    /**
+     * Pause between CSAF documents. Its own knob, and far shorter than --delay,
+     * because it paces a different host: --delay is set to ten times what
+     * fortiguard.com's robots.txt asks of a scraper walking advisory pages,
+     * while this reads static JSON off filestore.fortinet.com, the same origin
+     * the RSS feed is served from.
+     */
+    'csaf-delay': { type: 'string', default: '1000' },
   },
 });
 
@@ -121,33 +132,88 @@ if (targets.length === 0) {
   process.exit(0);
 }
 
-console.log(
-  `${values.vendor}: ${all.length} due, fetching ${targets.length} ` +
-    `at ${Number.parseInt(values.delay, 10) / 1000}s intervals${heldNote}`,
-);
+console.log(`${values.vendor}: ${all.length} due, fetching ${targets.length}${heldNote}`);
 
 const vendor = loadConfig().vendors.find((v) => v.slug === values.vendor);
 if (!vendor) throw new Error(`unknown vendor "${values.vendor}"`);
 
-const run = await fetchAcknowledgements(targets, {
-  vendorName: vendor.name,
-  brandMarkers: vendor.internalBrandMarkers,
-  concurrency: 1,
-  delayMs: Number.parseInt(values.delay, 10),
-});
+/**
+ * CSAF first, the advisory page only for what is left.
+ *
+ * Not a preference for the better data — the page is the better data, because it
+ * carries the labelled `Discovered:` field that CSAF omits. It is a preference
+ * for the data we can actually get: fortiguard.com has been refusing this job
+ * since 2026-09-08, and filestore.fortinet.com serves the same advisories as
+ * CSAF without a challenge.
+ *
+ * The ordering has a second effect worth stating. Every advisory CSAF answers is
+ * one the scraper never requests, so a run that resolves everything this way
+ * touches the blocked host zero times — no challenge, no refusal record, no
+ * alarm. The scrape is reached for only when CSAF genuinely cannot answer.
+ */
+let titles = new Map<string, string>();
+if (!values['no-csaf'] && vendor.rssUrl) {
+  try {
+    titles = parseRssAdvisoryTitles(await fetchText(vendor.rssUrl, { timeoutMs: 30_000, retries: 2 }));
+  } catch (err) {
+    // Degrade to the scrape rather than fail. The feed is an optimisation here,
+    // and an outage on it should not take the whole refresh down.
+    console.warn(`RSS feed unavailable (${(err as Error).message}) — CSAF skipped this run`);
+  }
+}
+
+const csaf = titles.size
+  ? await fetchCsafAcknowledgements(targets, {
+      titles,
+      vendorName: vendor.name,
+      brandMarkers: vendor.internalBrandMarkers,
+      concurrency: 1,
+      delayMs: Number.parseInt(values['csaf-delay'], 10),
+    })
+  : { results: [], remaining: [...targets], read: 0, missing: 0, failed: 0 };
+
+if (titles.size) {
+  console.log(
+    `csaf: read ${csaf.read} of ${csaf.read + csaf.failed} document(s) · ` +
+      `resolved ${csaf.results.length} CVE(s) · ${csaf.missing} carried no usable credit · ` +
+      `${csaf.remaining.length} left for the advisory page` +
+      (csaf.remaining.length
+        ? ` at ${Number.parseInt(values.delay, 10) / 1000}s intervals`
+        : ' — the blocked host is not touched this run'),
+  );
+}
+
+// Only what CSAF could not answer reaches the blocked host.
+const EMPTY_RUN = {
+  results: [],
+  missing: 0,
+  failed: 0,
+  blocked: 0,
+  failedCveIds: [],
+  blockedCveIds: [],
+};
+const run = csaf.remaining.length
+  ? await fetchAcknowledgements(csaf.remaining, {
+      vendorName: vendor.name,
+      brandMarkers: vendor.internalBrandMarkers,
+      concurrency: 1,
+      delayMs: Number.parseInt(values.delay, 10),
+    })
+  : EMPTY_RUN;
 
 const advisoryId = (url: string) => url.split('/').pop() ?? '';
 // Only advisories we actually read count toward the unresolved backoff. A
 // request that never returned tells us nothing about the page, and suppressing
 // it for a week on that basis would turn one bad afternoon into a silent gap.
-const resolved = new Set(run.results.map((r) => r.cveId));
+const found = [...csaf.results, ...run.results];
+const resolved = new Set(found.map((r) => r.cveId));
 const unreachable = new Set(run.failedCveIds);
 const blockedSet = new Set(run.blockedCveIds);
 const merged = mergeDiscoveryFile(
   OUT,
   values.vendor,
   Object.fromEntries(
-    run.results.map((r) => [
+    found.map((r) => [
       r.cveId,
       {
         discovery: r.discovery as NonNullable<typeof r.discovery>,
@@ -172,7 +238,8 @@ const merged = mergeDiscoveryFile(
 );
 
 console.log(
-  `resolved ${run.results.length} · ${run.missing} with no usable attribution · ` +
+  `resolved ${found.length} (${csaf.results.length} from csaf, ${run.results.length} from the ` +
+    `advisory page) · ${run.missing} with no usable attribution · ` +
     `${run.failed} failed` +
     (run.blocked ? ` (${run.blocked} served a bot challenge, not an advisory)` : '') +
     ` · file now holds ${merged.total} attributed, ` +
@@ -200,9 +267,18 @@ if (summary) {
 
 // A run where most requests failed is a blocked scrape, not a finding. Exit
 // non-zero so the job surfaces it rather than committing a thin result.
-if (run.failed > targets.length * 0.5) {
+//
+// Gated on having learned nothing at all, which CSAF changed the meaning of. A
+// refused scrape used to mean the run was blind; now it usually means the
+// advisory page was unreachable for the handful of CVEs CSAF could not cover,
+// while the rest resolved fine. That is a degraded run, not an invalid one, and
+// paging someone hourly over it is the noise this job was just fixed to stop.
+// The protection that actually matters — never recording a refusal as "credits
+// nobody" — lives in the blocked bucket and holds regardless of exit code.
+if (found.length === 0 && run.failed > csaf.remaining.length * 0.5) {
   console.error(
-    `\n${run.failed}/${targets.length} requests failed — treating this run as invalid.` +
+    `\n${run.failed}/${csaf.remaining.length} requests failed and nothing resolved — ` +
+      `treating this run as invalid.` +
       (run.blocked
         ? `\n${run.blocked} of them were answered with fortiguard.com's bot challenge rather than ` +
           `an advisory. The scrape is being refused, not coming up empty — nothing was written ` +

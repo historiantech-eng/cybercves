@@ -175,7 +175,27 @@ export function classifyAcknowledgement(
   const byClause = /\b(?:discovered|reported|found|identified|credited)\s+by\s+([\s\S]{0,220})/i.exec(
     trimmed,
   );
-  if (!byClause?.[1]) {
+
+  // The other way vendors phrase it: thanks rather than attribution.
+  //
+  // "Fortinet is pleased to thank Thomas Sautier for reporting this
+  // vulnerability under responsible disclosure" credits an outsider as plainly
+  // as "reported by" does, but names no "by" clause at all. Fortinet's CSAF
+  // documents use this form for nearly every externally-reported issue, so
+  // without it the machine-readable feed reads as "credits nobody" — the same
+  // false negative, arriving through a different door.
+  //
+  // The finder is bounded by the "for <verb>ing" that closes the clause, and is
+  // then run through exactly the same affiliation test as a "by" clause: a
+  // vendor thanking its own team ("…thank J. Doe of FortiGuard Labs…") is still
+  // INTERNAL.
+  const thanksClause =
+    /\bthanks?\s+([\s\S]{0,220}?)\s+for\s+(?:reporting|report|discovering|finding|identifying|notifying|bringing|responsibly)/i.exec(
+      trimmed,
+    );
+
+  const clause = byClause?.[1] ?? thanksClause?.[1];
+  if (!clause) {
     return { discovery: null, source: null, creditText: trimmed };
   }
 
@@ -187,7 +207,7 @@ export function classifyAcknowledgement(
   // period in an initial, and splitting there truncates "A. Researcher of
   // FortiGuard Labs" to "A" — losing the affiliation that decides the verdict.
   // The 220-character window above is what bounds the clause instead.
-  const finder = byClause[1]
+  const finder = clause
     .split(/\s+to\s+|\s+based\s+on\s+|\s+in\s+(?:coordination|collaboration)\s+|;/i)[0]
     ?.trim()
     .replace(/\.$/, '');

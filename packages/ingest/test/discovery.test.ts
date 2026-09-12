@@ -165,8 +165,41 @@ describe('classifyAcknowledgement', () => {
     }
   });
 
+  it('reads a thanks-for-reporting credit as external', () => {
+    // Fortinet's CSAF documents phrase nearly every outside report this way, and
+    // it names no "by" clause at all. Before this was handled, the machine-
+    // readable feed read as "credits nobody" for seven of nine advisories —
+    // the same false negative the challenge-page bug produced, by another route.
+    for (const text of [
+      'Fortinet is pleased to thank Thomas Sautier for reporting this vulnerability under responsible disclosure.',
+      'Fortinet is pleased to thank Robel Campbell from Halcyon and Mirae Yim for reporting this vulnerability under responsible disclosure.',
+      'Fortinet is pleased to thank Vang3lis and Cyth from VARAS@IIE for reporting this vulnerability under responsible disclosure.',
+    ]) {
+      const r = classifyAcknowledgement(text, 'Fortinet', ['FortiGuard']);
+      expect(r.discovery, text).toBe('EXTERNAL');
+      expect(r.source).toBe('psirt-acknowledgement');
+    }
+  });
+
+  it('still reads a thanked in-house finder as internal', () => {
+    // The trap in the rule above: the same sentence shape credits the vendor's
+    // own team, and must not be scored as an outside report.
+    expect(
+      classifyAcknowledgement(
+        'Fortinet is pleased to thank Jane Doe of FortiGuard Labs for reporting this vulnerability.',
+        'Fortinet',
+        ['FortiGuard'],
+      ).discovery,
+    ).toBe('INTERNAL');
+  });
+
   it('returns null rather than guessing on unrecognised text', () => {
     expect(classifyAcknowledgement('Thanks to everyone involved.', 'Fortinet').discovery).toBeNull();
+    // Gratitude with no finder named is not a credit.
+    expect(
+      classifyAcknowledgement('Fortinet thanks the community for its continued support.', 'Fortinet')
+        .discovery,
+    ).toBeNull();
     expect(classifyAcknowledgement(null, 'Fortinet').discovery).toBeNull();
     expect(classifyAcknowledgement('   ', 'Fortinet').discovery).toBeNull();
   });
