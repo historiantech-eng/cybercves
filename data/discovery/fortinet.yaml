@@ -18,7 +18,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-09-12T18:27:46.898Z
+generated: 2026-09-12T18:46:03.562Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -1735,6 +1735,12 @@ cves:
     source: psirt-field
     advisory: FG-IR-26-105
     credit: Internally discovered and reported by Shripal Rawal of Fortinet PSIRT team.
+  CVE-2026-22575:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-171
+    credit: Fortinet is pleased to thank Martin Cechvala for reporting this vulnerability under
+      responsible disclosure.
   CVE-2026-22576:
     discovery: INTERNAL
     source: psirt-field
@@ -1843,6 +1849,11 @@ cves:
     discovery: INTERNAL
     source: psirt-field
     advisory: FG-IR-26-136
+    credit: Internally discovered and reported by Adham El karn of Fortinet Product Security team.
+  CVE-2026-26084:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-166
     credit: Internally discovered and reported by Adham El karn of Fortinet Product Security team.
   CVE-2026-27316:
     discovery: EXTERNAL
@@ -2007,6 +2018,47 @@ cves:
     advisory: FG-IR-26-162
     credit: Fortinet is pleased to thank Iván Domínguez from Zerolynx for reporting this vulnerability
       under responsible disclosure.
+  CVE-2026-84385:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-164
+    credit: Fortinet is pleased to thank Thomas Sautier for reporting this vulnerability under
+      responsible disclosure.
+  CVE-2026-84386:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-165
+    credit: Fortinet is pleased to thank Robel Campbell from Halcyon and Mirae Yim for reporting this
+      vulnerability under responsible disclosure.
+  CVE-2026-84387:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-167
+    credit: Fortinet is pleased to thank Jason McFadyen from TrendAI Security Research of Trend Micro
+      for reporting this vulnerability under responsible disclosure.
+  CVE-2026-84389:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-169
+    credit: Fortinet is pleased to thank khalooda0x - Khaled ibn Al-Walid for reporting this
+      vulnerability under responsible disclosure.
+  CVE-2026-84391:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-172
+    credit: Fortinet is pleased to thank Stefan Grosser from Zebbra AG and Ralph Grossenbacher from BIT
+      for reporting this vulnerability under responsible disclosure
+  CVE-2026-84392:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-173
+    credit: Fortinet is pleased to thank Vang3lis and Cyth from VARAS@IIE for reporting this
+      vulnerability under responsible disclosure.
+  CVE-2026-84393:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-174
+    credit: Internally discovered and reported by John Headley of the Fortinet System Engineering team.
 unresolved:
   CVE-2023-50176:
     advisory: FG-IR-23-475
@@ -2016,42 +2068,6 @@ unresolved:
     advisory: FG-IR-23-434
     lastChecked: 2026-09-05T14:29:47.022Z
     attempts: 5
-  CVE-2026-22575:
-    advisory: FG-IR-26-171
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-26084:
-    advisory: FG-IR-26-166
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-84385:
-    advisory: FG-IR-26-164
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-84386:
-    advisory: FG-IR-26-165
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-84387:
-    advisory: FG-IR-26-167
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-84389:
-    advisory: FG-IR-26-169
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-84391:
-    advisory: FG-IR-26-172
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-84392:
-    advisory: FG-IR-26-173
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
-  CVE-2026-84393:
-    advisory: FG-IR-26-174
-    lastChecked: 2026-09-08T18:50:21.163Z
-    attempts: 1
 blocked:
   CVE-2025-59921:
     advisory: FG-IR-23-434
