@@ -18,7 +18,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-09-12T19:26:31.851Z
+generated: 2026-09-12T19:30:55.162Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -1540,6 +1540,11 @@ cves:
     source: psirt-field
     advisory: FG-IR-25-601
     credit: Internally discovered and reported by Shripal Rawal of Fortinet PSIRT team.
+  CVE-2025-59921:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-25-861
+    credit: Internally discovered and reported by Kushal Shah of Fortinet Vulnerability Research team.
   CVE-2025-59922:
     discovery: EXTERNAL
     source: psirt-field
@@ -2064,13 +2069,3 @@ cves:
     source: psirt-acknowledgement
     advisory: FG-IR-26-174
     credit: Internally discovered and reported by John Headley of the Fortinet System Engineering team.
-unresolved:
-  CVE-2025-59921:
-    advisory: FG-IR-23-434
-    lastChecked: 2026-09-05T14:29:47.022Z
-    attempts: 5
-blocked:
-  CVE-2025-59921:
-    advisory: FG-IR-23-434
-    lastBlocked: 2026-09-12T18:27:46.898Z
-    attempts: 1
