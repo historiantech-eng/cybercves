@@ -18,7 +18,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-09-12T19:30:55.162Z
+generated: 2026-09-22T15:01:25.994Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -2046,6 +2046,13 @@ cves:
     advisory: FG-IR-26-167
     credit: Fortinet is pleased to thank Jason McFadyen from TrendAI Security Research of Trend Micro
       for reporting this vulnerability under responsible disclosure.
+  CVE-2026-84388:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-168
+    credit: Fortinet is pleased to thank Kevin Joensen from Baldur Security, Eric Brandel from Target,
+      Dan Rosenqvist from Shelltrail, and James Arnott from Bay Area Labs
+      (https://amibeingpwned.com/) for reporting this vulnerability under responsible disclosure.
   CVE-2026-84389:
     discovery: EXTERNAL
     source: psirt-acknowledgement
