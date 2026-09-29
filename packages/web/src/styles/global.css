@@ -356,6 +356,18 @@ h3 {
   white-space: nowrap;
 }
 
+/* Quieter than .kev-flag: reachability is a property of the bug, exploitation
+   is evidence about the world, and the page should not rank them as equals. */
+.exposure-flag {
+  border: 1px dashed var(--gridline);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+
 /* Deliberately quieter than .kev-flag: on the KEV page every row is already
    exploited, so ransomware use is a qualifier on that fact rather than a second
    alarm. The word carries it; the border only groups it. */

@@ -83,3 +83,46 @@ export function extractCvss(record: CveRecord): CvssResult | null {
   }
   return null;
 }
+
+/**
+ * How reachable a vulnerability is, read from its CVSS vector.
+ *
+ * - `remote-unauth` — network attack vector, no privileges, no user interaction.
+ *   Anyone who can reach the service can exploit it unaided, which for the edge
+ *   devices this site tracks is the subset that decides patch order.
+ * - `remote` — network attack vector, but needs privileges or a user's action.
+ * - `other` — adjacent, local or physical access.
+ *
+ * Metrics are matched by exact key, not substring: a 4.0 vector carries `R:U`
+ * (Recovery) and environmental metrics like `MAV:`, and a substring test for
+ * `AV:N` would read those. The attack-vector, privileges and user-interaction
+ * keys mean the same thing in 3.x and 4.0 — only 4.0's UI values differ
+ * (`N/P/A` against `N/R`), and `N` means "none" in both.
+ */
+export type Exposure = 'remote-unauth' | 'remote' | 'other';
+
+export const EXPOSURE_LABELS: Readonly<Record<Exposure, string>> = {
+  'remote-unauth': 'Remote, no auth, no user interaction',
+  remote: 'Remote, needs privileges or user interaction',
+  other: 'Adjacent, local or physical access',
+};
+
+export function exposureFromVector(vector: string | null | undefined): Exposure | null {
+  if (!vector) return null;
+  const metrics = new Map<string, string>();
+  for (const part of vector.split('/')) {
+    const [key, value] = part.split(':');
+    if (key && value && !metrics.has(key)) metrics.set(key, value.toUpperCase());
+  }
+
+  const av = metrics.get('AV');
+  // No attack vector means this is not a vector we can read — v2 spells it the
+  // same way, so a missing AV is malformed input rather than an unknown version.
+  if (!av) return null;
+  if (av !== 'N') return 'other';
+  // v2 has `Au` instead of PR/UI; without both we cannot claim "no auth".
+  const pr = metrics.get('PR');
+  const ui = metrics.get('UI');
+  if (pr === 'N' && ui === 'N') return 'remote-unauth';
+  return 'remote';
+}

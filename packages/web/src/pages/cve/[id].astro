@@ -2,7 +2,7 @@
 import Base from '../../layouts/Base.astro';
 import Severity from '../../components/Severity.astro';
 import { db, formatDate } from '../../lib/data';
-import { affectedStatus, discoverySourceLabel } from '@cybercves/core';
+import { EXPOSURE_LABELS, affectedStatus, discoverySourceLabel, exposureFromVector } from '@cybercves/core';
 import ReportIssue from '../../components/ReportIssue.astro';
 
 export async function getStaticPaths() {
@@ -22,6 +22,7 @@ export async function getStaticPaths() {
 }
 
 const { detail } = Astro.props;
+const exposure = exposureFromVector(detail.cvss_vector);
 const refs = JSON.parse(detail.refs || '[]') as Array<{ url: string; name: string | null }>;
 const cwes = JSON.parse(detail.cwe_ids || '[]') as string[];
 // A CVE record's affected[] array is a set of statements about products, not a
@@ -60,6 +61,18 @@ const summary =
             <Severity severity={detail.cvss_severity} score={detail.cvss_base_score} />
           </div>
           <div class="small muted">CVSS {detail.cvss_version ?? '—'}</div>
+          {
+            exposure && (
+              <div class="small" style="margin-top:4px">
+                {exposure === 'remote-unauth' ? (
+                  <span class="exposure-flag">Remote · no auth</span>
+                ) : (
+                  <span class="muted">{EXPOSURE_LABELS[exposure]}</span>
+                )}{' '}
+                <a class="muted" href="/methodology#exposure">what this means</a>
+              </div>
+            )
+          }
         </div>
         <div>
           <div class="stat-label">Exploited</div>

@@ -1,5 +1,6 @@
 ---
 import Severity from './Severity.astro';
+import { exposureFromVector } from '@cybercves/core';
 import { formatDate, splitList } from '../lib/data';
 import { formatLag } from '../lib/kev-timing';
 
@@ -8,6 +9,8 @@ interface Row {
   date_published?: string | null;
   severity?: string | null;
   score?: number | null;
+  /** CVSS vector; when present, a remote-unauthenticated bug gets a badge. */
+  vector?: string | null;
   in_kev?: number;
   epss?: number | null;
   vendors?: string | null;
@@ -101,6 +104,14 @@ const { rows, showVendor = true, caption, showKevTiming = false } = Astro.props;
             )}
             <td>
               <Severity severity={row.severity ?? null} score={row.score ?? null} />
+              {exposureFromVector(row.vector) === 'remote-unauth' && (
+                <>
+                  {' '}
+                  <span class="exposure-flag" title="Network attack vector, no privileges, no user interaction">
+                    Remote · no auth
+                  </span>
+                </>
+              )}
             </td>
             {showVendor && (
               <td class="small">

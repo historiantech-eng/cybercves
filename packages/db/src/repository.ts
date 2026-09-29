@@ -842,6 +842,7 @@ export class Repository {
       date_published: string | null;
       severity: string | null;
       score: number | null;
+      vector: string | null;
       discovery: string | null;
       in_kev: number;
       epss: number | null;
@@ -853,6 +854,7 @@ export class Repository {
               c.date_published,
               c.cvss_severity AS severity,
               c.cvss_base_score AS score,
+              c.cvss_vector AS vector,
               c.discovery,
               CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
               e.score AS epss,
@@ -996,6 +998,7 @@ export class Repository {
       date_added: string;
       severity: string | null;
       score: number | null;
+      vector: string | null;
       epss: number | null;
       vendors: string | null;
       products: string | null;
@@ -1004,7 +1007,7 @@ export class Repository {
       days: number | null;
     }>(
       `SELECT c.cve_id, c.date_published, k.date_added,
-              c.cvss_severity AS severity, c.cvss_base_score AS score,
+              c.cvss_severity AS severity, c.cvss_base_score AS score, c.cvss_vector AS vector,
               e.score AS epss, k.ransomware_known, 1 AS in_kev,
               ${KEV_LAG_SQL} AS days,
               (SELECT GROUP_CONCAT(DISTINCT cp.vendor_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS vendors,
@@ -1135,12 +1138,14 @@ export class Repository {
       date_published: string | null;
       severity: string | null;
       score: number | null;
+      vector: string | null;
       in_kev: number;
       epss: number | null;
       vendors: string | null;
       products: string | null;
     }>(
       `SELECT c.cve_id, c.date_published, c.cvss_severity AS severity, c.cvss_base_score AS score,
+              c.cvss_vector AS vector,
               CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
               e.score AS epss,
               (SELECT GROUP_CONCAT(DISTINCT cp.vendor_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS vendors,

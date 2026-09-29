@@ -99,6 +99,13 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
       </select>
     </div>
     <div>
+      <label for="f-exposure">Exposure</label>
+      <select id="f-exposure" data-filter-exposure>
+        <option value="">Any</option>
+        <option value="remote-unauth">Remote, no auth, no interaction</option>
+      </select>
+    </div>
+    <div>
       <label for="f-q">Search</label>
       <input id="f-q" type="search" placeholder="CVE-2025-…" data-filter-q />
     </div>
@@ -138,6 +145,7 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
     c: number | null;
     k: number;
     e: number | null;
+    x: 1 | 0 | null;
     w: string | null;
     v: string[];
     p: string[];
@@ -154,6 +162,7 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
     severity: document.querySelector<HTMLSelectElement>('[data-filter-severity]'),
     kev: document.querySelector<HTMLSelectElement>('[data-filter-kev]'),
     discovery: document.querySelector<HTMLSelectElement>('[data-filter-discovery]'),
+    exposure: document.querySelector<HTMLSelectElement>('[data-filter-exposure]'),
     q: document.querySelector<HTMLInputElement>('[data-filter-q]'),
   };
 
@@ -207,11 +216,15 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
           : row.w === 'UNKNOWN' ? 'Unknown'
           : '—';
         const kev = row.k === 1 ? ' <span class="kev-flag">KEV</span>' : '';
+        const exposure =
+          row.x === 1
+            ? ' <span class="exposure-flag" title="Network attack vector, no privileges, no user interaction">Remote · no auth</span>'
+            : '';
 
         return `<tr>
           <td><a class="cve-id" href="/cve/${encodeURIComponent(row.i)}">${escapeHtml(row.i)}</a>${kev}</td>
           <td class="muted small">${date}</td>
-          <td>${severityCell(row)}</td>
+          <td>${severityCell(row)}${exposure}</td>
           <td class="small">${vendors}</td>
           <td class="small muted">${foundBy}</td>
           <td class="num small muted">${row.e != null ? row.e.toFixed(3) : '—'}</td>
@@ -234,6 +247,7 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
     const severity = controls.severity?.value ?? '';
     const kevOnly = controls.kev?.value === '1';
     const discovery = controls.discovery?.value ?? '';
+    const remoteUnauth = controls.exposure?.value === 'remote-unauth';
     const q = (controls.q?.value ?? '').trim().toUpperCase();
 
     const filtered = rows.filter((row) => {
@@ -245,6 +259,7 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
       // no attribution" is a distinct answer from "any attribution".
       if (discovery === '__none' && row.w !== null) return false;
       if (discovery && discovery !== '__none' && row.w !== discovery) return false;
+      if (remoteUnauth && row.x !== 1) return false;
       if (q && !row.i.includes(q)) return false;
       return true;
     });
@@ -272,6 +287,7 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
     if (severity) params.set('severity', severity);
     if (kevOnly) params.set('kev', '1');
     if (discovery) params.set('discovery', discovery);
+    if (remoteUnauth) params.set('exposure', 'remote-unauth');
     if (q) params.set('q', q);
     const query = params.toString();
     history.replaceState(null, '', query ? `?${query}` : location.pathname);
@@ -284,6 +300,7 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
     if (controls.severity) controls.severity.value = params.get('severity') ?? '';
     if (controls.kev) controls.kev.value = params.get('kev') ?? '';
     if (controls.discovery) controls.discovery.value = params.get('discovery') ?? '';
+    if (controls.exposure) controls.exposure.value = params.get('exposure') ?? '';
     if (controls.q) controls.q.value = params.get('q') ?? '';
   }
 
@@ -304,7 +321,7 @@ const vendorLabels = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
     if (year) location.href = `/years/${year}`;
   });
 
-  for (const key of ['vendor', 'category', 'severity', 'kev', 'discovery'] as const) {
+  for (const key of ['vendor', 'category', 'severity', 'kev', 'discovery', 'exposure'] as const) {
     controls[key]?.addEventListener('change', apply);
   }
 

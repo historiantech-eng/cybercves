@@ -1,7 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import { db } from '../lib/data';
-import { discoverySourceLabel, methodology } from '@cybercves/core';
+import { EXPOSURE_LABELS, discoverySourceLabel, methodology } from '@cybercves/core';
 
 // Rendered straight from the scoring module, so the published formula cannot
 // drift from the one that produced the numbers on the rest of the site.
@@ -185,6 +185,29 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
           </div>
         )
       }
+    </div>
+  </section>
+
+  <section class="section" id="exposure">
+    <div class="card">
+      <h2>Exposure</h2>
+      <p class="muted">
+        Read from the CVSS vector the vendor published. Only three metrics are used: attack
+        vector, privileges required and user interaction. A CVE marked
+        <span class="exposure-flag">Remote · no auth</span> needs all three to say the least
+        demanding thing: reachable over the network, no account, and no one having to click
+        anything. For the firewalls, VPNs and gateways tracked here, those are the bugs an
+        attacker can use against a device just because it is on the internet.
+      </p>
+      <ul class="muted">
+        {Object.entries(EXPOSURE_LABELS).map(([, label]) => <li>{label}</li>)}
+      </ul>
+      <p class="muted">
+        This describes the vulnerability, not your deployment. A management interface that is
+        not exposed to the internet is not reachable by an internet attacker, whatever the
+        vector says. CVSS v2 vectors have no privileges or user-interaction metrics, so they are
+        never marked as needing no authentication.
+      </p>
     </div>
   </section>
 
