@@ -135,6 +135,20 @@ const paceDelta =
     )
   }
 
+  {/*
+    Only for readers who watch something, and built entirely in their browser
+    from the public year shards — hidden until the script has an answer, so a
+    reader with no watchlist (or no storage) never sees an empty card.
+  */}
+  <section class="section" data-watch-summary hidden>
+    <div class="card">
+      <p style="margin:0">
+        <strong data-watch-summary-text></strong>{' '}
+        <a href="/watchlist">Open your watchlist →</a>
+      </p>
+    </div>
+  </section>
+
   <SeverityChart
     rows={severityRows}
     groupBy="vendor"
@@ -189,3 +203,45 @@ const paceDelta =
     )
   }
 </Base>
+
+<script>
+  import { createShardLoader } from '../lib/cve-rows';
+  import { isNewSince, markVisit } from '../lib/watchlist';
+
+  const section = document.querySelector<HTMLElement>('[data-watch-summary]');
+  const text = document.querySelector<HTMLElement>('[data-watch-summary-text]');
+  const list = markVisit();
+
+  async function summarise() {
+    if (!section || !text || !list.products.length) return;
+    const watched = new Set(list.products);
+    const year = new Date().getUTCFullYear();
+    const shard = createShardLoader();
+    // Last year too: a watchlist opened in early January should still count
+    // what landed over the holidays.
+    const rows = (
+      await Promise.all([shard(year), shard(year - 1).catch(() => [])])
+    ).flat();
+    const mine = rows.filter((row) => row.p.some((p) => watched.has(p)));
+    const products = `${list.products.length} watched product${list.products.length === 1 ? '' : 's'}`;
+
+    if (!list.prevVisit) {
+      text.textContent = `Watching ${products}. New CVEs will be marked from your next visit.`;
+    } else {
+      const fresh = mine.filter((row) => isNewSince(row.d, list.prevVisit)).length;
+      const since = new Date(list.prevVisit).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+      text.textContent =
+        fresh === 0
+          ? `Nothing new in your ${products} since ${since}.`
+          : `${fresh} new CVE${fresh === 1 ? '' : 's'} in your ${products} since ${since}.`;
+    }
+    section.hidden = false;
+  }
+
+  summarise().catch(() => {
+    // Leave the card hidden: no answer is better than a wrong count.
+  });
+</script>

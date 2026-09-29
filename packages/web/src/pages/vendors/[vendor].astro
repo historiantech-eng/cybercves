@@ -5,6 +5,7 @@ import CveTable from '../../components/CveTable.astro';
 import DiscoveryBar from '../../components/DiscoveryBar.astro';
 import YearFilter from '../../components/YearFilter.astro';
 import SeverityChart from '../../components/SeverityChart.astro';
+import WatchButton from '../../components/WatchButton.astro';
 import { CURRENT_YEAR, db } from '../../lib/data';
 import { toCompactRows } from '../../lib/cve-rows';
 
@@ -24,6 +25,7 @@ export async function getStaticPaths() {
   const currentYearRows = toCompactRows(await repo.listCveIndex(CURRENT_YEAR));
   const allCategories = await repo.listCategories();
   const categoryNames = Object.fromEntries(allCategories.map((c) => [c.slug, c.name]));
+  const watchable = await repo.listProducts();
   const discoveryByVendor = new Map(
     (await repo.getDiscoveryBreakdown()).map((row) => [row.vendor_slug, row]),
   );
@@ -91,14 +93,24 @@ export async function getStaticPaths() {
           years,
           categoryNames,
           severityRows: currentYearRows.filter((r) => r.v.includes(vendor.slug)),
+          vendorProducts: watchable.filter((p) => p.vendor_slug === vendor.slug),
         },
       };
     }),
   );
 }
 
-const { vendor, products, categories, cves, discovery, years, categoryNames, severityRows } =
-  Astro.props;
+const {
+  vendor,
+  products,
+  categories,
+  cves,
+  discovery,
+  years,
+  categoryNames,
+  severityRows,
+  vendorProducts,
+} = Astro.props;
 /** Why a cell reads N/A. Carried on the cell itself, not only in the footnote. */
 const naTitle = `${vendor.name} ships no product in this category`;
 const anyNa = categories.some((c) => !c.applicable);
@@ -112,6 +124,7 @@ const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
   title={vendor.name}
   description={`Every tracked CVE affecting ${vendor.name} products, broken down by product and category, with known-exploited and EPSS enrichment.`}
   path={`/vendors/${vendor.slug}`}
+  feed={{ href: `/feeds/vendor/${vendor.slug}.xml`, title: `${vendor.name} CVEs` }}
 >
   <h1>{vendor.name}</h1>
   <p class="lede">
@@ -126,6 +139,7 @@ const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
         </>
       )
     }
+    {' '}<a href={`/feeds/vendor/${vendor.slug}.xml`}>RSS feed</a>
   </p>
 
   {
@@ -277,6 +291,33 @@ const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
       </div>
     </div>
   </section>
+
+  {
+    vendorProducts.length > 0 && (
+      <section class="section">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <h2>Watch products</h2>
+              <p>
+                Saved in this browser only. See them together on your{' '}
+                <a href="/watchlist">watchlist</a>.
+              </p>
+            </div>
+          </div>
+          <ul class="watch-grid">
+            {vendorProducts.map((p) => (
+              <li>
+                <span>{p.name}</span>
+                <span class="small muted">{p.cve_count.toLocaleString()} CVEs</span>
+                <WatchButton slug={p.slug} name={p.name} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    )
+  }
 
   <section class="section">
     <div class="section-head">

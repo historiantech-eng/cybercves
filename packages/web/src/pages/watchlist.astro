@@ -1,0 +1,211 @@
+---
+import Base from '../layouts/Base.astro';
+import WatchButton from '../components/WatchButton.astro';
+import { db } from '../lib/data';
+
+const repo = db();
+const products = repo ? await repo.listProducts() : [];
+
+const byVendor = new Map<string, { name: string; products: typeof products }>();
+for (const product of products) {
+  const group = byVendor.get(product.vendor_slug);
+  if (group) group.products.push(product);
+  else byVendor.set(product.vendor_slug, { name: product.vendor_name, products: [product] });
+}
+
+// Shipped to the page so the script can name products and link their feeds
+// without a second lookup. Small: one short entry per product.
+const productNames = Object.fromEntries(
+  products.map((p) => [p.slug, `${p.vendor_name} ${p.name}`]),
+);
+---
+
+<Base
+  title="Watchlist"
+  description="Pick the security products you run and see their CVEs together, with what is new since your last visit. Saved in your browser only."
+>
+  <h1>Your watchlist</h1>
+  <p class="lede">
+    Pick the products you run. Their CVEs from this year and last appear below, with anything
+    published since your previous visit marked <span class="new-flag">NEW</span>. Your choices
+    are saved in this browser only and never sent anywhere; see <a href="/privacy">privacy</a>.
+  </p>
+
+  {/* A data attribute, not an inline JSON <script>: the CSP test counts every
+      inline script, and this one would need a hand-pinned hash if CSP returns. */}
+  <section class="section" data-watch-results-section data-product-names={JSON.stringify(productNames)}>
+    <div class="section-head">
+      <div>
+        <h2>CVEs in your stack</h2>
+        <p data-watch-status>Loading…</p>
+      </div>
+    </div>
+    <div class="card">
+      <div data-watch-results>
+        <p class="empty">Watch a product below to start.</p>
+      </div>
+    </div>
+    <p class="small muted" data-watch-feeds hidden></p>
+  </section>
+
+  <noscript>
+    <p class="empty">The watchlist runs in your browser and needs JavaScript.</p>
+  </noscript>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Products</h2>
+        <p>Only products with at least one tracked CVE are listed.</p>
+      </div>
+    </div>
+    {
+      [...byVendor.entries()].map(([vendorSlug, group]) => (
+        <div class="card" style="margin-bottom:12px">
+          <h3 style="margin-top:0">
+            <a href={`/vendors/${vendorSlug}`}>{group.name}</a>
+          </h3>
+          <ul class="watch-grid">
+            {group.products.map((p) => (
+              <li>
+                <span>{p.name}</span>
+                <span class="small muted">{p.cve_count.toLocaleString()} CVEs</span>
+                <WatchButton slug={p.slug} name={`${group.name} ${p.name}`} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </section>
+</Base>
+
+<script>
+  import { createShardLoader, type CveRow } from '../lib/cve-rows';
+  import { CHANGE_EVENT, isNewSince, load, markVisit } from '../lib/watchlist';
+
+  const PAGE_SIZE = 300;
+  const results = document.querySelector<HTMLElement>('[data-watch-results]');
+  const status = document.querySelector<HTMLElement>('[data-watch-status]');
+  const feeds = document.querySelector<HTMLElement>('[data-watch-feeds]');
+  const names = JSON.parse(
+    document.querySelector<HTMLElement>('[data-product-names]')?.dataset.productNames ?? '{}',
+  ) as Record<string, string>;
+
+  // Rolled once per session, before anything renders, so "new" is measured
+  // against the visit before this one — see markVisit.
+  const prevVisit = markVisit().prevVisit;
+
+  const SEV_CLASS: Record<string, string> = {
+    CRITICAL: 'critical',
+    HIGH: 'serious',
+    MEDIUM: 'warning',
+    LOW: 'good',
+  };
+
+  const escapeHtml = (value: string) =>
+    value.replace(/[&<>"']/g, (ch) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] as string,
+    );
+
+  const formatDay = (day: string | null) =>
+    day
+      ? new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        })
+      : '—';
+
+  let rows: CveRow[] = [];
+
+  function render() {
+    if (!results || !status) return;
+    const watched = load().products;
+    const set = new Set(watched);
+
+    if (feeds) {
+      feeds.hidden = watched.length === 0;
+      feeds.innerHTML = watched.length
+        ? `RSS for your products: ${watched
+            .map(
+              (slug) =>
+                `<a href="/feeds/product/${encodeURIComponent(slug)}.xml">${escapeHtml(names[slug] ?? slug)}</a>`,
+            )
+            .join(' · ')}`
+        : '';
+    }
+
+    if (!watched.length) {
+      status.textContent = 'Nothing watched yet.';
+      results.innerHTML = '<p class="empty">Watch a product below to start.</p>';
+      return;
+    }
+
+    const mine = rows.filter((row) => row.p.some((p) => set.has(p)));
+    const fresh = mine.filter((row) => isNewSince(row.d, prevVisit)).length;
+    const since = prevVisit
+      ? new Date(prevVisit).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : null;
+    status.textContent =
+      `${mine.length.toLocaleString()} CVEs across ${watched.length} product${watched.length === 1 ? '' : 's'}` +
+      (since ? ` · ${fresh} new since ${since}` : ' · new CVEs will be marked from your next visit');
+
+    if (!mine.length) {
+      results.innerHTML = '<p class="empty">No CVEs this year or last for these products.</p>';
+      return;
+    }
+
+    const body = mine
+      .slice(0, PAGE_SIZE)
+      .map((row) => {
+        const token = row.s ? (SEV_CLASS[row.s] ?? 'unknown') : 'unknown';
+        const label = row.s ? row.s.charAt(0) + row.s.slice(1).toLowerCase() : 'Unscored';
+        const flags = [
+          isNewSince(row.d, prevVisit) ? '<span class="new-flag">NEW</span>' : '',
+          row.k === 1 ? '<span class="kev-flag">KEV</span>' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const exposure =
+          row.x === 1
+            ? ' <span class="exposure-flag" title="Network attack vector, no privileges, no user interaction">Remote · no auth</span>'
+            : '';
+        const products = row.p
+          .filter((p) => set.has(p))
+          .map((p) => escapeHtml(names[p] ?? p))
+          .join(', ');
+        return `<tr>
+          <td><a class="cve-id" href="/cve/${encodeURIComponent(row.i)}">${escapeHtml(row.i)}</a> ${flags}</td>
+          <td class="muted small">${formatDay(row.d)}</td>
+          <td><span class="sev sev-${token}">${label}${row.c != null ? ` ${row.c}` : ''}</span>${exposure}</td>
+          <td class="small">${products}</td>
+          <td class="num small muted">${row.e != null ? row.e.toFixed(3) : '—'}</td>
+        </tr>`;
+      })
+      .join('');
+
+    results.innerHTML = `<div class="table-scroll"><table>
+      <thead><tr>
+        <th scope="col">CVE</th><th scope="col">Published</th><th scope="col">Severity</th>
+        <th scope="col">Your products</th><th scope="col" class="num">EPSS</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`;
+  }
+
+  async function start() {
+    const year = new Date().getUTCFullYear();
+    const shard = createShardLoader();
+    rows = (await Promise.all([shard(year).catch(() => []), shard(year - 1).catch(() => [])]))
+      .flat()
+      .sort((a, b) => (b.d ?? '').localeCompare(a.d ?? ''));
+    render();
+    window.addEventListener(CHANGE_EVENT, render);
+  }
+
+  start().catch(() => {
+    if (status) status.textContent = 'Could not load CVE data. Try reloading the page.';
+  });
+</script>

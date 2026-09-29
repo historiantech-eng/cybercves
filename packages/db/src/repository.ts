@@ -830,6 +830,34 @@ export class Repository {
   }
 
   /**
+   * Every product with at least one tracked CVE, for the watchlist picker and
+   * the per-product feeds.
+   *
+   * Products with none are left out rather than listed at zero: a feed that can
+   * never have an item, or a watch toggle that can never light up, is a control
+   * that looks broken.
+   */
+  async listProducts() {
+    return this.#db.all<{
+      slug: string;
+      name: string;
+      vendor_slug: string;
+      vendor_name: string;
+      category_slug: string;
+      cve_count: number;
+    }>(
+      `SELECT p.slug, p.name, p.vendor_slug, v.name AS vendor_name, p.category_slug,
+              COUNT(DISTINCT c.cve_id) AS cve_count
+       FROM product p
+       JOIN vendor v       ON v.slug = p.vendor_slug
+       JOIN cve_product cp ON cp.product_slug = p.slug
+       JOIN cve c          ON c.cve_id = cp.cve_id AND c.state = 'PUBLISHED'
+       GROUP BY p.slug, p.name, p.vendor_slug, v.name, p.category_slug
+       ORDER BY v.name, p.name`,
+    );
+  }
+
+  /**
    * Flat CVE index for a year.
    *
    * Deliberately narrow: only the fields the client filters and sorts on, so a

@@ -59,12 +59,14 @@ const { category, race, rows, totalCves, kevCount, years, vendorLabels, severity
   title={category.name}
   description={`${category.description} CVE counts by vendor across ${category.name.toLowerCase()} products.`}
   path={`/categories/${category.slug}`}
+  feed={{ href: `/feeds/category/${category.slug}.xml`, title: `${category.name} CVEs` }}
 >
   <h1>{category.name}</h1>
   <p class="lede">
     {category.description}
     {' '}{totalCves.toLocaleString()} tracked CVEs, {kevCount.toLocaleString()} confirmed exploited.
     {category.is_security !== 1 && ' This category sits outside vendors’ security portfolios and is excluded from risk rankings.'}
+    {' '}<a href={`/feeds/category/${category.slug}.xml`}>RSS feed</a>
   </p>
 
   <SeverityChart

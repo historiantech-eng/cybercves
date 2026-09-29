@@ -4,6 +4,7 @@ import Severity from '../../components/Severity.astro';
 import { db, formatDate } from '../../lib/data';
 import { EXPOSURE_LABELS, affectedStatus, discoverySourceLabel, exposureFromVector } from '@cybercves/core';
 import ReportIssue from '../../components/ReportIssue.astro';
+import WatchButton from '../../components/WatchButton.astro';
 
 export async function getStaticPaths() {
   const repo = db();
@@ -163,7 +164,10 @@ const summary =
                   <td>
                     <a href={`/vendors/${row.vendor_slug}`}>{row.vendor_name}</a>
                   </td>
-                  <td>{row.product_name}</td>
+                  <td>
+                    {row.product_name}{' '}
+                    <WatchButton slug={row.product_slug} name={row.product_name} />
+                  </td>
                   <td class="small muted">
                     <a href={`/categories/${row.category_slug}`}>{row.category_name}</a>
                   </td>
