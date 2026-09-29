@@ -37,6 +37,11 @@ export type MatchSignal =
   | 'description';
 
 export interface NormalizedAffected {
+  /**
+   * Which container stated this: the CNA (the vendor, for the vendors we track)
+   * or an ADP enrichment such as CISA's. See migration 0008 for why it matters.
+   */
+  source: 'cna' | 'adp';
   vendorRaw: string | null;
   productRaw: string | null;
   cpes: string[];

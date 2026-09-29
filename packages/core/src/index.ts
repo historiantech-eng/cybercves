@@ -11,3 +11,4 @@ export * from './normalize.js';
 export * from './scoring.js';
 export * from './taxonomy.js';
 export * from './priority.js';
+export * from './versions.js';

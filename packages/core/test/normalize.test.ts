@@ -84,6 +84,14 @@ describe('normalizeCve — Palo Alto CVE-2024-3400', () => {
     expect(adpEntries[0]?.cpes[0]).toContain('cpe:2.3:o:paloaltonetworks:pan-os');
     expect(adpEntries[0]?.vendorRaw).toBe('paloaltonetworks');
   });
+
+  it('tags each entry with the container that stated it', () => {
+    // /check prefers the vendor's own ranges over ADP's; it can only do that if
+    // normalization says which is which.
+    expect(cve.affected.filter((a) => a.source === 'cna')).toHaveLength(3);
+    expect(cve.affected.filter((a) => a.source === 'adp')).toHaveLength(3);
+    expect(cve.affected.filter((a) => a.source === 'adp').every((a) => a.vendorRaw === 'paloaltonetworks')).toBe(true);
+  });
 });
 
 describe('normalizeCve — Cisco CVE-2023-20198', () => {

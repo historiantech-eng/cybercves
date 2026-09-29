@@ -769,6 +769,27 @@ th.num {
   font-size: 14px;
   padding: 6px 9px;
 }
+.check-submit {
+  background: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  border-radius: 6px;
+  color: var(--surface-1);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 16px;
+}
+
+.check-form input {
+  min-width: 12ch;
+}
+
+.check-verdict {
+  font-size: 17px;
+  margin-top: 0;
+}
+
 .filter-count {
   color: var(--text-secondary);
   font-size: 13px;

@@ -405,10 +405,11 @@ export class Repository {
       for (const affected of cve.affected) {
         statements.push({
           sql: `INSERT INTO cve_affected
-                  (cve_id, vendor_raw, product_raw, cpes, versions, versions_truncated, version_count, default_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                  (cve_id, source, vendor_raw, product_raw, cpes, versions, versions_truncated, version_count, default_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           params: [
             cve.cveId,
+            affected.source,
             affected.vendorRaw,
             affected.productRaw,
             json(affected.cpes),
@@ -866,6 +867,58 @@ export class Repository {
       is_security: number;
       sort: number;
     }>('SELECT slug, name, description, is_security, sort FROM category ORDER BY sort');
+  }
+
+  /**
+   * Every CVE linked to one product, with its raw affected[] entries, for the
+   * build-time /check data. Entries are returned for every product the CVE
+   * names; the caller keeps only those that resolve to this product, using the
+   * same TaxonomyResolver ingest used, so the two cannot disagree.
+   */
+  async listVersionCheckRows(productSlug: string) {
+    const cves = await this.#db.all<{
+      cve_id: string;
+      title: string | null;
+      date_published: string | null;
+      severity: string | null;
+      score: number | null;
+      vector: string | null;
+      solution: string | null;
+      refs: string;
+      in_kev: number;
+      ransomware_known: number;
+      epss: number | null;
+    }>(
+      `SELECT c.cve_id, c.title, c.date_published, c.cvss_severity AS severity,
+              c.cvss_base_score AS score, c.cvss_vector AS vector, c.solution, c.refs,
+              CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
+              COALESCE(k.ransomware_known, 0) AS ransomware_known,
+              e.score AS epss
+       FROM cve_product cp
+       JOIN cve c       ON c.cve_id = cp.cve_id AND c.state = 'PUBLISHED'
+       LEFT JOIN kev k  ON k.cve_id = c.cve_id
+       LEFT JOIN epss e ON e.cve_id = c.cve_id
+       WHERE cp.product_slug = ?
+       ORDER BY c.date_published DESC`,
+      [productSlug],
+    );
+    const entries = await this.#db.all<{
+      cve_id: string;
+      source: string | null;
+      vendor_raw: string | null;
+      product_raw: string | null;
+      versions: string;
+      versions_truncated: number;
+      default_status: string | null;
+    }>(
+      `SELECT a.cve_id, a.source, a.vendor_raw, a.product_raw, a.versions,
+              a.versions_truncated, a.default_status
+       FROM cve_affected a
+       WHERE a.cve_id IN (SELECT cve_id FROM cve_product WHERE product_slug = ?)
+       ORDER BY a.id`,
+      [productSlug],
+    );
+    return { cves, entries };
   }
 
   /** The current EPSS snapshot's scoring day, or null before any enrichment. */

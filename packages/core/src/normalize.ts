@@ -79,6 +79,7 @@ function normalizeAffected(record: CveRecord): NormalizedAffected[] {
       if (!vendorRaw && !productRaw && !entry.cpes?.length) continue;
       const { versions, truncated, total } = normalizeVersions(entry);
       out.push({
+        source: container === record.containers?.cna ? 'cna' : 'adp',
         vendorRaw,
         productRaw,
         cpes: (entry.cpes ?? [])

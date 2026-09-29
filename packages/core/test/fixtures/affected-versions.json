@@ -1,0 +1,560 @@
+{
+ "CVE-2024-21754": [
+  {
+   "source": "cna",
+   "product": "FortiOS",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.4.3",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.2.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.2.8",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.0.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.0.15",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.4.15",
+     "versionType": "semver"
+    }
+   ]
+  }
+ ],
+ "CVE-2024-21762": [
+  {
+   "source": "cna",
+   "product": "FortiOS",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.4.2",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.2.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.2.6",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.0.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.0.13",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.4.14",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.2.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.2.15",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.0.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.0.17",
+     "versionType": "semver"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "fortios",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "6.0.0",
+     "status": "affected",
+     "lessThan": "6.2.16",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "fortios",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "6.4.0",
+     "status": "affected",
+     "lessThan": "6.4.15",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "fortios",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.0.0",
+     "status": "affected",
+     "lessThan": "7.0.14",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "fortios",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.2.0",
+     "status": "affected",
+     "lessThan": "7.2.7",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "fortios",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.4.0",
+     "status": "affected",
+     "lessThan": "7.4.3",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  }
+ ],
+ "CVE-2024-0012": [
+  {
+   "source": "cna",
+   "product": "PAN-OS",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "11.2.0",
+     "status": "affected",
+     "lessThan": "11.2.4-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "11.1.0",
+     "status": "affected",
+     "lessThan": "11.1.5-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "11.0.0",
+     "status": "affected",
+     "lessThan": "11.0.6-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "10.2.0",
+     "status": "affected",
+     "lessThan": "10.2.12-h2",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "10.1.0",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    }
+   ]
+  }
+ ],
+ "CVE-2026-0227": [
+  {
+   "source": "cna",
+   "product": "PAN-OS",
+   "defaultStatus": "affected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "12.1.2",
+     "status": "affected",
+     "lessThan": "12.1.4, 12.1.3-h3",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "11.2.0",
+     "status": "affected",
+     "lessThan": "11.2.10-h2, 11.2.7-h8, 11.2.4-h15",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "11.1.0",
+     "status": "affected",
+     "lessThan": "11.1.13, 11.1.10-h9, 11.1.6-h23, 11.1.4-h27",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "10.2.0",
+     "status": "affected",
+     "lessThan": "10.2.18-h1, 10.2.16-h6, 10.2.13-h18, 10.2.10-h30, 10.2.7-h32",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "10.1.0",
+     "status": "affected",
+     "lessThan": "10.1.14-h20",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  }
+ ],
+ "CVE-2024-0007": [
+  {
+   "source": "cna",
+   "product": "PAN-OS",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "8.1",
+     "status": "affected",
+     "lessThan": "8.1.24-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "8.1",
+     "status": "affected",
+     "lessThan": "8.1.25",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "9.0",
+     "status": "affected",
+     "lessThan": "9.0.17",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "9.1",
+     "status": "affected",
+     "lessThan": "9.1.16",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "10.0",
+     "status": "affected",
+     "lessThan": "10.0.11",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "10.1",
+     "status": "affected",
+     "lessThan": "10.1.6",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "10.2",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "11.0",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "11.1",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    }
+   ]
+  }
+ ],
+ "CVE-2024-23107": [
+  {
+   "source": "cna",
+   "product": "FortiWeb",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "7.2.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.2.4",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.0.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.0.8",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.3.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.3.23",
+     "versionType": "semver"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "fortiweb",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "7.2.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.2.4",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.0.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.0.8",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.3.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.3.23",
+     "versionType": "semver"
+    }
+   ]
+  }
+ ],
+ "CVE-2024-3400": [
+  {
+   "source": "cna",
+   "product": "PAN-OS",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "9.0.0",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "9.1.0",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "10.0.0",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "10.1.0",
+     "status": "unaffected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "10.2.0",
+     "status": "affected",
+     "lessThan": "10.2.9-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "11.0.0",
+     "status": "affected",
+     "lessThan": "11.0.4-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    },
+    {
+     "version": "11.1.0",
+     "status": "affected",
+     "lessThan": "11.1.2-h3",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "pan-os",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "10.2.0",
+     "status": "affected",
+     "lessThan": "10.2.9-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "pan-os",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "11.0.0",
+     "status": "affected",
+     "lessThan": "11.0.4-h1",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  },
+  {
+   "source": "adp",
+   "product": "pan-os",
+   "defaultStatus": "unknown",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "11.1.0",
+     "status": "affected",
+     "lessThan": "11.1.2-h3",
+     "lessThanOrEqual": null,
+     "versionType": "custom"
+    }
+   ]
+  }
+ ],
+ "CVE-2024-47575": [
+  {
+   "source": "cna",
+   "product": "FortiManager",
+   "defaultStatus": "unaffected",
+   "truncated": false,
+   "versions": [
+    {
+     "version": "7.6.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": null,
+     "versionType": null
+    },
+    {
+     "version": "7.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.4.4",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.2.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.2.7",
+     "versionType": "semver"
+    },
+    {
+     "version": "7.0.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "7.0.12",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.4.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.4.14",
+     "versionType": "semver"
+    },
+    {
+     "version": "6.2.0",
+     "status": "affected",
+     "lessThan": null,
+     "lessThanOrEqual": "6.2.12",
+     "versionType": "semver"
+    }
+   ]
+  }
+ ]
+}
