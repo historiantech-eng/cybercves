@@ -196,6 +196,19 @@ describe('pattern precedence', () => {
     expect(resolver.resolveProductName('cisco', 'unified_communications_manager')).toBe('cisco-ucm');
   });
 
+  it("maps Cisco's post-rebrand names to the specific product, not generic Secure Firewall", () => {
+    // '^secure firewall' on cisco-secure-firewall comes first in the file and
+    // used to capture all three, undercounting FTD and FMC and filing FMC under
+    // Firewall / NGFW. These strings are how Cisco writes recent records.
+    const resolve = (raw: string) => resolver.resolveProductNames('cisco', raw, 'Cisco').slugs;
+    expect(resolve('Cisco Secure Firewall Threat Defense (FTD) Software')).toEqual(['cisco-ftd']);
+    expect(resolve('Cisco Secure Firewall Management Center (FMC)')).toEqual(['cisco-fmc']);
+    expect(resolve('Cisco Secure Firewall Adaptive Security Appliance (ASA) Software')).toEqual([
+      'cisco-asa',
+    ]);
+    expect(resolve('Cisco Secure Firewall')).toEqual(['cisco-secure-firewall']);
+  });
+
   it('distinguishes IOS from IOS XE and IOS XR', () => {
     expect(resolver.resolveProductName('cisco', 'ios_xe')).toBe('cisco-ios-xe');
     expect(resolver.resolveProductName('cisco', 'ios_xr')).toBe('cisco-ios-xr');

@@ -37,6 +37,7 @@ products:
     categorySlug: firewall
     aliases:
       - Cisco Adaptive Security Appliance (ASA) Software
+      - Cisco Secure Firewall Adaptive Security Appliance (ASA) Software
       - Cisco ASA
       - Cisco Adaptive Security Appliance
     patterns: ['\badaptive security appliance\b', '^(cisco )?asa\b']
@@ -47,8 +48,12 @@ products:
     aliases:
       - Cisco Firepower Threat Defense Software
       - Cisco Firepower Threat Defense
+      # Cisco's name since the Secure Firewall rebrand. Without it the string
+      # fell through to cisco-secure-firewall's '^secure firewall' pattern, and
+      # 46 FTD entries were counted under the generic product instead of FTD.
+      - Cisco Secure Firewall Threat Defense (FTD) Software
       - Cisco FTD
-    patterns: ['\bfirepower threat defense\b']
+    patterns: ['\bfirepower threat defense\b', '\bfirewall threat defense\b']
 
   - slug: cisco-secure-firewall
     name: Cisco Secure Firewall
@@ -62,6 +67,9 @@ products:
     aliases:
       - Cisco Firepower Management Center
       - Cisco Secure Firewall Management Center
+      # As written on post-rebrand records. Same fall-through as FTD above, and
+      # worse: it filed a management-plane product under Firewall / NGFW.
+      - Cisco Secure Firewall Management Center (FMC)
       - Cisco FMC
     patterns: ['\bfirepower management center\b', '\bfirewall management center\b']
 
