@@ -1,4 +1,7 @@
 import type { EpssEntry } from '@cybercves/core';
+// Defined in core so the ingest step and the page that reads the result agree
+// on which days "7 and 30 days ago" are.
+export { EPSS_HISTORY_DAYS, epssDayBefore } from '@cybercves/core';
 import { fetchWithRetry } from '../http.js';
 
 /**
@@ -13,6 +16,17 @@ import { fetchWithRetry } from '../http.js';
  */
 
 export const EPSS_CSV_URL = 'https://epss.empiricalsecurity.com/epss_scores-current.csv.gz';
+
+/**
+ * FIRST's archived snapshot for one scoring day (YYYY-MM-DD).
+ *
+ * Same format as the current file. Verified live 2026-09-29 against
+ * epss_scores-2026-09-01.csv.gz (HTTP 200, ~2.5 MB).
+ */
+export function epssUrlForDate(day: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error(`not a YYYY-MM-DD date: ${day}`);
+  return `https://epss.empiricalsecurity.com/epss_scores-${day}.csv.gz`;
+}
 
 export const EPSS_ATTRIBUTION = 'EPSS data courtesy of FIRST — https://first.org/epss';
 

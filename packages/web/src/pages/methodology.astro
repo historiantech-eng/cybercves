@@ -1,7 +1,12 @@
 ---
 import Base from '../layouts/Base.astro';
 import { db } from '../lib/data';
-import { EXPOSURE_LABELS, discoverySourceLabel, methodology } from '@cybercves/core';
+import {
+  EXPOSURE_LABELS,
+  PRIORITY_TIERS,
+  discoverySourceLabel,
+  methodology,
+} from '@cybercves/core';
 
 // Rendered straight from the scoring module, so the published formula cannot
 // drift from the one that produced the numbers on the rest of the site.
@@ -207,6 +212,26 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
         not exposed to the internet is not reachable by an internet attacker, whatever the
         vector says. CVSS v2 vectors have no privileges or user-interaction metrics, so they are
         never marked as needing no authentication.
+      </p>
+    </div>
+  </section>
+
+  <section class="section" id="priority">
+    <div class="card">
+      <h2>Patch priority</h2>
+      <p class="muted">
+        <a href="/priority">Priority</a> sorts tracked CVEs into three tiers, checked in order: a
+        CVE lands in the first tier whose rule it meets. Tiers, not a blended score, so that
+        every placement comes with reasons a reader can verify.
+      </p>
+      <ol class="muted">
+        {PRIORITY_TIERS.map((t) => <li><strong>{t.label}.</strong> {t.rule}</li>)}
+      </ol>
+      <p class="muted">
+        EPSS rises are measured against FIRST's archived daily snapshot from that many days
+        before the current one. When the archive could not be fetched for a build, no rise is
+        claimed and the page says so. Priority describes exploitation evidence, not your
+        exposure: whether a CVE affects you depends on the version you run.
       </p>
     </div>
   </section>

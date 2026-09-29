@@ -45,3 +45,13 @@ export const PUSHED_TABLES = [
  * shorten this list.
  */
 export const NEVER_PUSHED_TABLES = ['feedback', 'subscriber'] as const;
+
+/**
+ * Derived tables that exist only for the static build and never reach D1.
+ *
+ * Unlike NEVER_PUSHED_TABLES these CAN be rebuilt — they are left out of the
+ * push because the Worker never reads them and every pushed row costs a D1
+ * write against the free plan's 100,000/day. `epss_history` alone would be
+ * ~3,200 writes a night for a table only the prerendered /priority page uses.
+ */
+export const LOCAL_ONLY_TABLES = ['epss_history'] as const;

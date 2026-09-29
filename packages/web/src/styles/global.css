@@ -256,6 +256,22 @@ a:hover {
   white-space: nowrap;
 }
 
+/* Why a CVE is on /priority. One chip per reason so each can be read alone. */
+.reason-chip {
+  border: 1px solid var(--gridline);
+  border-radius: 4px;
+  display: inline-block;
+  font-size: 11px;
+  margin: 1px 4px 1px 0;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.fix-cell {
+  max-width: 34ch;
+  min-width: 20ch;
+}
+
 /* ---------------------------------------------------------------- layout */
 
 .card {

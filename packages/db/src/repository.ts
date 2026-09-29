@@ -504,6 +504,45 @@ export class Repository {
     return written;
   }
 
+  /**
+   * Store one archived EPSS snapshot for the CVEs we track (see epss_history).
+   *
+   * Takes the snapshot's own `asOf` from each entry rather than a caller-supplied
+   * date, so a file whose header disagrees with its URL is stored as what it
+   * says it is — and the page then compares against the day it really was.
+   */
+  async upsertEpssHistoryForKnownCves(entries: readonly EpssEntry[]): Promise<number> {
+    if (!entries.length) return 0;
+    let written = 0;
+    for (let i = 0; i < entries.length; i += 400) {
+      const chunk = entries.slice(i, i + 400);
+      const ids = chunk.map((e) => e.cveId);
+      const known = new Set(
+        (
+          await this.#db.all<{ cve_id: string }>(
+            `SELECT cve_id FROM cve WHERE cve_id IN (${ids.map(() => '?').join(',')})`,
+            ids as SqlValue[],
+          )
+        ).map((r) => r.cve_id),
+      );
+      const relevant = chunk.filter((e) => known.has(e.cveId));
+      if (!relevant.length) continue;
+
+      await this.#db.batch(
+        relevant.map((e) => ({
+          sql: `INSERT INTO epss_history (cve_id, as_of, score, percentile)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(cve_id, as_of) DO UPDATE SET
+                  score = excluded.score,
+                  percentile = excluded.percentile`,
+          params: [e.cveId, e.asOf, e.score, e.percentile] as SqlValue[],
+        })),
+      );
+      written += relevant.length;
+    }
+    return written;
+  }
+
   // -------------------------------------------------------------------------
   // Taxonomy review queue
   // -------------------------------------------------------------------------
@@ -827,6 +866,73 @@ export class Repository {
       is_security: number;
       sort: number;
     }>('SELECT slug, name, description, is_security, sort FROM category ORDER BY sort');
+  }
+
+  /** The current EPSS snapshot's scoring day, or null before any enrichment. */
+  async getEpssAsOf(): Promise<string | null> {
+    const row = await this.#db.first<{ as_of: string | null }>('SELECT MAX(as_of) AS as_of FROM epss');
+    return row?.as_of ?? null;
+  }
+
+  /** Scoring days present in epss_history, newest first. */
+  async listEpssHistoryDays(): Promise<string[]> {
+    const rows = await this.#db.all<{ as_of: string }>(
+      'SELECT DISTINCT as_of FROM epss_history ORDER BY as_of DESC',
+    );
+    return rows.map((r) => r.as_of);
+  }
+
+  /**
+   * Every tracked CVE with what /priority needs to place it in a tier.
+   *
+   * All of them, not a pre-filtered set: the tier rules live in core/priority.ts
+   * and are applied at build time, so the SQL cannot quietly encode a different
+   * rule from the one /methodology prints. ~1,600 rows, build-time only.
+   *
+   * `epss_7d` / `epss_30d` are the archived scores for the two given days, null
+   * when that day was not fetched or the CVE had no score yet.
+   */
+  async listPriorityCandidates(day7: string | null, day30: string | null) {
+    return this.#db.all<{
+      cve_id: string;
+      title: string | null;
+      date_published: string | null;
+      severity: string | null;
+      score: number | null;
+      vector: string | null;
+      solution: string | null;
+      in_kev: number;
+      ransomware_known: number;
+      kev_date_added: string | null;
+      epss: number | null;
+      epss_7d: number | null;
+      epss_30d: number | null;
+      vendors: string | null;
+      products: string | null;
+      categories: string | null;
+    }>(
+      `SELECT c.cve_id, c.title, c.date_published,
+              c.cvss_severity AS severity, c.cvss_base_score AS score, c.cvss_vector AS vector,
+              c.solution,
+              CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
+              COALESCE(k.ransomware_known, 0) AS ransomware_known,
+              k.date_added AS kev_date_added,
+              e.score AS epss, h7.score AS epss_7d, h30.score AS epss_30d,
+              (SELECT GROUP_CONCAT(DISTINCT cp.vendor_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS vendors,
+              (SELECT GROUP_CONCAT(DISTINCT cp.product_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS products,
+              (SELECT GROUP_CONCAT(DISTINCT p.category_slug)
+                 FROM cve_product cp JOIN product p ON p.slug = cp.product_slug
+                WHERE cp.cve_id = c.cve_id) AS categories
+       FROM cve c
+       LEFT JOIN kev k           ON k.cve_id = c.cve_id
+       LEFT JOIN epss e          ON e.cve_id = c.cve_id
+       LEFT JOIN epss_history h7  ON h7.cve_id = c.cve_id AND h7.as_of = ?
+       LEFT JOIN epss_history h30 ON h30.cve_id = c.cve_id AND h30.as_of = ?
+       WHERE c.state = 'PUBLISHED'
+         AND EXISTS (SELECT 1 FROM cve_product cp WHERE cp.cve_id = c.cve_id)
+       ORDER BY c.date_published DESC`,
+      [day7, day30],
+    );
   }
 
   /**
