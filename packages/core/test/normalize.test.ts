@@ -84,6 +84,14 @@ describe('normalizeCve — Palo Alto CVE-2024-3400', () => {
     expect(adpEntries[0]?.cpes[0]).toContain('cpe:2.3:o:paloaltonetworks:pan-os');
     expect(adpEntries[0]?.vendorRaw).toBe('paloaltonetworks');
   });
+
+  it('tags each entry with the container that stated it', () => {
+    // /check prefers the vendor's own ranges over ADP's; it can only do that if
+    // normalization says which is which.
+    expect(cve.affected.filter((a) => a.source === 'cna')).toHaveLength(3);
+    expect(cve.affected.filter((a) => a.source === 'adp')).toHaveLength(3);
+    expect(cve.affected.filter((a) => a.source === 'adp').every((a) => a.vendorRaw === 'paloaltonetworks')).toBe(true);
+  });
 });
 
 describe('normalizeCve — Cisco CVE-2023-20198', () => {
@@ -202,5 +210,27 @@ describe('CPE capping', () => {
     // the resolver uses.
     expect(entry.cpes[0]).toContain('cpe:2.3:o:cisco:ios_xe');
     expect(JSON.stringify(entry.cpes).length).toBeLessThan(5_000);
+  });
+});
+
+describe('packVersions', () => {
+  it('round-trips a range list, dropping only versionType', async () => {
+    const { packVersions, unpackVersions } = await import('../src/normalize.js');
+    const ranges = [
+      { version: '11.1.0', status: 'affected', lessThan: '11.1.13, 11.1.6-h23', lessThanOrEqual: null, versionType: 'custom' },
+      { version: '9.16.4.48', status: 'affected', lessThan: null, lessThanOrEqual: null, versionType: null },
+      { version: '7.2.0', status: 'affected', lessThan: null, lessThanOrEqual: '7.2.8', versionType: 'semver' },
+    ];
+    const packed = packVersions(ranges);
+    expect(packed).toBe('[["11.1.0","affected","11.1.13, 11.1.6-h23"],["9.16.4.48","affected"],["7.2.0","affected",null,"7.2.8"]]');
+    expect(unpackVersions(packed)).toEqual(ranges.map((r) => ({ ...r, versionType: null })));
+  });
+
+  it('keeps the full list only when the cap applies', () => {
+    const cve = normalizeCve(fixture('CVE-2023-20198'));
+    const xe = cve.affected.find((a) => a.source === 'cna')!;
+    expect(xe.versions).toHaveLength(50);
+    expect(xe.fullVersions).toHaveLength(186);
+    expect(normalizeCve(fixture('CVE-2024-3400')).affected.every((a) => a.fullVersions === null)).toBe(true);
   });
 });

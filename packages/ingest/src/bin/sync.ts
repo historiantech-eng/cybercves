@@ -6,6 +6,7 @@ import { migrate } from '@cybercves/db/migrate';
 import { changedEntries, fetchDelta, fetchRecords } from '../sources/cvelist.js';
 import { fetchKev } from '../sources/kev.js';
 import { fetchEpss } from '../sources/epss.js';
+import { refreshEpssHistory } from '../epss-history.js';
 import { ingestRecords } from '../pipeline.js';
 import { loadConfig } from '../node/config-loader.js';
 
@@ -57,7 +58,7 @@ try {
   }
 
   const records = fetched.flatMap((f) => (f.record ? [f.record] : []));
-  const summary = await ingestRecords(repo, config.resolver, records);
+  const summary = await ingestRecords(repo, config.resolver, records, { fullVersions: true });
   console.log(
     `ingest: ${summary.inserted} new, ${summary.updated} updated, ${summary.skipped} unchanged, ` +
       `${summary.unmatched} not ours, ${summary.rejected} withdrawn, ` +
@@ -71,6 +72,7 @@ try {
     const epss = await fetchEpss();
     const written = await repo.upsertEpssForKnownCves(epss.entries);
     console.log(`epss: ${written} of ${epss.entries.length} scores kept (as of ${epss.asOf})`);
+    await refreshEpssHistory(repo, epss.asOf);
   }
 
   await repo.setSyncState('cvelist:fetchTime', feed.fetchTime);

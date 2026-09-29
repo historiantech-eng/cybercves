@@ -8,7 +8,7 @@ import type {
   UnmappedProduct,
   VendorFileConfig,
 } from '@cybercves/core';
-import { normalizeKey, publishedYear } from '@cybercves/core';
+import { normalizeKey, packVersions, publishedYear, unpackVersions } from '@cybercves/core';
 import type { SqlDriver, SqlValue, Statement } from './driver.js';
 
 /**
@@ -323,6 +323,16 @@ export class Repository {
        * it burns D1's write budget rewriting rows whose content did not change.
        */
       reresolve?: boolean;
+      /**
+       * Also store full version lists for capped entries, in the build-only
+       * affected_versions_full table (migration 0009).
+       *
+       * Node pipeline only. The Worker must leave this off: that table is never
+       * pushed to D1, and filling it there would spend write budget on rows
+       * nothing at runtime reads. Relies on last_insert_rowid(), which is sound
+       * because the Node driver runs a batch in order on one connection.
+       */
+      fullVersions?: boolean;
     } = {},
   ): Promise<UpsertResult> {
     const result: UpsertResult = { inserted: 0, updated: 0, skipped: 0 };
@@ -401,14 +411,21 @@ export class Repository {
       // Affected entries and product links are replaced rather than merged: an
       // upstream revision can remove an affected product, and a merge would keep
       // showing a product the vendor has since said is unaffected.
+      if (options.fullVersions) {
+        statements.push({
+          sql: 'DELETE FROM affected_versions_full WHERE cve_id = ?',
+          params: [cve.cveId],
+        });
+      }
       statements.push({ sql: 'DELETE FROM cve_affected WHERE cve_id = ?', params: [cve.cveId] });
       for (const affected of cve.affected) {
         statements.push({
           sql: `INSERT INTO cve_affected
-                  (cve_id, vendor_raw, product_raw, cpes, versions, versions_truncated, version_count, default_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                  (cve_id, source, vendor_raw, product_raw, cpes, versions, versions_truncated, version_count, default_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           params: [
             cve.cveId,
+            affected.source,
             affected.vendorRaw,
             affected.productRaw,
             json(affected.cpes),
@@ -418,6 +435,13 @@ export class Repository {
             affected.defaultStatus,
           ],
         });
+        if (options.fullVersions && affected.fullVersions) {
+          statements.push({
+            sql: `INSERT INTO affected_versions_full (affected_id, cve_id, versions)
+                  VALUES (last_insert_rowid(), ?, ?)`,
+            params: [cve.cveId, packVersions(affected.fullVersions)],
+          });
+        }
       }
 
       statements.push({ sql: 'DELETE FROM cve_product WHERE cve_id = ?', params: [cve.cveId] });
@@ -497,6 +521,45 @@ export class Repository {
                   percentile = excluded.percentile,
                   as_of = excluded.as_of`,
           params: [e.cveId, e.score, e.percentile, e.asOf] as SqlValue[],
+        })),
+      );
+      written += relevant.length;
+    }
+    return written;
+  }
+
+  /**
+   * Store one archived EPSS snapshot for the CVEs we track (see epss_history).
+   *
+   * Takes the snapshot's own `asOf` from each entry rather than a caller-supplied
+   * date, so a file whose header disagrees with its URL is stored as what it
+   * says it is — and the page then compares against the day it really was.
+   */
+  async upsertEpssHistoryForKnownCves(entries: readonly EpssEntry[]): Promise<number> {
+    if (!entries.length) return 0;
+    let written = 0;
+    for (let i = 0; i < entries.length; i += 400) {
+      const chunk = entries.slice(i, i + 400);
+      const ids = chunk.map((e) => e.cveId);
+      const known = new Set(
+        (
+          await this.#db.all<{ cve_id: string }>(
+            `SELECT cve_id FROM cve WHERE cve_id IN (${ids.map(() => '?').join(',')})`,
+            ids as SqlValue[],
+          )
+        ).map((r) => r.cve_id),
+      );
+      const relevant = chunk.filter((e) => known.has(e.cveId));
+      if (!relevant.length) continue;
+
+      await this.#db.batch(
+        relevant.map((e) => ({
+          sql: `INSERT INTO epss_history (cve_id, as_of, score, percentile)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(cve_id, as_of) DO UPDATE SET
+                  score = excluded.score,
+                  percentile = excluded.percentile`,
+          params: [e.cveId, e.asOf, e.score, e.percentile] as SqlValue[],
         })),
       );
       written += relevant.length;
@@ -830,6 +893,163 @@ export class Repository {
   }
 
   /**
+   * Every CVE linked to one product, with its raw affected[] entries, for the
+   * build-time /check data. Entries are returned for every product the CVE
+   * names; the caller keeps only those that resolve to this product, using the
+   * same TaxonomyResolver ingest used, so the two cannot disagree.
+   */
+  async listVersionCheckRows(productSlug: string) {
+    const cves = await this.#db.all<{
+      cve_id: string;
+      title: string | null;
+      date_published: string | null;
+      severity: string | null;
+      score: number | null;
+      vector: string | null;
+      solution: string | null;
+      refs: string;
+      in_kev: number;
+      ransomware_known: number;
+      epss: number | null;
+    }>(
+      `SELECT c.cve_id, c.title, c.date_published, c.cvss_severity AS severity,
+              c.cvss_base_score AS score, c.cvss_vector AS vector, c.solution, c.refs,
+              CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
+              COALESCE(k.ransomware_known, 0) AS ransomware_known,
+              e.score AS epss
+       FROM cve_product cp
+       JOIN cve c       ON c.cve_id = cp.cve_id AND c.state = 'PUBLISHED'
+       LEFT JOIN kev k  ON k.cve_id = c.cve_id
+       LEFT JOIN epss e ON e.cve_id = c.cve_id
+       WHERE cp.product_slug = ?
+       ORDER BY c.date_published DESC`,
+      [productSlug],
+    );
+    // The full list replaces the capped one where the build-only table has it;
+    // `truncated` then reflects what the caller actually holds, not what the
+    // capped row once said.
+    const rows = await this.#db.all<{
+      cve_id: string;
+      source: string | null;
+      vendor_raw: string | null;
+      product_raw: string | null;
+      versions: string;
+      versions_truncated: number;
+      default_status: string | null;
+      full: string | null;
+    }>(
+      `SELECT a.cve_id, a.source, a.vendor_raw, a.product_raw, a.versions,
+              a.versions_truncated, a.default_status, f.versions AS full
+       FROM cve_affected a
+       LEFT JOIN affected_versions_full f ON f.affected_id = a.id
+       WHERE a.cve_id IN (SELECT cve_id FROM cve_product WHERE product_slug = ?)
+       ORDER BY a.id`,
+      [productSlug],
+    );
+    const entries = rows.map(({ full, ...row }) =>
+      full
+        ? { ...row, versions: JSON.stringify(unpackVersions(full)), versions_truncated: 0 }
+        : row,
+    );
+    return { cves, entries };
+  }
+
+  /** The current EPSS snapshot's scoring day, or null before any enrichment. */
+  async getEpssAsOf(): Promise<string | null> {
+    const row = await this.#db.first<{ as_of: string | null }>('SELECT MAX(as_of) AS as_of FROM epss');
+    return row?.as_of ?? null;
+  }
+
+  /** Scoring days present in epss_history, newest first. */
+  async listEpssHistoryDays(): Promise<string[]> {
+    const rows = await this.#db.all<{ as_of: string }>(
+      'SELECT DISTINCT as_of FROM epss_history ORDER BY as_of DESC',
+    );
+    return rows.map((r) => r.as_of);
+  }
+
+  /**
+   * Every tracked CVE with what /priority needs to place it in a tier.
+   *
+   * All of them, not a pre-filtered set: the tier rules live in core/priority.ts
+   * and are applied at build time, so the SQL cannot quietly encode a different
+   * rule from the one /methodology prints. ~1,600 rows, build-time only.
+   *
+   * `epss_7d` / `epss_30d` are the archived scores for the two given days, null
+   * when that day was not fetched or the CVE had no score yet.
+   */
+  async listPriorityCandidates(day7: string | null, day30: string | null) {
+    return this.#db.all<{
+      cve_id: string;
+      title: string | null;
+      date_published: string | null;
+      severity: string | null;
+      score: number | null;
+      vector: string | null;
+      solution: string | null;
+      in_kev: number;
+      ransomware_known: number;
+      kev_date_added: string | null;
+      epss: number | null;
+      epss_7d: number | null;
+      epss_30d: number | null;
+      vendors: string | null;
+      products: string | null;
+      categories: string | null;
+    }>(
+      `SELECT c.cve_id, c.title, c.date_published,
+              c.cvss_severity AS severity, c.cvss_base_score AS score, c.cvss_vector AS vector,
+              c.solution,
+              CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
+              COALESCE(k.ransomware_known, 0) AS ransomware_known,
+              k.date_added AS kev_date_added,
+              e.score AS epss, h7.score AS epss_7d, h30.score AS epss_30d,
+              (SELECT GROUP_CONCAT(DISTINCT cp.vendor_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS vendors,
+              (SELECT GROUP_CONCAT(DISTINCT cp.product_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS products,
+              (SELECT GROUP_CONCAT(DISTINCT p.category_slug)
+                 FROM cve_product cp JOIN product p ON p.slug = cp.product_slug
+                WHERE cp.cve_id = c.cve_id) AS categories
+       FROM cve c
+       LEFT JOIN kev k           ON k.cve_id = c.cve_id
+       LEFT JOIN epss e          ON e.cve_id = c.cve_id
+       LEFT JOIN epss_history h7  ON h7.cve_id = c.cve_id AND h7.as_of = ?
+       LEFT JOIN epss_history h30 ON h30.cve_id = c.cve_id AND h30.as_of = ?
+       WHERE c.state = 'PUBLISHED'
+         AND EXISTS (SELECT 1 FROM cve_product cp WHERE cp.cve_id = c.cve_id)
+       ORDER BY c.date_published DESC`,
+      [day7, day30],
+    );
+  }
+
+  /**
+   * Every product with at least one tracked CVE, for the watchlist picker and
+   * the per-product feeds.
+   *
+   * Products with none are left out rather than listed at zero: a feed that can
+   * never have an item, or a watch toggle that can never light up, is a control
+   * that looks broken.
+   */
+  async listProducts() {
+    return this.#db.all<{
+      slug: string;
+      name: string;
+      vendor_slug: string;
+      vendor_name: string;
+      category_slug: string;
+      cve_count: number;
+    }>(
+      `SELECT p.slug, p.name, p.vendor_slug, v.name AS vendor_name, p.category_slug,
+              COUNT(DISTINCT c.cve_id) AS cve_count
+       FROM product p
+       JOIN vendor v       ON v.slug = p.vendor_slug
+       JOIN cve_product cp ON cp.product_slug = p.slug
+       JOIN cve c          ON c.cve_id = cp.cve_id AND c.state = 'PUBLISHED'
+       GROUP BY p.slug, p.name, p.vendor_slug, v.name, p.category_slug
+       ORDER BY v.name, p.name`,
+    );
+  }
+
+  /**
    * Flat CVE index for a year.
    *
    * Deliberately narrow: only the fields the client filters and sorts on, so a
@@ -842,6 +1062,7 @@ export class Repository {
       date_published: string | null;
       severity: string | null;
       score: number | null;
+      vector: string | null;
       discovery: string | null;
       in_kev: number;
       epss: number | null;
@@ -853,6 +1074,7 @@ export class Repository {
               c.date_published,
               c.cvss_severity AS severity,
               c.cvss_base_score AS score,
+              c.cvss_vector AS vector,
               c.discovery,
               CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
               e.score AS epss,
@@ -996,6 +1218,7 @@ export class Repository {
       date_added: string;
       severity: string | null;
       score: number | null;
+      vector: string | null;
       epss: number | null;
       vendors: string | null;
       products: string | null;
@@ -1004,7 +1227,7 @@ export class Repository {
       days: number | null;
     }>(
       `SELECT c.cve_id, c.date_published, k.date_added,
-              c.cvss_severity AS severity, c.cvss_base_score AS score,
+              c.cvss_severity AS severity, c.cvss_base_score AS score, c.cvss_vector AS vector,
               e.score AS epss, k.ransomware_known, 1 AS in_kev,
               ${KEV_LAG_SQL} AS days,
               (SELECT GROUP_CONCAT(DISTINCT cp.vendor_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS vendors,
@@ -1135,12 +1358,14 @@ export class Repository {
       date_published: string | null;
       severity: string | null;
       score: number | null;
+      vector: string | null;
       in_kev: number;
       epss: number | null;
       vendors: string | null;
       products: string | null;
     }>(
       `SELECT c.cve_id, c.date_published, c.cvss_severity AS severity, c.cvss_base_score AS score,
+              c.cvss_vector AS vector,
               CASE WHEN k.cve_id IS NOT NULL THEN 1 ELSE 0 END AS in_kev,
               e.score AS epss,
               (SELECT GROUP_CONCAT(DISTINCT cp.vendor_slug) FROM cve_product cp WHERE cp.cve_id = c.cve_id) AS vendors,

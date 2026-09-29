@@ -653,3 +653,39 @@ describe('discovery attribution', () => {
     expect(row?.discovery).toBe('INTERNAL');
   });
 });
+
+describe('full version lists (build-only)', () => {
+  // CVE-2023-20198 enumerates 186 IOS XE releases; cve_affected keeps 50.
+  const full = (options: { fullVersions?: boolean } = {}) => {
+    const cve = fixture('CVE-2023-20198');
+    return repo.upsertCves([{ cve, resolved: resolver.resolve(cve).resolved }], undefined, options);
+  };
+
+  it('keeps the capped row and stores the whole list beside it', async () => {
+    await full({ fullVersions: true });
+    const capped = await db.all<{ n: number; t: number }>(
+      `SELECT json_array_length(versions) AS n, versions_truncated AS t FROM cve_affected WHERE cve_id = 'CVE-2023-20198'`,
+    );
+    expect(capped[0]).toEqual({ n: 50, t: 1 });
+
+    const { entries } = await repo.listVersionCheckRows('cisco-ios-xe');
+    const versions = JSON.parse(entries[0]!.versions) as Array<{ version: string }>;
+    expect(versions).toHaveLength(186);
+    expect(entries[0]!.versions_truncated).toBe(0);
+  });
+
+  it('does not duplicate or orphan rows when a CVE is rewritten', async () => {
+    await full({ fullVersions: true });
+    await full({ fullVersions: true });
+    const rows = await db.all<{ n: number }>('SELECT COUNT(*) AS n FROM affected_versions_full');
+    expect(rows[0]!.n).toBe(1);
+  });
+
+  it('writes nothing there unless asked — the Worker path never is', async () => {
+    await full();
+    const rows = await db.all<{ n: number }>('SELECT COUNT(*) AS n FROM affected_versions_full');
+    expect(rows[0]!.n).toBe(0);
+    const { entries } = await repo.listVersionCheckRows('cisco-ios-xe');
+    expect(entries[0]!.versions_truncated).toBe(1);
+  });
+});

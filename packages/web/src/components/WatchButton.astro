@@ -1,0 +1,56 @@
+---
+/**
+ * Toggle one product in the reader's watchlist (see lib/watchlist.ts).
+ *
+ * Rendered as an inert, hidden button: the script reveals it only once it knows
+ * storage works. A watch control that silently fails to remember anything is
+ * worse than no control.
+ */
+interface Props {
+  slug: string;
+  name: string;
+}
+const { slug, name } = Astro.props;
+---
+
+<button
+  class="watch-toggle"
+  type="button"
+  data-watch={slug}
+  aria-pressed="false"
+  aria-label={`Watch ${name}`}
+  hidden
+>
+  <span data-watch-label>☆ Watch</span>
+</button>
+
+<script>
+  import { CHANGE_EVENT, load, save, toggle } from '../lib/watchlist';
+
+  function storageWorks(): boolean {
+    // Round-trip the real list rather than a probe key, so a success here means
+    // the same write toggle() will do will succeed.
+    return save(load());
+  }
+
+  function sync() {
+    const watched = new Set(load().products);
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-watch]')) {
+      const on = watched.has(button.dataset.watch ?? '');
+      button.setAttribute('aria-pressed', String(on));
+      const label = button.querySelector('[data-watch-label]');
+      if (label) label.textContent = on ? '★ Watching' : '☆ Watch';
+    }
+  }
+
+  if (storageWorks()) {
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-watch]')) {
+      button.hidden = false;
+      button.addEventListener('click', () => {
+        if (button.dataset.watch) toggle(button.dataset.watch);
+      });
+    }
+    sync();
+    window.addEventListener(CHANGE_EVENT, sync);
+  }
+</script>

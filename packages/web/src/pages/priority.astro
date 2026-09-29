@@ -1,0 +1,316 @@
+---
+import Base from '../layouts/Base.astro';
+import Severity from '../components/Severity.astro';
+import { db, formatDate } from '../lib/data';
+import {
+  EPSS_HISTORY_DAYS,
+  PRIORITY,
+  PRIORITY_TIERS,
+  comparePriority,
+  epssDayBefore,
+  exposureFromVector,
+  priorityTier,
+  type PriorityTier,
+} from '@cybercves/core';
+
+const repo = db();
+const vendors = repo ? await repo.listVendors() : [];
+const categories = repo ? await repo.listCategories() : [];
+const vendorNames = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
+
+// Which archived days the build was supposed to fetch, and which it actually
+// has. A day that failed to download is reported as missing, never guessed at.
+const asOf = repo ? await repo.getEpssAsOf() : null;
+const [shortDays, longDays] = EPSS_HISTORY_DAYS;
+const available = new Set(repo ? await repo.listEpssHistoryDays() : []);
+const dayShort = asOf ? epssDayBefore(asOf, shortDays) : null;
+const dayLong = asOf ? epssDayBefore(asOf, longDays) : null;
+const hasShort = dayShort !== null && available.has(dayShort);
+const hasLong = dayLong !== null && available.has(dayLong);
+
+const candidates = repo
+  ? await repo.listPriorityCandidates(hasShort ? dayShort : null, hasLong ? dayLong : null)
+  : [];
+
+const split = (value: string | null) => (value ?? '').split(',').filter(Boolean);
+
+const ranked = candidates
+  .map((row) => {
+    const exposure = exposureFromVector(row.vector);
+    const result = priorityTier({
+      inKev: row.in_kev === 1,
+      ransomware: row.ransomware_known === 1,
+      epss: row.epss,
+      // No archived score means no rise can be claimed — see priorityTier.
+      epssPrior: hasLong ? row.epss_30d : null,
+      severity: row.severity,
+      exposure,
+      published: row.date_published,
+    });
+    return { ...row, ...result, exposure, ransomware: row.ransomware_known === 1 };
+  })
+  .filter((row) => row.tier !== null)
+  .sort(comparePriority);
+
+const byTier = new Map<PriorityTier, typeof ranked>();
+for (const row of ranked) {
+  const tier = row.tier as PriorityTier;
+  const bucket = byTier.get(tier);
+  if (bucket) bucket.push(row);
+  else byTier.set(tier, [row]);
+}
+
+/** Biggest absolute EPSS rises over one window, largest first. */
+function movers(window: 'epss_7d' | 'epss_30d', limit = 10) {
+  return candidates
+    .filter((row) => row.epss != null && row[window] != null && row.epss - row[window]! > 0)
+    .map((row) => ({ ...row, prior: row[window]!, rise: row.epss! - row[window]! }))
+    .sort((a, b) => b.rise - a.rise)
+    .slice(0, limit);
+}
+const moversShort = hasShort ? movers('epss_7d') : [];
+const moversLong = hasLong ? movers('epss_30d') : [];
+
+/** First sentence-ish of the vendor's fix text; the full text is on the CVE page. */
+function fixSummary(solution: string | null): string | null {
+  if (!solution) return null;
+  const flat = solution.replace(/\s+/g, ' ').trim();
+  return flat.length > 180 ? `${flat.slice(0, 177).trimEnd()}…` : flat;
+}
+---
+
+<Base
+  title="Patch priority"
+  description="Which tracked CVEs to patch first: known exploited, likely to be exploited, and new remote no-auth bugs, with the reasons and the vendor's fix."
+>
+  <h1>Patch priority</h1>
+  <p class="lede">
+    Tracked CVEs sorted into three tiers by evidence of exploitation, each with the reasons it
+    is here and the vendor's fix. This ranks what attackers are doing, not what you run.
+    Whether a CVE affects <em>you</em> depends on your product and version:{' '}
+    <a href="/check">check your version</a>.
+  </p>
+
+  <div class="filters" role="group" aria-label="Filter priority list">
+    <div>
+      <label for="p-vendor">Vendor</label>
+      <select id="p-vendor" data-priority-vendor>
+        <option value="">All vendors</option>
+        {vendors.map((v) => <option value={v.slug}>{v.name}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="p-category">Category</label>
+      <select id="p-category" data-priority-category>
+        <option value="">All categories</option>
+        {categories.map((c) => <option value={c.slug}>{c.name}</option>)}
+      </select>
+    </div>
+    <span class="filter-count" data-priority-count>{ranked.length.toLocaleString()} CVEs</span>
+  </div>
+
+  {
+    PRIORITY_TIERS.map(({ tier, label, rule }) => {
+      const rows = byTier.get(tier) ?? [];
+      return (
+        <section class="section" data-priority-tier={tier}>
+          <div class="section-head">
+            <div>
+              <h2>
+                Tier {tier}: {label}{' '}
+                <span class="muted small" data-tier-count>
+                  ({rows.length.toLocaleString()})
+                </span>
+              </h2>
+              <p>
+                {rule}
+                {tier === 2 && !hasLong && (
+                  <strong>
+                    {' '}
+                    EPSS history was unavailable for this build, so only the score threshold is
+                    applied.
+                  </strong>
+                )}
+              </p>
+            </div>
+          </div>
+          <div class="card">
+            {rows.length === 0 ? (
+              <p class="empty">Nothing in this tier.</p>
+            ) : (
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">CVE</th>
+                      <th scope="col">Severity</th>
+                      <th scope="col">Vendor</th>
+                      <th scope="col">Why it is here</th>
+                      <th scope="col">Fix</th>
+                      <th scope="col" class="num">EPSS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr
+                        data-vendors={split(row.vendors).join(' ')}
+                        data-categories={split(row.categories).join(' ')}
+                      >
+                        <td>
+                          <a class="cve-id" href={`/cve/${row.cve_id}`}>
+                            {row.cve_id}
+                          </a>
+                          <div class="small muted">{formatDate(row.date_published)}</div>
+                        </td>
+                        <td>
+                          <Severity severity={row.severity} score={row.score} />
+                        </td>
+                        <td class="small">
+                          {split(row.vendors).map((slug, i) => (
+                            <>
+                              {i > 0 && ', '}
+                              <a href={`/vendors/${slug}`}>{vendorNames[slug] ?? slug}</a>
+                            </>
+                          ))}
+                        </td>
+                        <td class="small">
+                          {row.reasons.map((reason) => (
+                            <span class="reason-chip">{reason}</span>
+                          ))}
+                        </td>
+                        <td class="small muted fix-cell">
+                          {fixSummary(row.solution) ?? (
+                            <a href={`/cve/${row.cve_id}`}>See the vendor advisory</a>
+                          )}
+                        </td>
+                        <td class="num small muted">
+                          {row.epss != null ? row.epss.toFixed(3) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      );
+    })
+  }
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Biggest EPSS rises</h2>
+        <p>
+          EPSS estimates the probability of exploitation in the next 30 days. A sharp rise is often
+          the first public sign that attackers have taken an interest, ahead of any KEV listing.
+          Current scores as of {asOf ? formatDate(asOf) : '—'}.
+        </p>
+      </div>
+    </div>
+    <div class="grid grid-2">
+      {
+        [
+          { days: shortDays, day: dayShort, has: hasShort, rows: moversShort },
+          { days: longDays, day: dayLong, has: hasLong, rows: moversLong },
+        ].map((panel) => (
+          <div class="card">
+            <h3 style="margin-top:0">Last {panel.days} days</h3>
+            {!panel.has ? (
+              <p class="empty">
+                The EPSS snapshot for {panel.day ? formatDate(panel.day) : 'that day'} could not be
+                fetched for this build, so no change is shown rather than a wrong one.
+              </p>
+            ) : panel.rows.length === 0 ? (
+              <p class="empty">No tracked CVE's score rose over this window.</p>
+            ) : (
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">CVE</th>
+                      <th scope="col" class="num">Was</th>
+                      <th scope="col" class="num">Now</th>
+                      <th scope="col" class="num">Rise</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {panel.rows.map((row) => (
+                      <tr
+                        data-vendors={split(row.vendors).join(' ')}
+                        data-categories={split(row.categories).join(' ')}
+                      >
+                        <td>
+                          <a class="cve-id" href={`/cve/${row.cve_id}`}>
+                            {row.cve_id}
+                          </a>
+                          {row.in_kev === 1 && (
+                            <>
+                              {' '}
+                              <span class="kev-flag">KEV</span>
+                            </>
+                          )}
+                        </td>
+                        <td class="num small muted">{row.prior.toFixed(3)}</td>
+                        <td class="num small">{row.epss!.toFixed(3)}</td>
+                        <td class="num small">+{row.rise.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <p class="small muted">
+    Tier rules are on the <a href="/methodology#priority">methodology</a> page. Thresholds: EPSS
+    ≥ {PRIORITY.epssHigh}, a rise of ≥ {PRIORITY.epssRise} over {PRIORITY.riseWindowDays} days,
+    and a {PRIORITY.freshDays}-day window for new remote no-auth bugs. EPSS data courtesy of{' '}
+    <a href="https://first.org/epss">FIRST</a>. Known-exploited status from{' '}
+    <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog">CISA KEV</a>.
+  </p>
+</Base>
+
+<script>
+  const vendor = document.querySelector<HTMLSelectElement>('[data-priority-vendor]');
+  const category = document.querySelector<HTMLSelectElement>('[data-priority-category]');
+  const count = document.querySelector<HTMLElement>('[data-priority-count]');
+
+  function apply() {
+    const v = vendor?.value ?? '';
+    const c = category?.value ?? '';
+
+    for (const row of document.querySelectorAll<HTMLTableRowElement>('tr[data-vendors]')) {
+      const vendors = (row.dataset.vendors ?? '').split(' ');
+      const categories = (row.dataset.categories ?? '').split(' ');
+      row.hidden = Boolean((v && !vendors.includes(v)) || (c && !categories.includes(c)));
+    }
+
+    let total = 0;
+    for (const section of document.querySelectorAll<HTMLElement>('[data-priority-tier]')) {
+      const shown = section.querySelectorAll('tbody tr:not([hidden])').length;
+      total += shown;
+      const label = section.querySelector('[data-tier-count]');
+      if (label) label.textContent = `(${shown.toLocaleString()})`;
+    }
+    if (count) count.textContent = `${total.toLocaleString()} CVEs`;
+
+    const params = new URLSearchParams();
+    if (v) params.set('vendor', v);
+    if (c) params.set('category', c);
+    const query = params.toString();
+    history.replaceState(null, '', query ? `?${query}` : location.pathname);
+  }
+
+  const params = new URLSearchParams(location.search);
+  if (vendor) vendor.value = params.get('vendor') ?? '';
+  if (category) category.value = params.get('category') ?? '';
+  vendor?.addEventListener('change', apply);
+  category?.addEventListener('change', apply);
+  if (params.size) apply();
+</script>

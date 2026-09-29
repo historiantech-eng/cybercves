@@ -7,9 +7,17 @@ interface Props {
   path?: string;
   /** Absolute or root-relative social preview image; defaults to the site card. */
   image?: string;
+  /** A narrower feed for this page, advertised alongside the site-wide one. */
+  feed?: { href: string; title: string };
 }
 
-const { title, description, path = Astro.url.pathname, image = '/og-default.png' } = Astro.props;
+const {
+  title,
+  description,
+  path = Astro.url.pathname,
+  image = '/og-default.png',
+  feed,
+} = Astro.props;
 const site = Astro.site ?? 'https://cybercve.com';
 const canonical = new URL(path, site).toString();
 const fullTitle = title === 'CyberCVE' ? title : `${title} — CyberCVE`;
@@ -30,6 +38,9 @@ const nav = [
   { href: '/categories', label: 'Categories' },
   { href: '/compare', label: 'Compare' },
   { href: '/kev', label: 'Exploited' },
+  { href: '/priority', label: 'Priority' },
+  { href: '/check', label: 'Check' },
+  { href: '/watchlist', label: 'Watchlist' },
   { href: '/methodology', label: 'Methodology' },
 ];
 ---
@@ -61,6 +72,7 @@ const nav = [
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="sitemap" href="/sitemap.xml" />
     <link rel="alternate" type="application/rss+xml" title="CyberCVE" href="/rss.xml" />
+    {feed && <link rel="alternate" type="application/rss+xml" title={feed.title} href={feed.href} />}
 
     {
       isHome && (
@@ -201,7 +213,9 @@ const nav = [
             companies, so the way to say "that is wrong" should be the easiest
             link to find down here, not the last.
           */}
-          <a href="/feedback">Report a correction</a> · <a href="/privacy">Privacy</a> · <a
+          <a href="/feedback">Report a correction</a> · <a href="/feeds">RSS feeds</a> · <a
+            href="/privacy">Privacy</a
+          > · <a
             href="/terms">Terms</a
           > · <a href="/.well-known/security.txt">Security</a> · <a
             href="https://github.com/historiantech-eng/cybercves">Source</a

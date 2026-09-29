@@ -1,0 +1,109 @@
+---
+import Base from '../../layouts/Base.astro';
+import { db } from '../../lib/data';
+
+const repo = db();
+const vendors = repo ? await repo.listVendors() : [];
+const categories = repo ? await repo.listCategories() : [];
+const products = repo ? await repo.listProducts() : [];
+
+const byVendor = new Map<string, { name: string; products: typeof products }>();
+for (const product of products) {
+  const group = byVendor.get(product.vendor_slug);
+  if (group) group.products.push(product);
+  else byVendor.set(product.vendor_slug, { name: product.vendor_name, products: [product] });
+}
+---
+
+<Base
+  title="RSS feeds"
+  description="Free RSS feeds of new CVEs per vendor, product category and product, plus a feed of CISA known-exploited additions."
+>
+  <h1>RSS feeds</h1>
+  <p class="lede">
+    Follow exactly what you run. Every feed carries the newest 50 CVEs in its scope from this
+    year and last, and refreshes when the site rebuilds, every three hours.
+  </p>
+
+  <section class="section">
+    <div class="card prose">
+      <h2>Using a feed</h2>
+      <ul>
+        <li>
+          <strong>Slack:</strong> in any channel, type <code>/feed subscribe</code> followed by
+          the feed's address.
+        </li>
+        <li>
+          <strong>Microsoft Teams, Outlook, and most SOAR and ticketing tools</strong> accept an
+          RSS address as a source; look for "RSS" in the connector or integration list.
+        </li>
+        <li><strong>Any feed reader</strong> (Feedly, Inoreader, NetNewsWire): paste the address.</li>
+      </ul>
+      <p class="small muted">
+        Right-click a link below and copy its address. Want a view instead of a feed? Build a{' '}
+        <a href="/watchlist">watchlist</a>.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card">
+      <h2>Site-wide</h2>
+      <ul>
+        <li><a href="/rss.xml">All new CVEs</a></li>
+        <li>
+          <a href="/feeds/kev.xml">Known exploited</a>{' '}
+          <span class="small muted">
+            dated by when CISA added the CVE to KEV, not when it was published
+          </span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="grid grid-2">
+      <div class="card">
+        <h2>By vendor</h2>
+        <ul>
+          {vendors.map((v) => <li><a href={`/feeds/vendor/${v.slug}.xml`}>{v.name}</a></li>)}
+        </ul>
+      </div>
+      <div class="card">
+        <h2>By product category</h2>
+        <ul>
+          {
+            categories.map((c) => (
+              <li>
+                <a href={`/feeds/category/${c.slug}.xml`}>{c.name}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>By product</h2>
+        <p>Only products with at least one tracked CVE.</p>
+      </div>
+    </div>
+    {
+      [...byVendor.values()].map((group) => (
+        <div class="card" style="margin-bottom:12px">
+          <h3 style="margin-top:0">{group.name}</h3>
+          <ul class="watch-grid">
+            {group.products.map((p) => (
+              <li>
+                <a href={`/feeds/product/${p.slug}.xml`}>{p.name}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </section>
+</Base>

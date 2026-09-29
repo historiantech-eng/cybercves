@@ -1,0 +1,15 @@
+-- Which container an affected[] entry came from: the vendor's own statement
+-- ('cna') or someone else's enrichment of the record ('adp', usually CISA).
+--
+-- Needed by /check, which answers "is my version affected?". The two routinely
+-- describe the same product with different ranges — CISA-ADP derives its ranges
+-- from CPE configurations, which are often coarser than the vendor's list:
+-- CVE-2024-21762 carries Fortinet's per-branch FortiProxy ranges AND an ADP
+-- range of 1.0.0 < 2.0.14. Treating every entry as equal evidence would tell a
+-- reader on a version the vendor says is fixed that they are exposed. The
+-- vendor's statement wins, exactly as CNA CVSS wins over ADP CVSS in cvss.ts;
+-- ADP ranges are used only when the vendor gave none.
+--
+-- NULL means the row predates this column. Readers treat it as 'cna', which is
+-- what every consumer effectively did before. A fresh backfill fills it in.
+ALTER TABLE cve_affected ADD COLUMN source TEXT;

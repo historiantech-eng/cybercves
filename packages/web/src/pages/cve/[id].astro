@@ -2,8 +2,15 @@
 import Base from '../../layouts/Base.astro';
 import Severity from '../../components/Severity.astro';
 import { db, formatDate } from '../../lib/data';
-import { affectedStatus, discoverySourceLabel } from '@cybercves/core';
+import {
+  EXPOSURE_LABELS,
+  VERSION_SCHEMES,
+  affectedStatus,
+  discoverySourceLabel,
+  exposureFromVector,
+} from '@cybercves/core';
 import ReportIssue from '../../components/ReportIssue.astro';
+import WatchButton from '../../components/WatchButton.astro';
 
 export async function getStaticPaths() {
   const repo = db();
@@ -22,6 +29,7 @@ export async function getStaticPaths() {
 }
 
 const { detail } = Astro.props;
+const exposure = exposureFromVector(detail.cvss_vector);
 const refs = JSON.parse(detail.refs || '[]') as Array<{ url: string; name: string | null }>;
 const cwes = JSON.parse(detail.cwe_ids || '[]') as string[];
 // A CVE record's affected[] array is a set of statements about products, not a
@@ -60,6 +68,18 @@ const summary =
             <Severity severity={detail.cvss_severity} score={detail.cvss_base_score} />
           </div>
           <div class="small muted">CVSS {detail.cvss_version ?? '—'}</div>
+          {
+            exposure && (
+              <div class="small" style="margin-top:4px">
+                {exposure === 'remote-unauth' ? (
+                  <span class="exposure-flag">Remote · no auth</span>
+                ) : (
+                  <span class="muted">{EXPOSURE_LABELS[exposure]}</span>
+                )}{' '}
+                <a class="muted" href="/methodology#exposure">what this means</a>
+              </div>
+            )
+          }
         </div>
         <div>
           <div class="stat-label">Exploited</div>
@@ -150,7 +170,18 @@ const summary =
                   <td>
                     <a href={`/vendors/${row.vendor_slug}`}>{row.vendor_name}</a>
                   </td>
-                  <td>{row.product_name}</td>
+                  <td>
+                    {row.product_name}{' '}
+                    <WatchButton slug={row.product_slug} name={row.product_name} />
+                    {VERSION_SCHEMES[row.product_slug] && (
+                      <>
+                        {' '}
+                        <a class="small" href={`/check?product=${row.product_slug}`}>
+                          Check your version
+                        </a>
+                      </>
+                    )}
+                  </td>
                   <td class="small muted">
                     <a href={`/categories/${row.category_slug}`}>{row.category_name}</a>
                   </td>

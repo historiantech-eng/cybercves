@@ -208,6 +208,70 @@ a:hover {
   padding: 4px 9px;
 }
 
+/* Same weight as the theme toggle: a quiet control, not a call to action. */
+.watch-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.watch-toggle[aria-pressed='true'] {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.watch-grid {
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.watch-grid li {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.watch-grid li > :first-child {
+  flex: 1;
+}
+
+.new-flag {
+  border: 1px solid var(--text-secondary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+
+/* Why a CVE is on /priority. One chip per reason so each can be read alone. */
+.reason-chip {
+  border: 1px solid var(--gridline);
+  border-radius: 4px;
+  display: inline-block;
+  font-size: 11px;
+  margin: 1px 4px 1px 0;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.fix-cell {
+  max-width: 34ch;
+  min-width: 20ch;
+}
+
 /* ---------------------------------------------------------------- layout */
 
 .card {
@@ -353,6 +417,18 @@ h3 {
   font-weight: 600;
   letter-spacing: 0.04em;
   padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* Quieter than .kev-flag: reachability is a property of the bug, exploitation
+   is evidence about the world, and the page should not rank them as equals. */
+.exposure-flag {
+  border: 1px dashed var(--gridline);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  padding: 1px 4px;
   white-space: nowrap;
 }
 
@@ -693,6 +769,27 @@ th.num {
   font-size: 14px;
   padding: 6px 9px;
 }
+.check-submit {
+  background: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  border-radius: 6px;
+  color: var(--surface-1);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 16px;
+}
+
+.check-form input {
+  min-width: 12ch;
+}
+
+.check-verdict {
+  font-size: 17px;
+  margin-top: 0;
+}
+
 .filter-count {
   color: var(--text-secondary);
   font-size: 13px;

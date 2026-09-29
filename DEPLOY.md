@@ -131,6 +131,20 @@ npm run sync -- --db "$PWD/cybercves.sqlite" --enrich
 > Pass an **absolute** `--db` path. `npm run -w` executes with its cwd inside the package
 > directory, so a relative path lands somewhere you did not intend.
 
+### After upgrading to the /check release (one time, local only)
+
+`/check` reads two things older local databases do not have: which container each
+affected entry came from (`cve_affected.source`) and Cisco's uncapped version lists
+(the build-only `affected_versions_full` table). The delta sync skips unchanged
+records, so neither fills in on its own. Re-ingest once:
+
+```bash
+npm run backfill -- --clone "$PWD/../cvelistV5" --from 2024 --reresolve --db "$PWD/cybercves.sqlite"
+```
+
+CI needs nothing: it backfills into a fresh database on every run. Neither table
+reaches D1 — `affected_versions_full` and `epss_history` are in `LOCAL_ONLY_TABLES`.
+
 ### Discovery attribution (optional)
 
 Cisco and Palo Alto publish who found each vulnerability in the CVE record itself, so their

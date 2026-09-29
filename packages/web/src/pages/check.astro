@@ -1,0 +1,344 @@
+---
+import Base from '../layouts/Base.astro';
+import { db } from '../lib/data';
+import { VERSION_EXAMPLES, VERSION_SCHEMES } from '@cybercves/core';
+
+const repo = db();
+const products = (repo ? await repo.listProducts() : []).filter((p) => VERSION_SCHEMES[p.slug]);
+const examples = Object.fromEntries(products.map((p) => [p.slug, VERSION_EXAMPLES[p.slug] ?? '']));
+---
+
+<Base
+  title="Am I affected?"
+  description="Enter your FortiOS, FortiProxy, FortiManager, FortiAnalyzer, FortiWeb, PAN-OS, Cisco ASA, FTD, FMC or ISE version to see which tracked CVEs affect it and, where the vendor's data allows, the lowest version on your branch that clears them."
+>
+  <h1>Am I affected?</h1>
+  <p class="lede">
+    Enter the version you run. This lists the tracked CVEs whose vendor data covers it, known
+    exploited first, and the lowest release on your branch that clears them. It runs entirely in
+    your browser.
+  </p>
+
+  <form class="filters check-form" data-check-form data-examples={JSON.stringify(examples)}>
+    <div>
+      <label for="c-product">Product</label>
+      <select id="c-product" name="product" data-check-product required>
+        {products.map((p) => <option value={p.slug}>{p.vendor_name} {p.name}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="c-version">Version</label>
+      <input
+        id="c-version"
+        name="version"
+        data-check-version
+        required
+        autocomplete="off"
+        spellcheck="false"
+        placeholder={examples[products[0]?.slug ?? ''] ?? ''}
+      />
+    </div>
+    <div>
+      <button class="check-submit" type="submit">Check</button>
+    </div>
+  </form>
+
+  <noscript>
+    <p class="empty">The checker runs in your browser and needs JavaScript.</p>
+  </noscript>
+
+  <div data-check-output aria-live="polite"></div>
+
+  <section class="section">
+    <div class="card prose">
+      <h2>Read this before relying on an answer</h2>
+      <ul>
+        <li>
+          <strong>Answers come from the vendor's CVE records</strong>, the affected-version ranges
+          Fortinet and Palo Alto publish to the CVE Program. Vendors sometimes add fixes to their
+          advisory without updating the record. Every result links the advisory; it is the final
+          word.
+        </li>
+        <li>
+          <strong>"Could not determine" is never counted as safe.</strong> When the record's
+          ranges are missing, unreadable, or truncated here, the CVE is listed separately so you
+          can check it by hand.
+        </li>
+        <li>
+          <strong>Affected is not the same as exploitable.</strong> Many CVEs need a specific
+          feature enabled or an interface exposed. The advisory says which.
+        </li>
+        <li>
+          <strong>Cisco works differently.</strong> Cisco's CVE records list the releases that
+          are affected, one by one, and say nothing about the rest. So for ASA, FTD, FMC and ISE
+          this page can tell you a release <em>is</em> listed as affected, but a release that is
+          not listed has not been declared safe, and there is no fixed release to recommend. Use
+          Cisco's <a href="https://sec.cloudapps.cisco.com/security/center/softwarechecker.x"
+            rel="nofollow noopener">Software Checker</a> for fixed releases.
+        </li>
+        <li>
+          Only CVEs tracked on this site are checked. GlobalProtect is not covered yet: its
+          version numbers cannot be ordered reliably enough to answer this question.
+        </li>
+      </ul>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { evaluate, type CheckCve, type CheckData, type CheckResult } from '../lib/check';
+  import type { UpgradeTarget } from '@cybercves/core';
+
+  const form = document.querySelector<HTMLFormElement>('[data-check-form]');
+  const product = document.querySelector<HTMLSelectElement>('[data-check-product]');
+  const version = document.querySelector<HTMLInputElement>('[data-check-version]');
+  const output = document.querySelector<HTMLElement>('[data-check-output]');
+  const examples = JSON.parse(form?.dataset.examples ?? '{}') as Record<string, string>;
+  const cache = new Map<string, Promise<CheckData>>();
+
+  const escapeHtml = (value: string) =>
+    value.replace(/[&<>"']/g, (ch) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] as string,
+    );
+
+  const SEV_CLASS: Record<string, string> = {
+    CRITICAL: 'critical',
+    HIGH: 'serious',
+    MEDIUM: 'warning',
+    LOW: 'good',
+  };
+
+  function load(slug: string): Promise<CheckData> {
+    let pending = cache.get(slug);
+    if (!pending) {
+      pending = fetch(`/data/versions/${encodeURIComponent(slug)}.json`).then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<CheckData>;
+      });
+      cache.set(slug, pending);
+      pending.catch(() => cache.delete(slug));
+    }
+    return pending;
+  }
+
+  function severity(cve: CheckCve) {
+    const token = cve.s ? (SEV_CLASS[cve.s] ?? 'unknown') : 'unknown';
+    const label = cve.s ? cve.s.charAt(0) + cve.s.slice(1).toLowerCase() : 'Unscored';
+    return `<span class="sev sev-${token}">${label}${cve.c != null ? ` ${cve.c}` : ''}</span>`;
+  }
+
+  function flags(cve: CheckCve) {
+    return [
+      cve.k === 1 ? '<span class="kev-flag">KEV</span>' : '',
+      cve.r === 1 ? '<span class="ransom-flag">RANSOM</span>' : '',
+      cve.x === 1 ? '<span class="exposure-flag">Remote · no auth</span>' : '',
+      cve.src === 'adp'
+        ? '<span class="reason-chip" title="The vendor published no ranges for this product; these come from CISA\'s enrichment of the record">CISA ranges</span>'
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  function advisory(cve: CheckCve) {
+    const links = [`<a href="/cve/${encodeURIComponent(cve.i)}">details</a>`];
+    if (cve.adv) links.push(`<a href="${escapeHtml(cve.adv)}" rel="nofollow noopener">vendor advisory</a>`);
+    return links.join(' · ');
+  }
+
+  function table(rows: CheckCve[], extra: (cve: CheckCve) => string, extraHead: string) {
+    return `<div class="table-scroll"><table>
+      <thead><tr>
+        <th scope="col">CVE</th><th scope="col">Severity</th><th scope="col">${extraHead}</th>
+        <th scope="col" class="num">EPSS</th><th scope="col">Sources</th>
+      </tr></thead>
+      <tbody>${rows
+        .map(
+          (cve) => `<tr>
+            <td><span class="cve-id">${escapeHtml(cve.i)}</span> ${flags(cve)}
+              ${cve.t ? `<div class="small muted">${escapeHtml(cve.t)}</div>` : ''}</td>
+            <td>${severity(cve)}</td>
+            <td class="small muted fix-cell">${extra(cve)}</td>
+            <td class="num small muted">${cve.e != null ? cve.e.toFixed(3) : '—'}</td>
+            <td class="small">${advisory(cve)}</td>
+          </tr>`,
+        )
+        .join('')}</tbody>
+    </table></div>`;
+  }
+
+  /** "11.1.6-h23", or "the first 7.2 release after 7.2.8" for an inferred target. */
+  function describeTarget(t: UpgradeTarget): string {
+    const v = t.target!;
+    const text = `${v.major}.${v.minor}.${v.patch}${v.hotfix ? `-h${v.hotfix}` : ''}`;
+    if (!t.after) return `<strong>${text}</strong> or later`;
+    return `<strong>the first ${v.major}.${v.minor} release after ${v.major}.${v.minor}.${v.patch - 1}</strong>`;
+  }
+
+  function targetLine(label: string, t: UpgradeTarget | null, branch: string, count: number) {
+    if (!t) return '';
+    const parts: string[] = [];
+    if (t.target) {
+      parts.push(`${label}: upgrade to ${describeTarget(t)}.`);
+    } else if (t.unfixed.length < count) {
+      parts.push(
+        `${label}: no single ${escapeHtml(branch)} release in the vendor's data clears all of them. Check each advisory.`,
+      );
+    }
+    if (t.unfixed.length) {
+      parts.push(
+        `${t.unfixed.length} ${t.unfixed.length === 1 ? 'has' : 'have'} no fixed ${escapeHtml(branch)} release in the vendor's data (${t.unfixed
+          .map(escapeHtml)
+          .join(', ')}). Moving to a newer, supported branch is the way out.`,
+      );
+    }
+    return parts.length ? `<p>${parts.join(' ')}</p>` : '';
+  }
+
+  const SOFTWARE_CHECKER = 'https://sec.cloudapps.cisco.com/security/center/softwarechecker.x';
+
+  function renderListed(data: CheckData, result: CheckResult) {
+    if (!output) return;
+    const name = escapeHtml(data.name);
+    const ver = escapeHtml(result.version);
+    const kevCount = result.affected.filter((c) => c.k === 1).length;
+    const kevUnlisted = result.notListed.filter((c) => c.k === 1);
+
+    const summary =
+      result.affected.length === 0
+        ? `<p class="check-verdict">Cisco does not list ${name} ${ver} as affected by any tracked CVE.</p>`
+        : `<p class="check-verdict">Cisco lists ${name} ${ver} as affected by <strong>${result.affected.length}</strong> tracked CVE${
+            result.affected.length === 1 ? '' : 's'
+          }${kevCount ? `, <strong>${kevCount} known exploited</strong>` : ''}.</p>`;
+
+    output.innerHTML = `
+      <section class="section"><div class="card">
+        ${summary}
+        <p>${result.notListed.length.toLocaleString()} other tracked ${name} CVEs do not list this release. That is
+          <strong>not</strong> a statement that it is unaffected: Cisco's records name affected releases and say
+          nothing about the rest. For fixed releases and a definitive answer, use Cisco's
+          <a href="${SOFTWARE_CHECKER}" rel="nofollow noopener">Software Checker</a>.</p>
+        <p class="small muted">Matched exactly against Cisco's enumerated release lists in the CVE record.
+          Data built ${new Date(data.generatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.</p>
+      </div></section>
+      ${
+        result.affected.length
+          ? `<section class="section"><div class="section-head"><div><h2>Listed as affected</h2>
+               <p>Known exploited first, then by EPSS.</p></div></div>
+               <div class="card">${table(result.affected, () => 'See the advisory for fixed releases.', 'Fix')}</div></section>`
+          : ''
+      }
+      ${
+        kevUnlisted.length
+          ? `<section class="section"><div class="section-head"><div><h2>Known exploited, not listing this release</h2>
+               <p>Worth confirming by hand: these are being used in attacks, and "not listed" is not "fixed".</p></div></div>
+               <div class="card">${table(kevUnlisted, () => 'Not in Cisco\'s affected list for this CVE.', 'Status')}</div></section>`
+          : ''
+      }
+      ${
+        result.unknown.length
+          ? `<section class="section"><div class="section-head"><div><h2>Could not determine</h2>
+               <p>Not counted either way. Check these against the advisory.</p></div></div>
+               <div class="card">${table(result.unknown as CheckCve[], (c) => `Because ${escapeHtml((c as CheckCve & { reason: string }).reason)}.`, 'Why')}</div></section>`
+          : ''
+      }`;
+  }
+
+  function render(data: CheckData, result: CheckResult) {
+    if (!output) return;
+    if (result.mode === 'listed') {
+      renderListed(data, result);
+      return;
+    }
+    const kevCount = result.affected.filter((c) => c.k === 1).length;
+    const name = escapeHtml(data.name);
+    const ver = escapeHtml(result.version);
+
+    const summary =
+      result.affected.length === 0
+        ? `<p class="check-verdict">No tracked CVE's vendor data covers ${name} ${ver}${
+            result.unknown.length ? `, but ${result.unknown.length} could not be determined. Check those below.` : '.'
+          }</p>`
+        : `<p class="check-verdict"><strong>${result.affected.length}</strong> tracked CVE${
+            result.affected.length === 1 ? '' : 's'
+          } affect ${name} ${ver}${kevCount ? `, <strong>${kevCount} known exploited</strong>` : ''}.</p>`;
+
+    const targets =
+      targetLine('For the known-exploited ones', result.targetKev, result.branch, kevCount) +
+      targetLine('For all of them', result.targetAll, result.branch, result.affected.length);
+
+    output.innerHTML = `
+      <section class="section"><div class="card">
+        ${summary}
+        ${targets}
+        <p class="small muted">${result.notAffected.toLocaleString()} other tracked ${name} CVEs do not cover this version, per the vendor's data.
+          Results use the vendor's affected-version ranges from the CVE record; confirm against the advisory.
+          Data built ${new Date(data.generatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.</p>
+      </div></section>
+      ${
+        result.affected.length
+          ? `<section class="section"><div class="section-head"><div><h2>Affected</h2>
+               <p>Known exploited first, then by EPSS.</p></div></div>
+               <div class="card">${table(result.affected, (c) => (c.fix ? escapeHtml(c.fix.length > 220 ? `${c.fix.slice(0, 217)}…` : c.fix) : 'See the vendor advisory.'), 'Vendor fix')}</div></section>`
+          : ''
+      }
+      ${
+        result.unknown.length
+          ? `<section class="section"><div class="section-head"><div><h2>Could not determine</h2>
+               <p>Not counted as safe. Check these against the advisory.</p></div></div>
+               <div class="card">${table(result.unknown as CheckCve[], (c) => `Because ${escapeHtml((c as CheckCve & { reason: string }).reason)}.`, 'Why')}</div></section>`
+          : ''
+      }`;
+  }
+
+  function message(html: string) {
+    if (output) output.innerHTML = `<section class="section"><div class="card"><p>${html}</p></div></section>`;
+  }
+
+  async function run() {
+    const slug = product?.value ?? '';
+    const raw = (version?.value ?? '').trim();
+    if (!slug || !raw) return;
+
+    const params = new URLSearchParams({ product: slug, version: raw });
+    history.replaceState(null, '', `?${params}`);
+
+    let data: CheckData;
+    try {
+      data = await load(slug);
+    } catch {
+      message('Could not load the version data. Try again in a moment.');
+      return;
+    }
+    const result = evaluate(data, raw);
+    if ('error' in result) {
+      const example = escapeHtml(examples[slug] ?? '');
+      message(
+        result.error === 'incomplete'
+          ? `Enter a full version such as <code>${example}</code>. A branch alone does not say which fixes you have.`
+          : `“${escapeHtml(raw)}” is not a version this page can read. Enter it like <code>${example}</code>.`,
+      );
+      return;
+    }
+    render(data, result);
+  }
+
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    run();
+  });
+  product?.addEventListener('change', () => {
+    if (version) version.placeholder = examples[product.value] ?? '';
+  });
+
+  const initial = new URLSearchParams(location.search);
+  const initialProduct = initial.get('product');
+  if (product && initialProduct && [...product.options].some((o) => o.value === initialProduct)) {
+    product.value = initialProduct;
+    if (version) version.placeholder = examples[initialProduct] ?? '';
+  }
+  if (version && initial.get('version')) {
+    version.value = initial.get('version') ?? '';
+    run();
+  }
+</script>
