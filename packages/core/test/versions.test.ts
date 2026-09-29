@@ -4,6 +4,8 @@ import {
   cveStatus,
   entryStatus,
   formatVersion,
+  listedCveStatus,
+  normalizeListedVersion,
   parseVersion,
   upgradeTarget,
   type AffectedEntryInput,
@@ -219,5 +221,60 @@ describe('upgradeTarget', () => {
     );
     expect(result.target).toBeNull();
     expect(result.unfixed).toEqual(['CVE-2026-0227']);
+  });
+});
+
+describe('Cisco: listed releases', () => {
+  it('normalizes the forms readers and records use', () => {
+    expect(normalizeListedVersion('9.18(4)24', 'cisco-dotted')).toBe('9.18.4.24');
+    expect(normalizeListedVersion('9.18(4)', 'cisco-dotted')).toBe('9.18.4');
+    expect(normalizeListedVersion('Cisco Adaptive Security Appliance Software Version 9.16(4)48', 'cisco-dotted')).toBe('9.16.4.48');
+    expect(normalizeListedVersion('7.2.5.1 (Build 29)', 'cisco-dotted')).toBe('7.2.5.1');
+    expect(normalizeListedVersion('7.2.5-208', 'cisco-dotted')).toBe('7.2.5');
+    expect(normalizeListedVersion('9.18', 'cisco-dotted')).toBeNull(); // a train, not a release
+    expect(normalizeListedVersion('N/A', 'cisco-dotted')).toBeNull();
+
+    // ISE: two record spellings and the device's, all one release.
+    expect(normalizeListedVersion('2.7.0 p1', 'cisco-ise')).toBe('2.7.0 p1');
+    expect(normalizeListedVersion('3.3 Patch 2', 'cisco-ise')).toBe('3.3.0 p2');
+    expect(normalizeListedVersion('3.2.0.542 patch 4', 'cisco-ise')).toBe('3.2.0 p4');
+    expect(normalizeListedVersion('3.2', 'cisco-ise')).toBe('3.2.0');
+    expect(normalizeListedVersion('latest', 'cisco-ise')).toBeNull();
+  });
+
+  const asa = FIXTURE['CVE-2024-20353']!;
+  const ftd = FIXTURE['CVE-2024-20353-ftd']!;
+  const s = (entries: AffectedEntryInput[], raw: string) =>
+    listedCveStatus(entries, normalizeListedVersion(raw, 'cisco-dotted')!, 'cisco-dotted').status;
+
+  it('CVE-2024-20353 (KEV, ArcaneDoor): listed ASA releases are affected', () => {
+    expect(s(asa, '9.18(4)8')).toBe('affected');
+    expect(s(asa, '9.18.4')).toBe('affected');
+    expect(s(asa, '9.20.2')).toBe('affected');
+    expect(s(ftd, '7.4.1')).toBe('affected');
+  });
+
+  it('reports a release Cisco did not list as not listed, never as safe', () => {
+    // 9.18.4.22 is Cisco's first fixed 9.18 release. The record simply does not
+    // list it; it never says it is unaffected.
+    expect(s(asa, '9.18.4.22')).toBe('not-listed');
+    expect(s(ftd, '7.4.1.1')).toBe('not-listed');
+  });
+
+  it('refuses to conclude anything from a list that was cut off', () => {
+    const cut = [{ ...asa[0]!, versions: asa[0]!.versions.slice(0, 50), truncated: true }];
+    expect(s(cut, '9.20.2')).toBe('unknown');
+  });
+
+  it('honours an explicit unaffected baseline when a vendor states one', () => {
+    const entry: AffectedEntryInput = {
+      defaultStatus: 'unaffected',
+      truncated: false,
+      versions: [{ version: '3.2.0 p3', status: 'affected', lessThan: null, lessThanOrEqual: null, versionType: null }],
+    };
+    const ise = (raw: string) =>
+      listedCveStatus([entry], normalizeListedVersion(raw, 'cisco-ise')!, 'cisco-ise').status;
+    expect(ise('3.2 Patch 3')).toBe('affected');
+    expect(ise('3.2 Patch 4')).toBe('not-affected');
   });
 });

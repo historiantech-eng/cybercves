@@ -58,7 +58,7 @@ try {
   }
 
   const records = fetched.flatMap((f) => (f.record ? [f.record] : []));
-  const summary = await ingestRecords(repo, config.resolver, records);
+  const summary = await ingestRecords(repo, config.resolver, records, { fullVersions: true });
   console.log(
     `ingest: ${summary.inserted} new, ${summary.updated} updated, ${summary.skipped} unchanged, ` +
       `${summary.unmatched} not ours, ${summary.rejected} withdrawn, ` +

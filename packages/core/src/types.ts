@@ -47,6 +47,13 @@ export interface NormalizedAffected {
   cpes: string[];
   /** Capped at MAX_VERSION_RANGES; see normalize.ts for why. */
   versions: NormalizedVersionRange[];
+  /**
+   * Every range the vendor listed, set ONLY when `versions` was capped. Stored in
+   * the build-only `affected_versions_full` table by the Node pipeline, never in
+   * cve_affected and never in D1. Optional so hand-built test entries need not
+   * carry it.
+   */
+  fullVersions?: NormalizedVersionRange[] | null;
   /** True when the vendor listed more ranges than we store. */
   versionsTruncated: boolean;
   /** How many the vendor actually listed, before capping. */

@@ -69,3 +69,34 @@ describe('evaluate', () => {
     expect(evaluate(fortios, 'latest')).toEqual({ error: 'unreadable' });
   });
 });
+
+describe('evaluate — Cisco (listed mode)', () => {
+  const asa: CheckData = {
+    product: 'cisco-asa',
+    name: 'Cisco ASA',
+    scheme: 'cisco-dotted',
+    generatedAt: '2026-09-29T00:00:00Z',
+    cves: [cve('CVE-2024-20353', { k: 1, e: 0.5 })],
+  };
+
+  it('reports a listed release as affected, with no upgrade target', () => {
+    const result = evaluate(asa, '9.18(4)8');
+    if ('error' in result) throw new Error(result.error);
+    expect(result.mode).toBe('listed');
+    expect(result.version).toBe('9.18.4.8');
+    expect(result.affected.map((c) => c.i)).toEqual(['CVE-2024-20353']);
+    expect(result.targetAll).toBeNull();
+  });
+
+  it('keeps an unlisted release out of both the affected and the safe counts', () => {
+    const result = evaluate(asa, '9.18.4.22');
+    if ('error' in result) throw new Error(result.error);
+    expect(result.affected).toEqual([]);
+    expect(result.notListed.map((c) => c.i)).toEqual(['CVE-2024-20353']);
+    expect(result.notAffected).toBe(0);
+  });
+
+  it('refuses a train on its own', () => {
+    expect(evaluate(asa, '9.18')).toEqual({ error: 'unreadable' });
+  });
+});

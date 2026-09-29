@@ -33,6 +33,11 @@ export interface IngestOptions {
    * D1 free-tier storage budget for data the site never shows.
    */
   keepUnmatched?: boolean;
+  /**
+   * Store uncapped version lists in the build-only table. Node bins only —
+   * the Worker's cron must not; see Repository.upsertCves.
+   */
+  fullVersions?: boolean;
   now?: string;
 }
 
@@ -76,7 +81,10 @@ export async function ingestRecords(
     entries.push({ cve, resolved });
   }
 
-  const result = await repo.upsertCves(entries, now, { reresolve: options.reresolve });
+  const result = await repo.upsertCves(entries, now, {
+    reresolve: options.reresolve,
+    fullVersions: options.fullVersions,
+  });
   await repo.recordUnmapped([...unmapped.values()], now);
 
   // Retire gaps the taxonomy now answers. Resolution is a pure function of the

@@ -74,6 +74,7 @@ try {
   for (const { year, records } of streamRecords(values.clone, fromYear, toYear)) {
     const summary = await ingestRecords(repo, config.resolver, records, {
       reresolve: values.reresolve,
+      fullVersions: true,
     });
     totals.inserted += summary.inserted;
     totals.updated += summary.updated;

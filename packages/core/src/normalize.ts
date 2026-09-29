@@ -45,18 +45,22 @@ export const MAX_CPES = 20;
 
 function normalizeVersions(container: NonNullable<CveContainer['affected']>[number]) {
   const source = container.versions ?? [];
-  const versions: NormalizedVersionRange[] = [];
-
-  for (const v of source.slice(0, MAX_VERSION_RANGES)) {
-    versions.push({
-      version: v.version ?? null,
-      status: v.status ?? null,
-      lessThan: v.lessThan ?? null,
-      lessThanOrEqual: v.lessThanOrEqual ?? null,
-      versionType: v.versionType ?? null,
-    });
-  }
-  return { versions, truncated: source.length > MAX_VERSION_RANGES, total: source.length };
+  const all: NormalizedVersionRange[] = source.map((v) => ({
+    version: v.version ?? null,
+    status: v.status ?? null,
+    lessThan: v.lessThan ?? null,
+    lessThanOrEqual: v.lessThanOrEqual ?? null,
+    versionType: v.versionType ?? null,
+  }));
+  const truncated = all.length > MAX_VERSION_RANGES;
+  return {
+    versions: truncated ? all.slice(0, MAX_VERSION_RANGES) : all,
+    // Kept only when the cap bit, for the build-only full-list table — see
+    // migration 0009. Everything that reaches D1 still sees the capped list.
+    fullVersions: truncated ? all : null,
+    truncated,
+    total: all.length,
+  };
 }
 
 /**
@@ -77,7 +81,7 @@ function normalizeAffected(record: CveRecord): NormalizedAffected[] {
       const vendorRaw = entry.vendor?.trim() || null;
       const productRaw = (entry.product ?? entry.packageName)?.trim() || null;
       if (!vendorRaw && !productRaw && !entry.cpes?.length) continue;
-      const { versions, truncated, total } = normalizeVersions(entry);
+      const { versions, fullVersions, truncated, total } = normalizeVersions(entry);
       out.push({
         source: container === record.containers?.cna ? 'cna' : 'adp',
         vendorRaw,
@@ -86,6 +90,7 @@ function normalizeAffected(record: CveRecord): NormalizedAffected[] {
           .filter((c): c is string => typeof c === 'string' && c.length > 0)
           .slice(0, MAX_CPES),
         versions,
+        fullVersions,
         versionsTruncated: truncated,
         versionCount: total,
         defaultStatus: entry.defaultStatus ?? null,
@@ -190,4 +195,34 @@ export function publishedYear(cve: NormalizedCve): number | null {
   if (!cve.datePublished) return null;
   const year = Number.parseInt(cve.datePublished.slice(0, 4), 10);
   return Number.isFinite(year) ? year : null;
+}
+
+type PackedRange = [string | null, string | null, string | null, string | null] | (string | null)[];
+
+/**
+ * Compact form of a version list for the build-only full-list table.
+ *
+ * Positional tuples with trailing nulls dropped, and no versionType (nothing
+ * reads it). An enumerated Cisco entry shrinks from ~100 bytes per version to
+ * ~20. `unpackVersions(packVersions(x))` round-trips everything except
+ * versionType, which comes back null.
+ */
+export function packVersions(versions: readonly NormalizedVersionRange[]): string {
+  return JSON.stringify(
+    versions.map((v) => {
+      const tuple: (string | null)[] = [v.version, v.status, v.lessThan, v.lessThanOrEqual];
+      while (tuple.length > 1 && tuple[tuple.length - 1] === null) tuple.pop();
+      return tuple;
+    }),
+  );
+}
+
+export function unpackVersions(packed: string): NormalizedVersionRange[] {
+  return (JSON.parse(packed) as PackedRange[]).map((t) => ({
+    version: t[0] ?? null,
+    status: t[1] ?? null,
+    lessThan: t[2] ?? null,
+    lessThanOrEqual: t[3] ?? null,
+    versionType: null,
+  }));
 }

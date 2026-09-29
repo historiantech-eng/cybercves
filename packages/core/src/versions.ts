@@ -20,9 +20,25 @@ import type { NormalizedVersionRange } from './types.js';
  *               lessThan: "11.1.13, 11.1.10-h9, 11.1.6-h23" }      one fix per maintenance line
  *             { version: "11.0", status: "unaffected" }            whole branch
  *   Both      defaultStatus: "unaffected"                          baseline when nothing matches
+ *
+ * Cisco is different in kind, and handled by the "listed" functions at the end
+ * of this file: its records enumerate affected releases one by one, with no
+ * ranges, no defaultStatus and no fixed release. That can prove a release is
+ * affected, but never that one is not — so an unlisted release is reported as
+ * exactly that, "not listed", and never counted as safe.
  */
 
+/** Schemes whose versions can be ordered, so ranges and upgrade targets work. */
 export type VersionScheme = 'fortinet' | 'panos';
+
+/** Schemes answered by exact membership in the vendor's enumerated list. */
+export type ListedScheme = 'cisco-dotted' | 'cisco-ise';
+
+export type CheckScheme = VersionScheme | ListedScheme;
+
+export function isListedScheme(scheme: CheckScheme): scheme is ListedScheme {
+  return scheme === 'cisco-dotted' || scheme === 'cisco-ise';
+}
 
 /**
  * Products /check covers, and how to read their version strings.
@@ -31,21 +47,37 @@ export type VersionScheme = 'fortinet' | 'panos';
  * been read end to end and the scheme below parses all of it. GlobalProtect is
  * absent on purpose: its ranges use build suffixes (`6.2.6-c857`, `6.3.2-566`)
  * whose ordering against hotfixes is not published, and guessing it is how this
- * page would produce a confident wrong answer. Cisco is absent because 1,093 of
- * its 3,207 stored range lists are truncated at MAX_VERSION_RANGES.
+ * page would produce a confident wrong answer.
+ *
+ * Cisco products here depend on the build-only full version lists (migration
+ * 0009): with the 50-entry cap alone, a release missing from a list could just
+ * have been cut off, and every answer would be "could not determine".
  */
-export const VERSION_SCHEMES: Readonly<Record<string, VersionScheme>> = {
+export const VERSION_SCHEMES: Readonly<Record<string, CheckScheme>> = {
   'fortinet-fortios': 'fortinet',
   'fortinet-fortiproxy': 'fortinet',
   'fortinet-fortimanager': 'fortinet',
   'fortinet-fortianalyzer': 'fortinet',
   'fortinet-fortiweb': 'fortinet',
   'palo-alto-pan-os': 'panos',
+  'cisco-asa': 'cisco-dotted',
+  'cisco-ftd': 'cisco-dotted',
+  'cisco-fmc': 'cisco-dotted',
+  'cisco-ise': 'cisco-ise',
 };
 
-export const VERSION_EXAMPLES: Readonly<Record<VersionScheme, string>> = {
-  fortinet: '7.2.8',
-  panos: '10.2.9-h1',
+/** A version as the reader would type it, per product. */
+export const VERSION_EXAMPLES: Readonly<Record<string, string>> = {
+  'fortinet-fortios': '7.2.8',
+  'fortinet-fortiproxy': '7.2.8',
+  'fortinet-fortimanager': '7.4.4',
+  'fortinet-fortianalyzer': '7.4.4',
+  'fortinet-fortiweb': '7.4.2',
+  'palo-alto-pan-os': '10.2.9-h1',
+  'cisco-asa': '9.18(4)24',
+  'cisco-ftd': '7.2.5.1',
+  'cisco-fmc': '7.2.5.1',
+  'cisco-ise': '3.2 Patch 4',
 };
 
 export interface Version {
@@ -387,4 +419,107 @@ export function upgradeTarget(
   // No single release on the branch clears every fixable CVE (their fixes sit on
   // different maintenance lines). Say so rather than offer a partial target.
   return { target: null, after: false, unfixed };
+}
+
+// ---------------------------------------------------------------------------
+// Listed schemes (Cisco): exact membership in an enumerated affected list.
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical form of a Cisco release, or null when it is not one.
+ *
+ * `cisco-dotted` (ASA, FTD, FMC): records write `9.8.2.45` and `7.1.0.1`. ASA
+ * shows the same release as `9.8(2)45` on the device, so the parenthesised form
+ * is converted. FTD shows `7.2.5.1 (Build 29)` and sometimes `7.2.5-208`; the
+ * build is not part of the release and is dropped.
+ *
+ * `cisco-ise`: records write both `2.7.0 p1` and `3.3 Patch 2`, and the device
+ * shows `3.2.0.542 patch 4`. All become `X.Y.Z` or `X.Y.Z pN`, with the build
+ * number dropped and a missing third part read as 0 — ISE releases are X.Y.0.
+ */
+export function normalizeListedVersion(raw: string | null | undefined, scheme: ListedScheme): string | null {
+  if (raw == null) return null;
+  let text = raw.trim().replace(/^(cisco\b[^\d]*?)?(version\s+)?v?(?=\d)/i, '').trim();
+
+  if (scheme === 'cisco-dotted') {
+    text = text.replace(/\s*\(build\s*\d+\)\s*$/i, '').replace(/-\d+$/, '');
+    // ASA interim/maintenance notation: 9.16(4)48 -> 9.16.4.48, 9.16(4) -> 9.16.4
+    text = text.replace(/^(\d+\.\d+)\((\d+)\)(\d+)?$/, (_, head, mid, tail) =>
+      tail ? `${head}.${mid}.${tail}` : `${head}.${mid}`,
+    );
+    return /^\d+\.\d+\.\d+(\.\d+)?$/.test(text) ? text.split('.').map(Number).join('.') : null;
+  }
+
+  const match = /^(\d+)\.(\d+)(?:\.(\d+))?(?:\.\d+)?\s*(?:,?\s*(?:p|patch)\s*(\d+))?$/i.exec(text);
+  if (!match) return null;
+  const base = `${Number(match[1])}.${Number(match[2])}.${Number(match[3] ?? 0)}`;
+  return match[4] !== undefined && Number(match[4]) > 0 ? `${base} p${Number(match[4])}` : base;
+}
+
+export type ListedStatus = 'affected' | 'not-affected' | 'not-listed' | 'unknown';
+
+export interface ListedVerdict {
+  status: ListedStatus;
+  reason?: string;
+}
+
+/**
+ * One enumerated entry's answer for one (normalized) release.
+ *
+ * `not-listed` is the honest answer for a release the vendor did not name: the
+ * record lists affected releases and says nothing about the rest. It becomes
+ * `not-affected` only when the vendor states a baseline of "unaffected".
+ */
+export function listedEntryStatus(
+  entry: AffectedEntryInput,
+  release: string,
+  scheme: ListedScheme,
+): ListedVerdict {
+  let unreadable = false;
+  let unaffectedMatch = false;
+
+  for (const item of entry.versions) {
+    const status = statusOf(item.status);
+    // A range cannot be evaluated without an ordering, which this scheme lacks.
+    const listed =
+      item.lessThan == null && item.lessThanOrEqual == null
+        ? normalizeListedVersion(item.version, scheme)
+        : null;
+    if (listed === null) {
+      if (status !== 'unaffected') unreadable = true;
+      continue;
+    }
+    if (listed !== release) continue;
+    if (status === 'affected') return { status: 'affected' };
+    if (status === 'unaffected') unaffectedMatch = true;
+  }
+
+  if (unreadable) {
+    return { status: 'unknown', reason: 'the vendor listed a version this page cannot read' };
+  }
+  if (entry.truncated) {
+    return { status: 'unknown', reason: 'the vendor listed more versions than are stored here' };
+  }
+  if (unaffectedMatch) return { status: 'not-affected' };
+  const baseline = statusOf(entry.defaultStatus);
+  if (baseline === 'unaffected') return { status: 'not-affected' };
+  if (baseline === 'affected') return { status: 'affected' };
+  return { status: 'not-listed' };
+}
+
+/** Combine a CVE's entries: affected, then unknown, then not-listed, then not-affected. */
+export function listedCveStatus(
+  entries: readonly AffectedEntryInput[],
+  release: string,
+  scheme: ListedScheme,
+): ListedVerdict {
+  if (!entries.length) {
+    return { status: 'unknown', reason: 'the vendor published no version data for this product' };
+  }
+  const verdicts = entries.map((entry) => listedEntryStatus(entry, release, scheme));
+  return (
+    verdicts.find((v) => v.status === 'affected') ??
+    verdicts.find((v) => v.status === 'unknown') ??
+    verdicts.find((v) => v.status === 'not-listed') ?? { status: 'not-affected' }
+  );
 }

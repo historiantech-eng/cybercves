@@ -5,14 +5,12 @@ import { VERSION_EXAMPLES, VERSION_SCHEMES } from '@cybercves/core';
 
 const repo = db();
 const products = (repo ? await repo.listProducts() : []).filter((p) => VERSION_SCHEMES[p.slug]);
-const examples = Object.fromEntries(
-  products.map((p) => [p.slug, VERSION_EXAMPLES[VERSION_SCHEMES[p.slug]!]]),
-);
+const examples = Object.fromEntries(products.map((p) => [p.slug, VERSION_EXAMPLES[p.slug] ?? '']));
 ---
 
 <Base
   title="Am I affected?"
-  description="Enter your FortiOS, FortiProxy, FortiManager, FortiAnalyzer, FortiWeb or PAN-OS version to see which tracked CVEs affect it and the lowest version on your branch that clears them."
+  description="Enter your FortiOS, FortiProxy, FortiManager, FortiAnalyzer, FortiWeb, PAN-OS, Cisco ASA, FTD, FMC or ISE version to see which tracked CVEs affect it and, where the vendor's data allows, the lowest version on your branch that clears them."
 >
   <h1>Am I affected?</h1>
   <p class="lede">
@@ -71,8 +69,16 @@ const examples = Object.fromEntries(
           feature enabled or an interface exposed. The advisory says which.
         </li>
         <li>
-          Only CVEs tracked on this site are checked. GlobalProtect and Cisco are not covered yet:
-          their published version data cannot be read reliably enough to answer this question.
+          <strong>Cisco works differently.</strong> Cisco's CVE records list the releases that
+          are affected, one by one, and say nothing about the rest. So for ASA, FTD, FMC and ISE
+          this page can tell you a release <em>is</em> listed as affected, but a release that is
+          not listed has not been declared safe, and there is no fixed release to recommend. Use
+          Cisco's <a href="https://sec.cloudapps.cisco.com/security/center/softwarechecker.x"
+            rel="nofollow noopener">Software Checker</a> for fixed releases.
+        </li>
+        <li>
+          Only CVEs tracked on this site are checked. GlobalProtect is not covered yet: its
+          version numbers cannot be ordered reliably enough to answer this question.
         </li>
       </ul>
     </div>
@@ -189,8 +195,61 @@ const examples = Object.fromEntries(
     return parts.length ? `<p>${parts.join(' ')}</p>` : '';
   }
 
+  const SOFTWARE_CHECKER = 'https://sec.cloudapps.cisco.com/security/center/softwarechecker.x';
+
+  function renderListed(data: CheckData, result: CheckResult) {
+    if (!output) return;
+    const name = escapeHtml(data.name);
+    const ver = escapeHtml(result.version);
+    const kevCount = result.affected.filter((c) => c.k === 1).length;
+    const kevUnlisted = result.notListed.filter((c) => c.k === 1);
+
+    const summary =
+      result.affected.length === 0
+        ? `<p class="check-verdict">Cisco does not list ${name} ${ver} as affected by any tracked CVE.</p>`
+        : `<p class="check-verdict">Cisco lists ${name} ${ver} as affected by <strong>${result.affected.length}</strong> tracked CVE${
+            result.affected.length === 1 ? '' : 's'
+          }${kevCount ? `, <strong>${kevCount} known exploited</strong>` : ''}.</p>`;
+
+    output.innerHTML = `
+      <section class="section"><div class="card">
+        ${summary}
+        <p>${result.notListed.length.toLocaleString()} other tracked ${name} CVEs do not list this release. That is
+          <strong>not</strong> a statement that it is unaffected: Cisco's records name affected releases and say
+          nothing about the rest. For fixed releases and a definitive answer, use Cisco's
+          <a href="${SOFTWARE_CHECKER}" rel="nofollow noopener">Software Checker</a>.</p>
+        <p class="small muted">Matched exactly against Cisco's enumerated release lists in the CVE record.
+          Data built ${new Date(data.generatedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.</p>
+      </div></section>
+      ${
+        result.affected.length
+          ? `<section class="section"><div class="section-head"><div><h2>Listed as affected</h2>
+               <p>Known exploited first, then by EPSS.</p></div></div>
+               <div class="card">${table(result.affected, () => 'See the advisory for fixed releases.', 'Fix')}</div></section>`
+          : ''
+      }
+      ${
+        kevUnlisted.length
+          ? `<section class="section"><div class="section-head"><div><h2>Known exploited, not listing this release</h2>
+               <p>Worth confirming by hand: these are being used in attacks, and "not listed" is not "fixed".</p></div></div>
+               <div class="card">${table(kevUnlisted, () => 'Not in Cisco\'s affected list for this CVE.', 'Status')}</div></section>`
+          : ''
+      }
+      ${
+        result.unknown.length
+          ? `<section class="section"><div class="section-head"><div><h2>Could not determine</h2>
+               <p>Not counted either way. Check these against the advisory.</p></div></div>
+               <div class="card">${table(result.unknown as CheckCve[], (c) => `Because ${escapeHtml((c as CheckCve & { reason: string }).reason)}.`, 'Why')}</div></section>`
+          : ''
+      }`;
+  }
+
   function render(data: CheckData, result: CheckResult) {
     if (!output) return;
+    if (result.mode === 'listed') {
+      renderListed(data, result);
+      return;
+    }
     const kevCount = result.affected.filter((c) => c.k === 1).length;
     const name = escapeHtml(data.name);
     const ver = escapeHtml(result.version);

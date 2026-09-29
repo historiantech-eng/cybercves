@@ -8,7 +8,7 @@ import type {
   UnmappedProduct,
   VendorFileConfig,
 } from '@cybercves/core';
-import { normalizeKey, publishedYear } from '@cybercves/core';
+import { normalizeKey, packVersions, publishedYear, unpackVersions } from '@cybercves/core';
 import type { SqlDriver, SqlValue, Statement } from './driver.js';
 
 /**
@@ -323,6 +323,16 @@ export class Repository {
        * it burns D1's write budget rewriting rows whose content did not change.
        */
       reresolve?: boolean;
+      /**
+       * Also store full version lists for capped entries, in the build-only
+       * affected_versions_full table (migration 0009).
+       *
+       * Node pipeline only. The Worker must leave this off: that table is never
+       * pushed to D1, and filling it there would spend write budget on rows
+       * nothing at runtime reads. Relies on last_insert_rowid(), which is sound
+       * because the Node driver runs a batch in order on one connection.
+       */
+      fullVersions?: boolean;
     } = {},
   ): Promise<UpsertResult> {
     const result: UpsertResult = { inserted: 0, updated: 0, skipped: 0 };
@@ -401,6 +411,12 @@ export class Repository {
       // Affected entries and product links are replaced rather than merged: an
       // upstream revision can remove an affected product, and a merge would keep
       // showing a product the vendor has since said is unaffected.
+      if (options.fullVersions) {
+        statements.push({
+          sql: 'DELETE FROM affected_versions_full WHERE cve_id = ?',
+          params: [cve.cveId],
+        });
+      }
       statements.push({ sql: 'DELETE FROM cve_affected WHERE cve_id = ?', params: [cve.cveId] });
       for (const affected of cve.affected) {
         statements.push({
@@ -419,6 +435,13 @@ export class Repository {
             affected.defaultStatus,
           ],
         });
+        if (options.fullVersions && affected.fullVersions) {
+          statements.push({
+            sql: `INSERT INTO affected_versions_full (affected_id, cve_id, versions)
+                  VALUES (last_insert_rowid(), ?, ?)`,
+            params: [cve.cveId, packVersions(affected.fullVersions)],
+          });
+        }
       }
 
       statements.push({ sql: 'DELETE FROM cve_product WHERE cve_id = ?', params: [cve.cveId] });
@@ -902,7 +925,10 @@ export class Repository {
        ORDER BY c.date_published DESC`,
       [productSlug],
     );
-    const entries = await this.#db.all<{
+    // The full list replaces the capped one where the build-only table has it;
+    // `truncated` then reflects what the caller actually holds, not what the
+    // capped row once said.
+    const rows = await this.#db.all<{
       cve_id: string;
       source: string | null;
       vendor_raw: string | null;
@@ -910,13 +936,20 @@ export class Repository {
       versions: string;
       versions_truncated: number;
       default_status: string | null;
+      full: string | null;
     }>(
       `SELECT a.cve_id, a.source, a.vendor_raw, a.product_raw, a.versions,
-              a.versions_truncated, a.default_status
+              a.versions_truncated, a.default_status, f.versions AS full
        FROM cve_affected a
+       LEFT JOIN affected_versions_full f ON f.affected_id = a.id
        WHERE a.cve_id IN (SELECT cve_id FROM cve_product WHERE product_slug = ?)
        ORDER BY a.id`,
       [productSlug],
+    );
+    const entries = rows.map(({ full, ...row }) =>
+      full
+        ? { ...row, versions: JSON.stringify(unpackVersions(full)), versions_truncated: 0 }
+        : row,
     );
     return { cves, entries };
   }

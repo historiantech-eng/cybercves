@@ -52,6 +52,8 @@ export const NEVER_PUSHED_TABLES = ['feedback', 'subscriber'] as const;
  * Unlike NEVER_PUSHED_TABLES these CAN be rebuilt — they are left out of the
  * push because the Worker never reads them and every pushed row costs a D1
  * write against the free plan's 100,000/day. `epss_history` alone would be
- * ~3,200 writes a night for a table only the prerendered /priority page uses.
+ * ~3,200 writes a night for a table only the prerendered /priority page uses;
+ * `affected_versions_full` holds ~132,000 enumerated Cisco versions that only
+ * /check's build step reads, in rows too large for a D1 statement anyway.
  */
-export const LOCAL_ONLY_TABLES = ['epss_history'] as const;
+export const LOCAL_ONLY_TABLES = ['epss_history', 'affected_versions_full'] as const;
