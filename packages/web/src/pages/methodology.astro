@@ -404,7 +404,7 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
     </div>
   </section>
 
-  <section class="section">
+  <section class="section" id="vendor-advisories">
     <div class="card">
       <h2>Sources and update cadence</h2>
       <ul class="muted small">
@@ -419,6 +419,14 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
         <li>
           <a href="https://first.org/epss">FIRST EPSS</a> — refreshed daily. EPSS data courtesy
           of FIRST.
+        </li>
+        <li>
+          <a href="https://developer.cisco.com/psirt/">Cisco PSIRT openVuln API</a> — refreshed with
+          each site build. Supplies the advisory each Cisco CVE was published under: Cisco&rsquo;s
+          Security Impact Rating, bug IDs, and when the advisory was last revised. The rating is
+          Cisco&rsquo;s per-advisory judgement and is shown beside the CVE&rsquo;s own CVSS
+          severity, never in place of it. Advisories marked Interim are still under investigation
+          and their affected-product list may grow.
         </li>
         <li>Vendor PSIRT feeds — used for advisory identifiers and freshness, not as a primary source.</li>
       </ul>

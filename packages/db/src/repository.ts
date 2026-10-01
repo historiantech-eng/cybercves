@@ -6,6 +6,7 @@ import type {
   ProductConfig,
   ResolvedProduct,
   UnmappedProduct,
+  VendorAdvisory,
   VendorFileConfig,
 } from '@cybercves/core';
 import { normalizeKey, packVersions, publishedYear, unpackVersions } from '@cybercves/core';
@@ -230,6 +231,8 @@ export class Repository {
       rssUrl: null,
       jsonUrlTemplate: null,
       advisoryIdPattern: null,
+      openVulnTokenUrl: null,
+      openVulnBaseUrl: null,
       internalBrandMarkers: [],
       discoveryNote: null,
     }));
@@ -488,6 +491,81 @@ export class Repository {
       })),
     );
     return entries.length;
+  }
+
+  /**
+   * Replace one vendor's advisories with a fresh pull.
+   *
+   * Replace, not merge: the pull is the vendor's complete list for the window,
+   * so an advisory missing from it has been withdrawn or re-keyed, and keeping
+   * the old row would link CVEs to a page that no longer says what we show.
+   * Only call this with a pull that succeeded — an empty list here empties the
+   * vendor's advisories.
+   *
+   * Links are written only for CVEs we hold. `advisory_cve` has a real foreign
+   * key to `cve`, and a Cisco advisory naming an IOS CVE outside our years is
+   * routine, not an error. Advisories left with no link at all are not stored.
+   */
+  async replaceVendorAdvisories(
+    vendorSlug: string,
+    advisories: readonly VendorAdvisory[],
+  ): Promise<{ advisories: number; links: number }> {
+    const allCves = [...new Set(advisories.flatMap((a) => a.cveIds))];
+    const known = new Set<string>();
+    for (let i = 0; i < allCves.length; i += 400) {
+      const ids = allCves.slice(i, i + 400);
+      for (const row of await this.#db.all<{ cve_id: string }>(
+        `SELECT cve_id FROM cve WHERE cve_id IN (${ids.map(() => '?').join(',')})`,
+        ids as SqlValue[],
+      )) {
+        known.add(row.cve_id);
+      }
+    }
+
+    const statements: Statement[] = [
+      {
+        sql: `DELETE FROM advisory_cve WHERE advisory_id IN (SELECT id FROM advisory WHERE vendor_slug = ?)`,
+        params: [vendorSlug],
+      },
+      { sql: 'DELETE FROM advisory WHERE vendor_slug = ?', params: [vendorSlug] },
+    ];
+
+    let stored = 0;
+    let links = 0;
+    for (const a of advisories) {
+      const cves = [...new Set(a.cveIds)].filter((id) => known.has(id));
+      if (!cves.length) continue;
+      stored++;
+      links += cves.length;
+      statements.push({
+        sql: `INSERT INTO advisory (vendor_slug, vendor_advisory_id, url, title, published, severity,
+                                    last_updated, revision, status, cvss_base_score, bug_ids)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          vendorSlug,
+          a.advisoryId,
+          a.url,
+          a.title,
+          a.published,
+          a.severity,
+          a.lastUpdated,
+          a.revision,
+          a.status,
+          a.cvssBaseScore,
+          JSON.stringify(a.bugIds),
+        ],
+      });
+      for (const cveId of cves) {
+        statements.push({
+          sql: `INSERT INTO advisory_cve (advisory_id, cve_id)
+                SELECT id, ? FROM advisory WHERE vendor_slug = ? AND vendor_advisory_id = ?`,
+          params: [cveId, vendorSlug, a.advisoryId],
+        });
+      }
+    }
+
+    await this.#db.batch(statements);
+    return { advisories: stored, links };
   }
 
   /**
@@ -1174,7 +1252,31 @@ export class Repository {
       [cveId],
     );
 
-    return { ...cve, products, affected };
+    const advisories = await this.#db.all<{
+      vendor_slug: string;
+      vendor_name: string;
+      vendor_advisory_id: string;
+      url: string;
+      title: string | null;
+      published: string | null;
+      last_updated: string | null;
+      revision: string | null;
+      status: string | null;
+      severity: string | null;
+      cvss_base_score: number | null;
+      bug_ids: string;
+    }>(
+      `SELECT a.vendor_slug, v.name AS vendor_name, a.vendor_advisory_id, a.url, a.title, a.published,
+              a.last_updated, a.revision, a.status, a.severity, a.cvss_base_score, a.bug_ids
+       FROM advisory_cve ac
+       JOIN advisory a ON a.id = ac.advisory_id
+       JOIN vendor v   ON v.slug = a.vendor_slug
+       WHERE ac.cve_id = ?
+       ORDER BY a.published`,
+      [cveId],
+    );
+
+    return { ...cve, products, affected, advisories };
   }
 
   /** Product-level rollup for a vendor page. */

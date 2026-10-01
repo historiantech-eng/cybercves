@@ -1,0 +1,167 @@
+{
+  "advisories": [
+    {
+      "advisoryId": "cisco-sa-notice-fBn58ELx",
+      "advisoryTitle": "Cisco Advance Notification for Publication of October 7, 2026, Security Advisories",
+      "bugIDs": [
+        "NA"
+      ],
+      "ipsSignatures": [
+        "NA"
+      ],
+      "cves": [
+        "NA"
+      ],
+      "cvrfUrl": "https://sec.cloudapps.cisco.com/security/center/contentxml/CiscoSecurityAdvisory/cisco-sa-notice-fBn58ELx/cvrf/cisco-sa-notice-fBn58ELx_cvrf.xml",
+      "csafUrl": "https://sec.cloudapps.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/cisco-sa-notice-fBn58ELx/csaf/cisco-sa-notice-fBn58ELx.json",
+      "cvssBaseScore": "NA",
+      "cwe": [
+        "NA"
+      ],
+      "firstPublished": "2026-09-30T16:00:00",
+      "lastUpdated": "2026-09-30T16:00:00",
+      "status": "Interim",
+      "version": "1.0",
+      "productNames": [
+        "NA"
+      ],
+      "publicationUrl": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-notice-fBn58ELx",
+      "sir": "Informational",
+      "summary": "<p>On October 7, 2026, the Cisco Product Security Incident Response Team (PSIRT) will publish advisories to disclose security vulnerability information along wi"
+    },
+    {
+      "advisoryId": "cisco-sa-sdwan-webauth-xr8beuuU",
+      "advisoryTitle": "Cisco Catalyst SD-WAN Manager API Authentication Bypass Vulnerability",
+      "bugIDs": [
+        "CSCww79570"
+      ],
+      "ipsSignatures": [
+        "NA"
+      ],
+      "cves": [
+        "CVE-2026-76504"
+      ],
+      "cvrfUrl": "https://sec.cloudapps.cisco.com/security/center/contentxml/CiscoSecurityAdvisory/cisco-sa-sdwan-webauth-xr8beuuU/cvrf/cisco-sa-sdwan-webauth-xr8beuuU_cvrf.xml",
+      "csafUrl": "https://sec.cloudapps.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/cisco-sa-sdwan-webauth-xr8beuuU/csaf/cisco-sa-sdwan-webauth-xr8beuuU.json",
+      "cvssBaseScore": "9.8",
+      "cwe": [
+        "CWE-177"
+      ],
+      "firstPublished": "2026-09-30T13:00:00",
+      "lastUpdated": "2026-09-30T13:00:00",
+      "status": "Final",
+      "version": "1.0",
+      "productNames": [
+        "Cisco Catalyst SD-WAN Manager 17.2.6",
+        "Cisco Catalyst SD-WAN Manager 17.2.7",
+        "Cisco Catalyst SD-WAN Manager 17.2.8"
+      ],
+      "publicationUrl": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-webauth-xr8beuuU",
+      "sir": "Critical",
+      "summary": "\r\n<p>A vulnerability in the API session-based authentication management of Cisco Catalyst SD-WAN Manager could allow an unauthenticated, remote attacker to acce"
+    },
+    {
+      "advisoryId": "cisco-sa-ise-multiauth-bypass-sgD2HbL4",
+      "advisoryTitle": "Cisco Identity Services Engine Authentication Bypass Vulnerabilities",
+      "bugIDs": [
+        "CSCwu73771",
+        "CSCwu73786",
+        "CSCwu73808",
+        "CSCwu73832"
+      ],
+      "ipsSignatures": [
+        "NA"
+      ],
+      "cves": [
+        "CVE-2026-76439",
+        "CVE-2026-76444",
+        "CVE-2026-76446",
+        "CVE-2026-76447"
+      ],
+      "cvrfUrl": "https://sec.cloudapps.cisco.com/security/center/contentxml/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4/cvrf/cisco-sa-ise-multiauth-bypass-sgD2HbL4_cvrf.xml",
+      "csafUrl": "https://sec.cloudapps.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4/csaf/cisco-sa-ise-multiauth-bypass-sgD2HbL4.json",
+      "cvssBaseScore": "5.3",
+      "cwe": [
+        "CWE-306",
+        "CWE-611"
+      ],
+      "firstPublished": "2026-09-16T16:00:00",
+      "lastUpdated": "2026-09-24T17:16:37",
+      "status": "Final",
+      "version": "1.1",
+      "productNames": [
+        "Cisco Identity Services Engine Software 3.1.0",
+        "Cisco Identity Services Engine Software 3.1.0 p1",
+        "Cisco Identity Services Engine Software 3.1.0 p3"
+      ],
+      "publicationUrl": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4",
+      "sir": "Medium",
+      "summary": "<p>Multiple vulnerabilities in Cisco Identity Services Engine (ISE) and Cisco ISE Passive Identity Connector (ISE-PIC) could allow a remote attacker to access o"
+    },
+    {
+      "advisoryId": "cisco-sa-asaftdvirtual-dos-MuenGnYR",
+      "advisoryTitle": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software SSL VPN Denial of Service Vulnerability",
+      "bugIDs": [
+        "CSCwe44099",
+        "CSCwk12738",
+        "CSCwr18877",
+        "CSCwu02508"
+      ],
+      "ipsSignatures": [
+        "NA"
+      ],
+      "cves": [
+        "CVE-2024-20260"
+      ],
+      "cvrfUrl": "https://sec.cloudapps.cisco.com/security/center/contentxml/CiscoSecurityAdvisory/cisco-sa-asaftdvirtual-dos-MuenGnYR/cvrf/cisco-sa-asaftdvirtual-dos-MuenGnYR_cvrf.xml",
+      "csafUrl": "https://sec.cloudapps.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/cisco-sa-asaftdvirtual-dos-MuenGnYR/csaf/cisco-sa-asaftdvirtual-dos-MuenGnYR.json",
+      "cvssBaseScore": "8.6",
+      "cwe": [
+        "CWE-789"
+      ],
+      "firstPublished": "2024-10-23T16:00:00",
+      "lastUpdated": "2026-09-23T13:26:33",
+      "status": "Final",
+      "version": "2.1",
+      "productNames": [
+        "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.1",
+        "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.1.28",
+        "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.2"
+      ],
+      "publicationUrl": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftdvirtual-dos-MuenGnYR",
+      "sir": "High",
+      "summary": "\r\n<p><strong>Update for September 16, 2026: </strong>The original 1.0 version of this advisory was specific to the Cisco Adaptive Security Virtual Appliance (AS"
+    },
+    {
+      "advisoryId": "cisco-sa-asa-ftd-logging-dos-ZXXNesfN",
+      "advisoryTitle": "Cisco Secure Firewall Adaptive Security Appliance and Secure Firewall Threat Defense Software Logging Denial of Service Vulnerability",
+      "bugIDs": [
+        "CSCwq97424"
+      ],
+      "ipsSignatures": [
+        "NA"
+      ],
+      "cves": [
+        "CVE-2026-20154"
+      ],
+      "cvrfUrl": "https://sec.cloudapps.cisco.com/security/center/contentxml/CiscoSecurityAdvisory/cisco-sa-asa-ftd-logging-dos-ZXXNesfN/cvrf/cisco-sa-asa-ftd-logging-dos-ZXXNesfN_cvrf.xml",
+      "csafUrl": "https://sec.cloudapps.cisco.com/security/center/contentjson/CiscoSecurityAdvisory/cisco-sa-asa-ftd-logging-dos-ZXXNesfN/csaf/cisco-sa-asa-ftd-logging-dos-ZXXNesfN.json",
+      "cvssBaseScore": "8.6",
+      "cwe": [
+        "CWE-835"
+      ],
+      "firstPublished": "2026-09-16T16:00:00",
+      "lastUpdated": "2026-09-18T15:50:56",
+      "status": "Final",
+      "version": "1.1",
+      "productNames": [
+        "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.1",
+        "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.1.28",
+        "Cisco Secure Firewall Adaptive Security Appliance (ASA) Software 9.16.2"
+      ],
+      "publicationUrl": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asa-ftd-logging-dos-ZXXNesfN",
+      "sir": "High",
+      "summary": "\r\n<p>A vulnerability in the system rate-limiting process for syslog message 419002 of Cisco Secure Firewall Adaptive Security Appliance (ASA) Software and Cisco"
+    }
+  ]
+}

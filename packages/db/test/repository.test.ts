@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CveRecord } from '@cybercves/core';
 import { TaxonomyResolver, normalizeCve } from '@cybercves/core';
-import type { CategoryConfig, ProductConfig, VendorFileConfig } from '@cybercves/core';
+import type { CategoryConfig, ProductConfig, VendorAdvisory, VendorFileConfig } from '@cybercves/core';
 import { NodeSqliteDriver } from '../src/drivers/node-sqlite.js';
 import { migrate } from '../src/migrate.js';
 import { Repository } from '../src/repository.js';
@@ -36,6 +36,8 @@ const VENDORS: VendorFileConfig[] = [
     rssUrl: null,
     jsonUrlTemplate: null,
     advisoryIdPattern: null,
+    openVulnTokenUrl: null,
+    openVulnBaseUrl: null,
     internalBrandMarkers: [],
     discoveryNote: null,
   },
@@ -51,6 +53,8 @@ const VENDORS: VendorFileConfig[] = [
     rssUrl: null,
     jsonUrlTemplate: null,
     advisoryIdPattern: null,
+    openVulnTokenUrl: null,
+    openVulnBaseUrl: null,
     internalBrandMarkers: [],
     discoveryNote: null,
   },
@@ -195,6 +199,65 @@ describe('enrichment', () => {
     ]);
     expect(written).toBe(1);
     expect(await db.all('SELECT cve_id FROM epss')).toHaveLength(1);
+  });
+});
+
+describe('replaceVendorAdvisories', () => {
+  const advisory = (id: string, cveIds: string[], extra: Partial<VendorAdvisory> = {}): VendorAdvisory => ({
+    advisoryId: id,
+    url: `https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/${id}`,
+    title: 'Cisco IOS XE Software Web UI Privilege Escalation Vulnerability',
+    published: '2023-10-16T15:00:00',
+    lastUpdated: '2023-11-01T19:43:23',
+    revision: '1.12',
+    status: 'Final',
+    severity: 'Critical',
+    cvssBaseScore: 10,
+    bugIds: ['CSCwh87343'],
+    cveIds,
+    ...extra,
+  });
+
+  it('links an advisory to the CVEs we hold and ignores the rest', async () => {
+    await ingest('CVE-2023-20198');
+    const written = await repo.replaceVendorAdvisories('cisco', [
+      // A real advisory naming a CVE outside our years is routine, not an error.
+      advisory('cisco-sa-iosxe-webui-privesc-j22SaA4z', ['CVE-2023-20198', 'CVE-2023-20273']),
+      // Nothing we hold: not stored at all.
+      advisory('cisco-sa-other', ['CVE-1999-0001']),
+    ]);
+    expect(written).toEqual({ advisories: 1, links: 1 });
+
+    const detail = await repo.getCveDetail('CVE-2023-20198');
+    expect(detail?.advisories).toHaveLength(1);
+    expect(detail?.advisories[0]).toMatchObject({
+      vendor_advisory_id: 'cisco-sa-iosxe-webui-privesc-j22SaA4z',
+      severity: 'Critical',
+      revision: '1.12',
+      cvss_base_score: 10,
+    });
+    expect(JSON.parse(detail!.advisories[0]!.bug_ids)).toEqual(['CSCwh87343']);
+  });
+
+  it('replaces the vendor’s previous pull rather than accumulating', async () => {
+    await ingest('CVE-2023-20198');
+    await repo.replaceVendorAdvisories('cisco', [advisory('cisco-sa-old', ['CVE-2023-20198'])]);
+    await repo.replaceVendorAdvisories('cisco', [advisory('cisco-sa-new', ['CVE-2023-20198'])]);
+
+    const ids = (await db.all<{ vendor_advisory_id: string }>('SELECT vendor_advisory_id FROM advisory')).map(
+      (r) => r.vendor_advisory_id,
+    );
+    expect(ids).toEqual(['cisco-sa-new']);
+    expect(await db.all('SELECT * FROM advisory_cve')).toHaveLength(1);
+  });
+
+  it('leaves other vendors’ advisories alone', async () => {
+    await ingest('CVE-2023-20198');
+    await db.run(
+      `INSERT INTO advisory (vendor_slug, vendor_advisory_id, url) VALUES ('fortinet', 'FG-IR-25-254', 'https://x')`,
+    );
+    await repo.replaceVendorAdvisories('cisco', [advisory('cisco-sa-a', ['CVE-2023-20198'])]);
+    expect(await db.all("SELECT * FROM advisory WHERE vendor_slug = 'fortinet'")).toHaveLength(1);
   });
 });
 

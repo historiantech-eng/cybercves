@@ -45,6 +45,17 @@ const affected = (detail.affected ?? []).map((entry) => ({
   }),
 }));
 
+// Vendor advisories this CVE was published under (Cisco, via openVuln). Not
+// only the assigner's: Cisco publishes advisories for third-party CVEs that hit
+// its products, such as CVE-2025-32433 in Erlang/OTP.
+const advisories = (detail.advisories ?? []).map((a) => ({
+  ...a,
+  bugIds: JSON.parse(a.bug_ids || '[]') as string[],
+  // Shown only when the advisory moved after publication, which is the case a
+  // reader who read it once needs to hear about.
+  revised: Boolean(a.last_updated && a.published && a.last_updated.slice(0, 10) !== a.published.slice(0, 10)),
+}));
+
 const summary =
   detail.description?.slice(0, 155) ??
   `${detail.cve_id} — vulnerability details, affected products, severity and exploitation status.`;
@@ -227,6 +238,69 @@ const summary =
           {/* The vendor's own words. Shown verbatim so a reader can judge the
               internal-vs-third-party call rather than take ours on faith. */}
           <p class="muted" style="white-space:pre-wrap">{detail.credit_text}</p>
+        </div>
+      </section>
+    )
+  }
+
+  {
+    advisories.length > 0 && (
+      <section class="section">
+        <div class="card">
+          <h2>Vendor advisory</h2>
+          {advisories.map((a) => (
+            <div style="margin-top:10px">
+              <p style="margin:0">
+                <a href={a.url} rel="nofollow noopener" style="font-family:var(--font-mono)">
+                  {a.vendor_advisory_id}
+                </a>
+                {a.status === 'Interim' && (
+                  <span class="pill" style="margin-left:8px">Interim — investigation open</span>
+                )}
+              </p>
+              {a.title && <p class="muted" style="margin:4px 0 0">{a.title}</p>}
+              <p class="small muted" style="margin:6px 0 0">
+                {a.severity && (
+                  <>
+                    {a.vendor_name}&rsquo;s rating: <strong>{a.severity}</strong>
+                    {a.cvss_base_score != null && <> (advisory CVSS {a.cvss_base_score.toFixed(1)})</>}
+                    {' · '}
+                  </>
+                )}
+                Published {formatDate(a.published)}
+                {a.revised && (
+                  <>
+                    {' · '}updated {formatDate(a.last_updated)}
+                    {a.revision && <> (revision {a.revision})</>}
+                  </>
+                )}
+              </p>
+              {a.bugIds.length > 0 && (
+                <p class="small muted" style="margin:4px 0 0">
+                  Bug ID{a.bugIds.length > 1 ? 's' : ''}:{' '}
+                  {a.bugIds.map((bug, i) => (
+                    <>
+                      {i > 0 && ', '}
+                      {a.vendor_slug === 'cisco' ? (
+                        <a href={`https://bst.cloudapps.cisco.com/bugsearch/bug/${bug}`} rel="nofollow noopener">
+                          {bug}
+                        </a>
+                      ) : (
+                        bug
+                      )}
+                    </>
+                  ))}
+                </p>
+              )}
+            </div>
+          ))}
+          {/* The vendor's rating is set per advisory and can disagree with the
+              CVSS band above, which is per CVE. Said so plainly rather than
+              leaving two different severities unexplained on one page. */}
+          <p class="small muted" style="margin-top:12px">
+            The vendor&rsquo;s rating applies to the whole advisory and can differ from this CVE&rsquo;s
+            own CVSS severity. <a href="/methodology#vendor-advisories">Where this comes from</a>
+          </p>
         </div>
       </section>
     )

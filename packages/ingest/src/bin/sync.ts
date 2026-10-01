@@ -8,6 +8,7 @@ import { fetchKev } from '../sources/kev.js';
 import { fetchEpss } from '../sources/epss.js';
 import { refreshEpssHistory } from '../epss-history.js';
 import { ingestRecords } from '../pipeline.js';
+import { describeCiscoOutcome, enrichCiscoAdvisories, openVulnCredentialsFrom } from '../cisco-advisories.js';
 import { loadConfig } from '../node/config-loader.js';
 
 /**
@@ -15,19 +16,22 @@ import { loadConfig } from '../node/config-loader.js';
  * locally against a SQLite file for development and debugging.
  *
  *   npm run sync -- --db ./cybercves.sqlite
- *   npm run sync -- --db ./cybercves.sqlite --enrich   (also refresh KEV + EPSS)
+ *   npm run sync -- --db ./cybercves.sqlite --enrich   (also refresh KEV, EPSS, and Cisco
+ *                                                      advisories when CISCO_CLIENT_ID/SECRET are set)
  */
 
 const { values } = parseArgs({
   options: {
     db: { type: 'string', default: './cybercves.sqlite' },
     enrich: { type: 'boolean', default: false },
+    /** First year of Cisco advisories to pull with --enrich. Match the backfill's --from. */
+    'cisco-from': { type: 'string', default: '2024' },
     help: { type: 'boolean', default: false },
   },
 });
 
 if (values.help) {
-  console.log('Usage: npm run sync -- [--db <path>] [--enrich]');
+  console.log('Usage: npm run sync -- [--db <path>] [--enrich] [--cisco-from 2024]');
   process.exit(0);
 }
 
@@ -73,6 +77,14 @@ try {
     const written = await repo.upsertEpssForKnownCves(epss.entries);
     console.log(`epss: ${written} of ${epss.entries.length} scores kept (as of ${epss.asOf})`);
     await refreshEpssHistory(repo, epss.asOf);
+
+    const cisco = await enrichCiscoAdvisories(
+      repo,
+      config.vendors.find((v) => v.slug === 'cisco'),
+      openVulnCredentialsFrom(process.env),
+      Number.parseInt(values['cisco-from'], 10),
+    );
+    console.log(describeCiscoOutcome(cisco, Boolean(process.env.GITHUB_ACTIONS)));
   }
 
   await repo.setSyncState('cvelist:fetchTime', feed.fetchTime);

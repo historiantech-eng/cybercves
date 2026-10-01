@@ -7,6 +7,7 @@ import { fetchKev } from '../sources/kev.js';
 import { fetchEpss } from '../sources/epss.js';
 import { refreshEpssHistory } from '../epss-history.js';
 import { ingestRecords } from '../pipeline.js';
+import { describeCiscoOutcome, enrichCiscoAdvisories, openVulnCredentialsFrom } from '../cisco-advisories.js';
 import { loadConfig } from '../node/config-loader.js';
 import { inspectClone, streamRecords } from '../node/local-clone.js';
 
@@ -105,6 +106,15 @@ try {
     const epss = await fetchEpss();
     console.log(`epss: ${await repo.upsertEpssForKnownCves(epss.entries)} scores kept`);
     await refreshEpssHistory(repo, epss.asOf);
+
+    // After the CVEs are in: advisories link only to CVEs we hold.
+    const cisco = await enrichCiscoAdvisories(
+      repo,
+      config.vendors.find((v) => v.slug === 'cisco'),
+      openVulnCredentialsFrom(process.env),
+      fromYear,
+    );
+    console.log(describeCiscoOutcome(cisco, Boolean(process.env.GITHUB_ACTIONS)));
   }
 
   const queue = await repo.getUnmappedForReview(15);
