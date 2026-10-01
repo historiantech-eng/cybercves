@@ -76,6 +76,10 @@ export interface VendorFileConfig extends VendorConfig {
   rssUrl: string | null;
   jsonUrlTemplate: string | null;
   advisoryIdPattern: string | null;
+  /** Cisco openVuln OAuth token endpoint. Credentials come from the environment, never config. */
+  openVulnTokenUrl: string | null;
+  /** Cisco openVuln API root, e.g. https://apix.cisco.com/security/advisories/v2 */
+  openVulnBaseUrl: string | null;
   /** Brands the vendor's own security org publishes under (FortiGuard, Talos, Unit 42). */
   internalBrandMarkers: string[];
   /** Where this vendor publishes discovery attribution, shown when we have none. */
@@ -170,6 +174,8 @@ export function parseVendor(
     rssUrl: optionalString(obj.rssUrl, `${sourcePath}.rssUrl`),
     jsonUrlTemplate: optionalString(obj.jsonUrlTemplate, `${sourcePath}.jsonUrlTemplate`),
     advisoryIdPattern: optionalString(obj.advisoryIdPattern, `${sourcePath}.advisoryIdPattern`),
+    openVulnTokenUrl: optionalString(obj.openVulnTokenUrl, `${sourcePath}.openVulnTokenUrl`),
+    openVulnBaseUrl: optionalString(obj.openVulnBaseUrl, `${sourcePath}.openVulnBaseUrl`),
     internalBrandMarkers: stringArray(
       obj.internalBrandMarkers,
       `${sourcePath}.internalBrandMarkers`,

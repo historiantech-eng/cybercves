@@ -82,12 +82,19 @@ jobs:
           cd "$RUNNER_TEMP/cvelistV5"
           git sparse-checkout set $(for y in $(seq 2024 $(date -u +%Y)); do echo -n "cves/$y "; done)
 
+      # Cisco's openVuln credentials are optional: without them the Cisco
+      # advisory step logs "skipped" and everything else builds as before. A
+      # failed pull is a warning, not a failure — see enrichCiscoAdvisories.
+      # Read-only API credentials; nothing here can write to Cisco.
       - name: Backfill and enrich
         run: |
           npm run backfill -- \
             --clone "$RUNNER_TEMP/cvelistV5" \
             --from 2024 \
             --db "$PWD/cybercves.sqlite"
+        env:
+          CISCO_CLIENT_ID: ${{ secrets.CISCO_CLIENT_ID }}
+          CISCO_CLIENT_SECRET: ${{ secrets.CISCO_CLIENT_SECRET }}
 
       # ---------------------------------------------------------------------
       # Discovery attribution — MUST run before the D1 push.

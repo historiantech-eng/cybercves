@@ -162,6 +162,33 @@ npm run discovery -- --db "$PWD/cybercves.sqlite" --concurrency 2 --delay 2500
 > self-found percentage. Re-run from a different address or with a much longer `--delay`.
 > Until it completes, Fortinet shows as "not disclosed" with an explanatory note.
 
+### Cisco advisories (optional)
+
+The CVE page's "Vendor advisory" card for Cisco CVEs (cisco-sa-* id, Cisco's Security
+Impact Rating, bug IDs, revision) comes from Cisco's openVuln API. It needs an app
+registered at <https://apiconsole.cisco.com> with Application Type **Service**, Grant Type
+**Client Credentials**, and the **Cisco PSIRT openVuln API** selected.
+
+CI reads the credentials from two repository secrets. Set them from your own terminal, never
+by pasting into a chat or a file in the repo:
+
+```bash
+gh secret set CISCO_CLIENT_ID
+gh secret set CISCO_CLIENT_SECRET
+```
+
+Locally, put the same two names in `.env` (git-ignored) and export them before a backfill
+or `npm run sync -- --enrich`:
+
+```bash
+set -a; . ./.env; set +a
+```
+
+Without them the step logs `cisco advisories: skipped` and nothing else changes. If Cisco is
+unreachable the build logs a warning and continues without the advisories; it never fails
+the deploy. A full pull is one request per year since `--from` (three for 2024–2026), paced
+under Cisco's 30-per-minute limit.
+
 ### Push to D1
 
 ```bash

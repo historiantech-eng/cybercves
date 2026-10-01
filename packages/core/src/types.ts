@@ -115,6 +115,26 @@ export interface EpssEntry {
   asOf: string;
 }
 
+/** One vendor security advisory and the CVEs it covers. Stored in `advisory`/`advisory_cve`. */
+export interface VendorAdvisory {
+  /** The vendor's own id: cisco-sa-asaftd-websrvs-dos-X8gNucD2. */
+  advisoryId: string;
+  url: string;
+  title: string | null;
+  /** ISO datetime. */
+  published: string | null;
+  lastUpdated: string | null;
+  /** The advisory's revision, as the vendor numbers it ("1.0", "2.1"). */
+  revision: string | null;
+  /** Cisco's Interim (investigation open, may change) or Final. */
+  status: string | null;
+  /** The vendor's own rating — Cisco's Security Impact Rating, not a CVSS band. */
+  severity: string | null;
+  cvssBaseScore: number | null;
+  bugIds: string[];
+  cveIds: string[];
+}
+
 export interface Category {
   slug: string;
   name: string;

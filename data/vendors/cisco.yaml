@@ -31,10 +31,12 @@ psirtHosts:
   - sec.cloudapps.cisco.com
   - tools.cisco.com
 
-# Cisco's openVuln API returns CSAF and is the richest source, but requires a free
-# cisco.com account plus OAuth app registration. Until those credentials are
-# supplied the CVE List path works unaided; the adapter degrades to `cvelist`
-# when no client ID is configured.
+# Cisco's openVuln API supplies the advisory behind each Cisco CVE: the
+# cisco-sa-* id, Cisco's Security Impact Rating, bug IDs and revision history.
+# OAuth client credentials come from CISCO_CLIENT_ID / CISCO_CLIENT_SECRET in the
+# environment (GitHub Actions secrets in CI), never from this file. Without them
+# the build skips the advisory pull and the CVE List path works unaided.
+# See packages/ingest/src/sources/cisco-openvuln.ts and DEPLOY.md.
 adapter: csaf
 openVulnTokenUrl: https://id.cisco.com/oauth2/default/v1/token
 openVulnBaseUrl: https://apix.cisco.com/security/advisories/v2
