@@ -107,6 +107,26 @@ function parseBrands(value: unknown, path: string): Record<string, string[]> {
   return out;
 }
 
+const CVE_ID_RE = /^CVE-\d{4}-\d{4,}$/;
+
+/**
+ * `notAffected:` is a map of CVE id -> the reason, and the reason is required.
+ * Each entry overrides what the vendor published, so the next person to read
+ * the file has to be able to see why without re-deriving it.
+ */
+function parseNotAffected(value: unknown, path: string): Record<string, string> {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new ConfigError(`${path}: expected a map of CVE id to reason`);
+  }
+  const out: Record<string, string> = {};
+  for (const [cveId, reason] of Object.entries(value as Record<string, unknown>)) {
+    if (!CVE_ID_RE.test(cveId)) throw new ConfigError(`${path}: "${cveId}" is not a CVE id`);
+    out[cveId] = requireString(reason, `${path}.${cveId}`);
+  }
+  return out;
+}
+
 const ADAPTERS = new Set(['cvelist', 'json', 'csaf', 'rss', 'scrape']);
 
 export function parseVendor(
@@ -241,6 +261,7 @@ export function parseProducts(
       descriptionPatterns,
       brand,
       brandFallback,
+      notAffected: parseNotAffected(item.notAffected, `${path}.notAffected`),
     };
   });
 }

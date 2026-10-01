@@ -143,8 +143,8 @@ export class Repository {
     for (const [sort, p] of products.entries()) {
       statements.push({
         sql: `INSERT INTO product (slug, vendor_slug, name, category_slug, aliases, patterns,
-                                   description_patterns, brand, brand_fallback, sort)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   description_patterns, brand, brand_fallback, not_affected, sort)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(slug) DO UPDATE SET
                 vendor_slug = excluded.vendor_slug,
                 name = excluded.name,
@@ -154,6 +154,7 @@ export class Repository {
                 description_patterns = excluded.description_patterns,
                 brand = excluded.brand,
                 brand_fallback = excluded.brand_fallback,
+                not_affected = excluded.not_affected,
                 sort = excluded.sort`,
         params: [
           p.slug,
@@ -165,6 +166,7 @@ export class Repository {
           json(p.descriptionPatterns),
           p.brand ?? null,
           p.brandFallback ? 1 : 0,
+          json(p.notAffected),
           sort,
         ],
       });
@@ -248,12 +250,13 @@ export class Repository {
         description_patterns: string;
         brand: string | null;
         brand_fallback: number;
+        not_affected: string | null;
       }>(
         // ORDER BY sort, not slug: pattern precedence is positional, so
         // alphabetising here made the Worker resolve differently from the Node
         // pipeline. See 0004_product_brand.sql.
         `SELECT slug, vendor_slug, name, category_slug, aliases, patterns, description_patterns,
-                brand, brand_fallback
+                brand, brand_fallback, not_affected
            FROM product ORDER BY sort, slug`,
       )
     ).map((row) => ({
@@ -275,6 +278,10 @@ export class Repository {
         : [],
       brand: row.brand,
       brandFallback: row.brand_fallback === 1,
+      // Null-tolerant for the same reason as descriptionPatterns (0011).
+      notAffected: row.not_affected
+        ? (JSON.parse(row.not_affected) as Record<string, string>)
+        : {},
     }));
 
     return { categories, vendors, products };

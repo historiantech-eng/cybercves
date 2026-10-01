@@ -203,6 +203,13 @@ export interface ProductConfig {
    * goes to the review queue instead.
    */
   brandFallback: boolean;
+  /**
+   * CVE id -> why, for CVEs whose record lists this product although the
+   * vendor's own statement says otherwise. A reviewed correction for one record
+   * at a time, never a rule: the resolver drops the link and nothing else. See
+   * `notAffected` in data/products/fortinet.yaml for the case that forced it.
+   */
+  notAffected: Record<string, string>;
 }
 
 /** A resolved link between a CVE and one of our canonical products. */

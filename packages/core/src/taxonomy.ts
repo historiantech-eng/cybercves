@@ -490,6 +490,16 @@ export class TaxonomyResolver {
       }
     }
 
+    // Reviewed corrections, applied last so neither pass above can put the
+    // product back. Fortinet's record for CVE-2026-70466 lists FortiOS ranges
+    // while its description and fix name only FortiWeb, and /check reported
+    // every FortiOS 7.6 release as affected by a FortiWeb bug. Per record, not
+    // a rule: 42 other Fortinet CVEs list a product their prose never mentions
+    // (FortiProxy, FortiPAM, RUGGEDCOM running FortiOS), and those are real.
+    for (const productSlug of resolved.keys()) {
+      if (this.#products.get(productSlug)?.notAffected[cve.cveId]) resolved.delete(productSlug);
+    }
+
     // A foreign-vendor entry only matters when nothing else claimed this CVE.
     //
     // If the CVE is already attributed, the foreign entry is a re-listing, not a

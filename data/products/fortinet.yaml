@@ -14,6 +14,14 @@ products:
     categorySlug: firewall
     aliases: [FortiOS, Fortinet FortiOS, FortiOS-6K7K]
     patterns: ['^fortios']
+    # Records whose affected[] lists FortiOS while Fortinet's own text says the
+    # flaw is in another product. Reviewed one at a time; the reason is required.
+    notAffected:
+      CVE-2026-70466: >-
+        FortiWeb-only. The description and the fix ("Upgrade to FortiWeb 8.0.3 /
+        7.6.6") name only FortiWeb; the FortiOS entry (7.6.0-7.6.7, 7.4.0-7.4.11,
+        ...) is mentioned nowhere else in the record and looks pasted from another
+        advisory. Record as updated 2026-09-15.
 
   - slug: fortinet-fortigate
     name: FortiGate

@@ -61,12 +61,12 @@ const VENDORS: VendorFileConfig[] = [
 ];
 
 const PRODUCTS: ProductConfig[] = [
-  { slug: 'fortinet-fortimail', vendorSlug: 'fortinet', name: 'FortiMail', categorySlug: 'email-security', aliases: ['FortiMail'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false },
-  { slug: 'fortinet-fortindr', vendorSlug: 'fortinet', name: 'FortiNDR', categorySlug: 'threat-detection', aliases: ['FortiNDR'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false },
-  { slug: 'fortinet-fortivoice', vendorSlug: 'fortinet', name: 'FortiVoice', categorySlug: 'other', aliases: ['FortiVoice'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false },
-  { slug: 'fortinet-forticamera', vendorSlug: 'fortinet', name: 'FortiCamera', categorySlug: 'other', aliases: ['FortiCamera'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false },
-  { slug: 'fortinet-fortirecorder', vendorSlug: 'fortinet', name: 'FortiRecorder', categorySlug: 'other', aliases: ['FortiRecorder'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false },
-  { slug: 'cisco-ios-xe', vendorSlug: 'cisco', name: 'Cisco IOS XE', categorySlug: 'routing-switching', aliases: [], patterns: ['^cisco ios xe\\b'], descriptionPatterns: [], brand: null, brandFallback: false },
+  { slug: 'fortinet-fortimail', vendorSlug: 'fortinet', name: 'FortiMail', categorySlug: 'email-security', aliases: ['FortiMail'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false, notAffected: {} },
+  { slug: 'fortinet-fortindr', vendorSlug: 'fortinet', name: 'FortiNDR', categorySlug: 'threat-detection', aliases: ['FortiNDR'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false, notAffected: {} },
+  { slug: 'fortinet-fortivoice', vendorSlug: 'fortinet', name: 'FortiVoice', categorySlug: 'other', aliases: ['FortiVoice'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false, notAffected: {} },
+  { slug: 'fortinet-forticamera', vendorSlug: 'fortinet', name: 'FortiCamera', categorySlug: 'other', aliases: ['FortiCamera'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false, notAffected: {} },
+  { slug: 'fortinet-fortirecorder', vendorSlug: 'fortinet', name: 'FortiRecorder', categorySlug: 'other', aliases: ['FortiRecorder'], patterns: [], descriptionPatterns: [], brand: null, brandFallback: false, notAffected: {} },
+  { slug: 'cisco-ios-xe', vendorSlug: 'cisco', name: 'Cisco IOS XE', categorySlug: 'routing-switching', aliases: [], patterns: ['^cisco ios xe\\b'], descriptionPatterns: [], brand: null, brandFallback: false, notAffected: {} },
 ];
 
 function fixture(id: string) {
