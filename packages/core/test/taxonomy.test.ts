@@ -348,6 +348,7 @@ describe('unrecognised vendor on a CNA-assigned CVE', () => {
         aliases: ['Cisco Secure Firewall'],
         patterns: [],
         descriptionPatterns: [],
+        notAffected: {},
       },
     ],
   );

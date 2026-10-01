@@ -1,0 +1,13 @@
+-- Reviewed per-CVE corrections: CVEs whose record lists a product the vendor's
+-- own statement says is not affected. A JSON object of CVE id -> reason, from
+-- `notAffected` in data/products/*.yaml.
+--
+-- The case that forced it: Fortinet's record for CVE-2026-70466 carries a
+-- FortiOS entry (7.6.0 through 7.6.7, and so on) while its description and fix
+-- name only FortiWeb, so /check listed a FortiWeb bug against every FortiOS 7.6
+-- release.
+--
+-- Stored on the product for the same reason description_patterns is (0005): the
+-- Worker rebuilds the resolver from D1, and a correction only the Node pipeline
+-- knows would come undone the next time the Worker re-ingests the record.
+ALTER TABLE product ADD COLUMN not_affected TEXT NOT NULL DEFAULT '{}';

@@ -29,6 +29,7 @@ function product(categorySlug: string): ProductConfig {
     descriptionPatterns: [],
     brand: null,
     brandFallback: false,
+    notAffected: {},
   };
 }
 

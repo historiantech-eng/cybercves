@@ -327,3 +327,45 @@ describe('description-stated applicability', () => {
     expect(panoramaProduct?.descriptionPatterns.length).toBeGreaterThan(0);
   });
 });
+
+describe('reviewed not-affected corrections', () => {
+  const range = (version: string, lessThanOrEqual: string) => ({
+    version,
+    status: 'affected',
+    lessThan: null,
+    lessThanOrEqual,
+    versionType: 'semver',
+  });
+  const entry = (productRaw: string, cpeProduct: string, versions: ReturnType<typeof range>[]) => ({
+    source: 'cna',
+    vendorRaw: 'Fortinet',
+    productRaw,
+    cpes: [`cpe:2.3:a:fortinet:${cpeProduct}:7.6.0:*:*:*:*:*:*:*`],
+    versions,
+    versionsTruncated: false,
+    versionCount: versions.length,
+    defaultStatus: 'unaffected',
+  });
+  // Fortinet's record as published: a FortiWeb description and fix, and a
+  // FortiOS entry nothing else in the record mentions.
+  const record = (cveId: string) =>
+    ({
+      cveId,
+      assignerShortName: 'fortinet',
+      description: 'A incomplete list of disallowed inputs vulnerability in Fortinet FortiWeb 8.0.0 through 8.0.2',
+      affected: [
+        entry('FortiWeb', 'fortiweb', [range('8.0.0', '8.0.2'), range('7.6.0', '7.6.5')]),
+        entry('FortiOS', 'fortios', [range('7.6.0', '7.6.7'), range('7.4.0', '7.4.11')]),
+      ],
+      references: [{ url: 'https://fortiguard.fortinet.com/psirt/FG-IR-26-157', name: null, tags: [] }],
+    }) as unknown as Parameters<typeof resolver.resolve>[0];
+  const slugs = (cveId: string) => resolver.resolve(record(cveId)).resolved.map((r) => r.productSlug).sort();
+
+  it('files CVE-2026-70466 under FortiWeb only, not FortiOS', () => {
+    expect(slugs('CVE-2026-70466')).toEqual(['fortinet-fortiweb']);
+  });
+
+  it('leaves the same shape alone on any CVE nobody reviewed', () => {
+    expect(slugs('CVE-2026-00001')).toEqual(['fortinet-fortios', 'fortinet-fortiweb']);
+  });
+});
