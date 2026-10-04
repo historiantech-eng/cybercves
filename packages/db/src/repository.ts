@@ -109,14 +109,16 @@ export class Repository {
     for (const v of vendors) {
       statements.push({
         sql: `INSERT INTO vendor (slug, name, cna_short_names, aliases, psirt_hosts, psirt_url,
-                                  homepage, adapter, discovery_note, brands, portfolio)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  psirt_policy_url, homepage, adapter, discovery_note,
+                                  brands, portfolio)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(slug) DO UPDATE SET
                 name = excluded.name,
                 cna_short_names = excluded.cna_short_names,
                 aliases = excluded.aliases,
                 psirt_hosts = excluded.psirt_hosts,
                 psirt_url = excluded.psirt_url,
+                psirt_policy_url = excluded.psirt_policy_url,
                 homepage = excluded.homepage,
                 adapter = excluded.adapter,
                 discovery_note = excluded.discovery_note,
@@ -129,6 +131,7 @@ export class Repository {
           json(v.aliases),
           json(v.psirtHosts),
           v.psirtUrl,
+          v.psirtPolicyUrl,
           v.homepage,
           v.adapter,
           v.discoveryNote,
@@ -211,6 +214,7 @@ export class Repository {
         aliases: string;
         psirt_hosts: string;
         psirt_url: string | null;
+        psirt_policy_url: string | null;
         homepage: string | null;
         adapter: string;
         brands: string;
@@ -228,6 +232,7 @@ export class Repository {
       brands: JSON.parse(row.brands) as Record<string, string[]>,
       psirtHosts: JSON.parse(row.psirt_hosts) as string[],
       psirtUrl: row.psirt_url,
+      psirtPolicyUrl: row.psirt_policy_url,
       homepage: row.homepage,
       adapter: row.adapter as VendorFileConfig['adapter'],
       rssUrl: null,
@@ -959,11 +964,13 @@ export class Repository {
       slug: string;
       name: string;
       psirt_url: string | null;
+      psirt_policy_url: string | null;
       homepage: string | null;
       discovery_note: string | null;
       portfolio: string | null;
     }>(
-      'SELECT slug, name, psirt_url, homepage, discovery_note, portfolio FROM vendor ORDER BY name',
+      `SELECT slug, name, psirt_url, psirt_policy_url, homepage, discovery_note, portfolio
+         FROM vendor ORDER BY name`,
     );
   }
 

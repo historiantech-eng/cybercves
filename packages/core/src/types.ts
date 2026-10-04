@@ -168,6 +168,11 @@ export interface VendorConfig {
   /** Hostnames whose presence in a reference URL implies this vendor's advisory. */
   psirtHosts: string[];
   psirtUrl: string | null;
+  /**
+   * The vendor's published vulnerability-handling policy: how they triage,
+   * fix, and disclose. Distinct from psirtUrl, which lists the advisories.
+   */
+  psirtPolicyUrl: string | null;
   homepage: string | null;
   /** Which enrichment adapter tier this vendor uses beyond the CVE List. */
   adapter: 'cvelist' | 'json' | 'csaf' | 'rss' | 'scrape';

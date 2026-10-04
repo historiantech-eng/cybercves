@@ -1,6 +1,7 @@
 slug: check-point
 name: Check Point
 homepage: https://www.checkpoint.com
+psirtPolicyUrl: https://www.checkpoint.com/vulnerability-disclosure-policy/
 
 # Verified against the 2024-2026 CVE List: 29 of the 30 records we hold carry
 # assignerShortName "checkpoint" — one word, no separator or underscore. The
