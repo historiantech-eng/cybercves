@@ -2,6 +2,7 @@ slug: fortinet
 name: Fortinet
 homepage: https://www.fortinet.com
 psirtUrl: https://www.fortiguard.com/psirt
+psirtPolicyUrl: https://www.fortiguard.com/psirt_policy
 
 # Verified against CVE-2025-32756, whose cveMetadata.assignerShortName is "fortinet".
 cnaShortNames:

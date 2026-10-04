@@ -139,6 +139,16 @@ const totalKev = products.reduce((sum, p) => sum + p.kev_count, 0);
         </>
       )
     }
+    {
+      vendor.psirt_policy_url && (
+        <>
+          {' '}
+          <a href={vendor.psirt_policy_url} rel="nofollow noopener">
+            PSIRT policy →
+          </a>
+        </>
+      )
+    }
     {' '}<a href={`/feeds/vendor/${vendor.slug}.xml`}>RSS feed</a>
   </p>
 

@@ -189,6 +189,7 @@ export function parseVendor(
     brands,
     psirtHosts: stringArray(obj.psirtHosts, `${sourcePath}.psirtHosts`).map((h) => h.toLowerCase()),
     psirtUrl: optionalString(obj.psirtUrl, `${sourcePath}.psirtUrl`),
+    psirtPolicyUrl: optionalString(obj.psirtPolicyUrl, `${sourcePath}.psirtPolicyUrl`),
     homepage: optionalString(obj.homepage, `${sourcePath}.homepage`),
     adapter: adapter as VendorConfig['adapter'],
     rssUrl: optionalString(obj.rssUrl, `${sourcePath}.rssUrl`),

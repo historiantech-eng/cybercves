@@ -2,6 +2,7 @@ slug: cisco
 name: Cisco
 homepage: https://www.cisco.com
 psirtUrl: https://sec.cloudapps.cisco.com/security/center/publicationListing.x
+psirtPolicyUrl: https://sec.cloudapps.cisco.com/security/center/resources/security_vulnerability_policy.html
 
 # Verified against CVE-2023-20198, whose assignerShortName is "cisco".
 cnaShortNames:

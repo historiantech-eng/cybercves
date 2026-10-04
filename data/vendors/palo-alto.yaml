@@ -2,6 +2,7 @@ slug: palo-alto
 name: Palo Alto Networks
 homepage: https://www.paloaltonetworks.com
 psirtUrl: https://security.paloaltonetworks.com
+psirtPolicyUrl: https://www.paloaltonetworks.com/product-security-assurance
 
 # Verified against CVE-2024-3400: assignerShortName is "palo_alto" (underscore),
 # not "paloalto" or "palo-alto".
