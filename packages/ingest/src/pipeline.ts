@@ -10,6 +10,26 @@ import type { Repository, UpsertResult } from '@cybercves/db';
  * regardless of which process saw it.
  */
 
+/**
+ * The oldest CVE ID year the site tracks.
+ *
+ * The deploy backfills from a sparse clone of cves/2024 onward and then
+ * replaces D1 wholesale, so this is the de facto scope of production. The
+ * delta feed has no such limit — it carries any record updated upstream, and
+ * old IDs are revised all the time — so the Worker must apply the same cutoff
+ * or D1 accumulates rows the next push deletes. Four of those (CVE-2020-26140
+ * and friends, republished upstream) were enough to trip push:d1's shrink
+ * guard and halt the deploy.
+ *
+ * Keep in step with `--from` and the sparse checkout in deploy.yml.
+ */
+export const FIRST_TRACKED_YEAR = 2024;
+
+/** The year embedded in a CVE ID ("CVE-2024-1234" → 2024), or NaN. */
+export function cveIdYear(cveId: string): number {
+  return Number.parseInt(cveId.slice(4, 8), 10);
+}
+
 export interface IngestSummary extends UpsertResult {
   processed: number;
   unmappedCount: number;
@@ -19,6 +39,8 @@ export interface IngestSummary extends UpsertResult {
   unmatched: number;
   /** Withdrawn assignments, skipped before normalization. */
   rejected: number;
+  /** Records older than `fromYear`, skipped before normalization. */
+  outOfRange: number;
 }
 
 export interface IngestOptions {
@@ -38,6 +60,11 @@ export interface IngestOptions {
    * the Worker's cron must not; see Repository.upsertCves.
    */
   fullVersions?: boolean;
+  /**
+   * Skip CVE IDs from before this year. The delta paths pass FIRST_TRACKED_YEAR;
+   * the backfill already limits years by which directories it reads.
+   */
+  fromYear?: number;
   now?: string;
 }
 
@@ -52,6 +79,7 @@ export async function ingestRecords(
   const unmapped = new Map<string, UnmappedProduct>();
   let unmatched = 0;
   let rejected = 0;
+  let outOfRange = 0;
 
   for (const record of records) {
     if (!record?.cveMetadata?.cveId) continue;
@@ -61,6 +89,11 @@ export async function ingestRecords(
     // is pure cost: on a 2024-2026 backfill they were 39% of stored rows.
     if (record.cveMetadata.state === 'REJECTED') {
       rejected++;
+      continue;
+    }
+
+    if (options.fromYear !== undefined && !(cveIdYear(record.cveMetadata.cveId) >= options.fromYear)) {
+      outOfRange++;
       continue;
     }
 
@@ -102,5 +135,6 @@ export async function ingestRecords(
     retiredUnmapped: retired,
     unmatched,
     rejected,
+    outOfRange,
   };
 }

@@ -7,7 +7,7 @@ import { changedEntries, fetchDelta, fetchRecords } from '../sources/cvelist.js'
 import { fetchKev } from '../sources/kev.js';
 import { fetchEpss } from '../sources/epss.js';
 import { refreshEpssHistory } from '../epss-history.js';
-import { ingestRecords } from '../pipeline.js';
+import { FIRST_TRACKED_YEAR, ingestRecords } from '../pipeline.js';
 import { describeCiscoOutcome, enrichCiscoAdvisories, openVulnCredentialsFrom } from '../cisco-advisories.js';
 import { loadConfig } from '../node/config-loader.js';
 
@@ -62,7 +62,10 @@ try {
   }
 
   const records = fetched.flatMap((f) => (f.record ? [f.record] : []));
-  const summary = await ingestRecords(repo, config.resolver, records, { fullVersions: true });
+  const summary = await ingestRecords(repo, config.resolver, records, {
+    fullVersions: true,
+    fromYear: FIRST_TRACKED_YEAR,
+  });
   console.log(
     `ingest: ${summary.inserted} new, ${summary.updated} updated, ${summary.skipped} unchanged, ` +
       `${summary.unmatched} not ours, ${summary.rejected} withdrawn, ` +
