@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { NodeSqliteDriver } from '@cybercves/db/drivers/node';
 import { PUSHED_TABLES } from '../push-tables.js';
+import { FIRST_TRACKED_YEAR } from '../pipeline.js';
 
 /**
  * Push the local SQLite snapshot into Cloudflare D1.
@@ -36,6 +37,21 @@ const { values } = parseArgs({
 });
 
 const CHUNK = Number.parseInt(values.chunk, 10);
+
+/**
+ * Both sides of the guard are measured over the years the site tracks.
+ *
+ * D1 can legitimately hold older IDs — the delta cron stored them before it
+ * learned the cutoff — and this push is exactly what removes them. Counting
+ * them would read their removal as data loss and block the deploy that fixes
+ * it. Scoped to the constant rather than to local's oldest year, so a backfill
+ * that silently skipped a whole year still shows up as a shrink.
+ */
+const BASELINE_SQL =
+  `SELECT COUNT(*) AS total, ` +
+  `SUM(CASE WHEN CAST(substr(cve_id, 5, 4) AS INTEGER) >= ${FIRST_TRACKED_YEAR} THEN 1 ELSE 0 END) AS n, ` +
+  `MAX(CASE WHEN CAST(substr(cve_id, 5, 4) AS INTEGER) >= ${FIRST_TRACKED_YEAR} THEN date_published END) AS newest ` +
+  `FROM cve`;
 
 /**
  * Conservative byte budgets for a single `wrangler d1 execute --file` call.
@@ -92,7 +108,7 @@ function runWrangler(sqlFile: string) {
  * caller handles separately. So a genuine first push is never confused with a
  * check that could not run.
  */
-async function remoteBaseline(): Promise<{ count: number; newest: string | null }> {
+async function remoteBaseline(): Promise<{ count: number; total: number; newest: string | null }> {
   // Retried: the observed failure was transient, and one flaky subprocess call
   // should not be enough to either halt a deploy or wave one through.
   let lastError: unknown;
@@ -110,16 +126,19 @@ async function remoteBaseline(): Promise<{ count: number; newest: string | null 
         '--yes',
         '--json',
         '--command',
-        'SELECT COUNT(*) AS n, MAX(date_published) AS newest FROM cve',
+        BASELINE_SQL,
       ],
         { cwd: new URL('../../../worker/', import.meta.url).pathname, encoding: 'utf8' },
       );
       // wrangler prefixes human-readable noise before the JSON on some versions.
       const json = out.slice(out.indexOf('['));
-      const parsed = JSON.parse(json) as Array<{ results?: Array<{ n?: number; newest?: string }> }>;
+      const parsed = JSON.parse(json) as Array<{
+        results?: Array<{ total?: number; n?: number | null; newest?: string }>;
+      }>;
       const row = parsed[0]?.results?.[0];
-      if (!row || typeof row.n !== 'number') throw new Error('unexpected wrangler output shape');
-      return { count: row.n, newest: row.newest ?? null };
+      if (!row || typeof row.total !== 'number') throw new Error('unexpected wrangler output shape');
+      // SUM over zero rows is NULL, not 0.
+      return { count: row.n ?? 0, total: row.total, newest: row.newest ?? null };
     } catch (err) {
       lastError = err;
       console.warn(
@@ -153,7 +172,7 @@ async function remoteBaseline(): Promise<{ count: number; newest: string | null 
 async function assertNotARegression(): Promise<void> {
   if (!values.remote || values.force || values['dry-run']) return;
 
-  let remote: { count: number; newest: string | null };
+  let remote: { count: number; total: number; newest: string | null };
   try {
     remote = await remoteBaseline();
   } catch (err) {
@@ -169,15 +188,21 @@ async function assertNotARegression(): Promise<void> {
     );
   }
 
+  const outOfScope = remote.total - remote.count;
+  if (outOfScope > 0) {
+    console.log(
+      `D1 holds ${outOfScope} CVE(s) from before ${FIRST_TRACKED_YEAR} — outside the tracked ` +
+        `range, so this push drops them on purpose and the guard does not count them`,
+    );
+  }
+
   if (remote.count === 0) {
     // A real first push. The query worked and production is genuinely empty.
     console.log('D1 is empty — nothing to regress against, proceeding');
     return;
   }
 
-  const local = await driver.first<{ n: number; newest: string | null }>(
-    'SELECT COUNT(*) AS n, MAX(date_published) AS newest FROM cve',
-  );
+  const local = await driver.first<{ n: number | null; newest: string | null }>(BASELINE_SQL);
   const localCount = local?.n ?? 0;
   const shrink = (remote.count - localCount) / remote.count;
   const maxShrink = Number.parseFloat(values['max-shrink']);

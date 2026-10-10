@@ -5,7 +5,7 @@ import type { CveRecord } from '@cybercves/core';
 import { Repository } from '@cybercves/db';
 import { NodeSqliteDriver } from '@cybercves/db/drivers/node';
 import { migrate } from '@cybercves/db/migrate';
-import { ingestRecords } from '../src/pipeline.js';
+import { FIRST_TRACKED_YEAR, ingestRecords } from '../src/pipeline.js';
 import { loadConfig } from '../src/node/config-loader.js';
 
 const config = loadConfig();
@@ -58,6 +58,21 @@ describe('ingestRecords', () => {
     expect(summary.rejected).toBe(1);
     expect(summary.inserted).toBe(0);
     expect(await db.all('SELECT cve_id FROM cve')).toHaveLength(0);
+  });
+
+  it('skips CVE IDs older than fromYear', async () => {
+    // The delta feed carries old IDs that were revised upstream. The deploy's
+    // backfill never reads those years, so storing them in D1 only creates rows
+    // the next push deletes — and four of them tripped push:d1's shrink guard.
+    const old = fixture('CVE-2025-32756');
+    old.cveMetadata.cveId = 'CVE-2023-20178';
+
+    const summary = await ingestRecords(repo, config.resolver, [old, fixture('CVE-2025-32756')], {
+      fromYear: FIRST_TRACKED_YEAR,
+    });
+    expect(summary.outOfRange).toBe(1);
+    expect(summary.inserted).toBe(1);
+    expect(await db.all('SELECT cve_id FROM cve')).toEqual([{ cve_id: 'CVE-2025-32756' }]);
   });
 
   it('keeps a CVE whose vendor matched even when no product could be mapped', async () => {

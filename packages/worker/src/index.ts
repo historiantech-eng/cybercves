@@ -6,7 +6,7 @@ import { D1Driver } from '@cybercves/db/drivers/d1';
 import type { D1Database as D1Shape } from '@cybercves/db/drivers/d1';
 import { changedEntries, fetchDelta, fetchRecords } from '@cybercves/ingest';
 import { fetchEpss, fetchKev } from '@cybercves/ingest';
-import { ingestRecords } from '@cybercves/ingest';
+import { FIRST_TRACKED_YEAR, ingestRecords } from '@cybercves/ingest';
 import { advisoryUrlFromRefs } from '@cybercves/ingest';
 import type { CleanFeedback, FeedbackInput } from './feedback.js';
 import { alertText, hashIp, validateFeedback, verifyTurnstile } from './feedback.js';
@@ -78,7 +78,7 @@ async function syncDelta(env: Env): Promise<void> {
       const resolver = await resolverFor(repo);
       const fetched = await fetchRecords(changed, 4);
       const records = fetched.flatMap((f) => (f.record ? [f.record] : []));
-      summary = await ingestRecords(repo, resolver, records);
+      summary = await ingestRecords(repo, resolver, records, { fromYear: FIRST_TRACKED_YEAR });
     }
 
     await refreshLiveSnapshot(env, repo);
