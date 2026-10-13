@@ -18,7 +18,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-10-01T23:57:39.992Z
+generated: 2026-10-13T23:20:01.694Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -1699,6 +1699,17 @@ cves:
     source: psirt-acknowledgement
     advisory: FG-IR-26-175
     credit: Internally discovered and reported by Gwendal Guégniaud of Fortinet Product Security team
+  CVE-2026-106172:
+    discovery: EXTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-179
+    credit: External
+  CVE-2026-106175:
+    discovery: EXTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-182
+    credit: Fortinet is pleased to thank The UK's National Cyber Security Centre (NCSC) for reporting
+      this vulnerability under responsible disclosure.
   CVE-2026-21643:
     discovery: INTERNAL
     source: psirt-field
