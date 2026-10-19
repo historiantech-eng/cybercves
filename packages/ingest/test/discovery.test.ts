@@ -9,6 +9,7 @@ import {
   classifyAdvisoryPage,
   fetchAcknowledgements,
   isAdvisoryPage,
+  isUnavailableAdvisoryPage,
   parseAcknowledgement,
   parseDiscoveredField,
 } from '../src/sources/psirt-fortinet.js';
@@ -22,6 +23,12 @@ const fixture = readFileSync(
 /** fortiguard.com's ALTCHA interstitial, served with HTTP 200 in place of an advisory. */
 const challenge = readFileSync(
   fileURLToPath(new URL('./fixtures/fortinet-challenge.html', import.meta.url)),
+  'utf8',
+);
+
+/** fortiguard.com's answer for an advisory it has not published yet, also HTTP 200. */
+const unavailable = readFileSync(
+  fileURLToPath(new URL('./fixtures/fortinet-unavailable.html', import.meta.url)),
   'utf8',
 );
 
@@ -226,6 +233,20 @@ describe('isAdvisoryPage', () => {
   });
 });
 
+describe('isUnavailableAdvisoryPage', () => {
+  it('recognises the page served for an advisory that is not published yet', () => {
+    expect(isUnavailableAdvisoryPage(unavailable)).toBe(true);
+    // Which is why it needs its own test: it is not an advisory either, and
+    // used to be filed as a bot challenge on that basis alone.
+    expect(isAdvisoryPage(unavailable)).toBe(false);
+  });
+
+  it('does not mistake the bot challenge or a real advisory for it', () => {
+    expect(isUnavailableAdvisoryPage(challenge)).toBe(false);
+    expect(isUnavailableAdvisoryPage(fixture)).toBe(false);
+  });
+});
+
 describe('fetchAcknowledgements', () => {
   const target = [{ cveId: 'CVE-2026-22575', url: 'https://www.fortiguard.com/psirt/FG-IR-26-171' }];
 
@@ -260,6 +281,22 @@ describe('fetchAcknowledgements', () => {
     expect(run.failedCveIds).toEqual(['CVE-2026-22575']);
     expect(run.blocked).toBe(0);
     expect(run.blockedCveIds).toEqual([]);
+  });
+
+  it('counts an unpublished advisory as neither refused nor read-and-empty', async () => {
+    const run = await fetchAcknowledgements(target, {
+      delayMs: 0,
+      fetchPage: async () => ({ html: unavailable }),
+    });
+
+    expect(run.unavailable).toBe(1);
+    expect(run.unavailableCveIds).toEqual(['CVE-2026-22575']);
+    // Not a refusal — the origin served us — so it must not raise the alarm.
+    expect(run.blocked).toBe(0);
+    expect(run.failed).toBe(0);
+    // And not "credits nobody": there is no advisory yet to have said anything.
+    expect(run.missing).toBe(0);
+    expect(run.results).toEqual([]);
   });
 
   it('still reads a real advisory', async () => {
@@ -475,6 +512,54 @@ describe('discovery store', () => {
       'CVE-2025-32756': { discovery: 'EXTERNAL', source: 'psirt-field' },
     });
     expect(readDiscoveryFile(path)?.blocked?.['CVE-2026-22575']).toBeDefined();
+  });
+
+  it('records an unpublished advisory in its own bucket and keeps its first sighting', () => {
+    const path = tmp();
+    const target = [{ cveId: 'CVE-2025-46773', advisory: 'FG-IR-25-246' }];
+    const first = new Date('2026-10-13T18:00:00Z');
+    mergeDiscoveryFile(path, 'fortinet', {}, first, [], [], target);
+    const r = mergeDiscoveryFile(path, 'fortinet', {}, new Date('2026-10-14T06:00:00Z'), [], [], target);
+
+    expect(r.unavailable).toBe(1);
+    expect(r.unresolved).toBe(0);
+    expect(r.blocked).toBe(0);
+    // firstSeen is what the alarm ages off, so a retry must not reset it.
+    expect(readDiscoveryFile(path)?.unavailable?.['CVE-2025-46773']).toEqual({
+      advisory: 'FG-IR-25-246',
+      firstSeen: first.toISOString(),
+      lastChecked: '2026-10-14T06:00:00.000Z',
+      attempts: 2,
+    });
+  });
+
+  it('clears a refusal that was really an unpublished advisory', () => {
+    // The migration path for CVE-2025-46773: it sits in `blocked` from before
+    // this page was recognised, and must not stay there once it is.
+    const path = tmp();
+    const target = [{ cveId: 'CVE-2025-46773', advisory: 'FG-IR-25-246' }];
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], target);
+    const r = mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [], target);
+    expect(r.blocked).toBe(0);
+    expect(r.unavailable).toBe(1);
+  });
+
+  it('clears the unpublished record once the advisory appears', () => {
+    const path = tmp();
+    const target = [{ cveId: 'CVE-2025-46773', advisory: 'FG-IR-25-246' }];
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [], target);
+    const r = mergeDiscoveryFile(path, 'fortinet', {
+      'CVE-2025-46773': { discovery: 'EXTERNAL', source: 'psirt-field' },
+    });
+    expect(r.unavailable).toBe(0);
+    expect(readDiscoveryFile(path)?.unavailable?.['CVE-2025-46773']).toBeUndefined();
+
+    // Or appears and credits nobody — then it belongs on the slow backoff instead.
+    const path2 = tmp();
+    mergeDiscoveryFile(path2, 'fortinet', {}, new Date(), [], [], target);
+    const r2 = mergeDiscoveryFile(path2, 'fortinet', {}, new Date(), target);
+    expect(r2.unavailable).toBe(0);
+    expect(r2.unresolved).toBe(1);
   });
 
   it('treats a missing file as empty rather than throwing', () => {

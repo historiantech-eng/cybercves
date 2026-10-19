@@ -138,6 +138,15 @@ jobs:
           rather than advisories, so the affected CVEs are on the refusal backoff
           and will be retried in 24h. Nothing here claims anything about who
           found these CVEs — keeping that separate is the point of the bucket."
+          elif [ "${{ steps.fetch.outputs.unavailable || '0' }}" != "0" ]; then
+            git commit -m "Record Fortinet advisories not published yet
+
+          $(git diff --cached --stat -- data/discovery/ | tail -1)
+
+          No attribution changed. These CVE records cite an FG-IR advisory that
+          fortiguard.com answers as \"Unavailable\" — the CVE is out, the advisory
+          page is not. Re-checked every 12h; nothing here claims anything about
+          who found these CVEs."
           else
             git commit -m "Back off Fortinet advisories that carry no attribution
 
@@ -172,6 +181,8 @@ jobs:
         run: |
           if [ "${{ steps.fetch.outputs.exit-code }}" = "2" ]; then
             echo "::error::fortiguard.com refused the scrape — it served its bot challenge instead of advisories. The affected advisories are on a 24h backoff, so this job reports again after the next refused attempt rather than every hour. No CVE has been recorded as uncredited on this evidence."
+          elif [ "${{ steps.fetch.outputs.exit-code }}" = "3" ]; then
+            echo "::error::An advisory cited by a CVE record has been unavailable on fortiguard.com for over 14 days — the CVE may cite the wrong FG-IR, or Fortinet withdrew it. See the Fetch attribution step for which. Not a refusal; re-checked daily."
           else
             echo "::error::discovery:fetch exited ${{ steps.fetch.outputs.exit-code }} — see the Fetch attribution step."
           fi

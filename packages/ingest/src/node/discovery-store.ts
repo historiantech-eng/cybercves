@@ -77,12 +77,36 @@ export interface BlockedRecord {
   attempts: number;
 }
 
+/**
+ * An advisory the origin says it does not have yet.
+ *
+ * The third state, and a common one: Fortinet publishes the CVE record citing an
+ * FG-IR before the advisory page goes live, and fortiguard.com answers the
+ * interval with "Unavailable". That is not `unresolved` — there is no advisory
+ * to have credited nobody — and not `blocked` — we were served, not refused.
+ *
+ * `firstSeen` is the reason this is a record and not just a backoff. A page that
+ * is merely late is normal and should stay quiet; one that never appears means
+ * the CVE cites the wrong advisory or Fortinet withdrew it, and someone should
+ * look. The fetcher raises the alarm off this field — see --unavailable-alarm-days.
+ *
+ * Never consulted for attribution, same as `blocked`.
+ */
+export interface UnavailableRecord {
+  advisory?: string;
+  /** First time the origin answered "Unavailable". Kept across retries. */
+  firstSeen: string;
+  lastChecked: string;
+  attempts: number;
+}
+
 export interface DiscoveryFile {
   vendor: string;
   generated: string;
   cves: Record<string, DiscoveryRecord>;
   unresolved?: Record<string, UnresolvedRecord>;
   blocked?: Record<string, BlockedRecord>;
+  unavailable?: Record<string, UnavailableRecord>;
 }
 
 const HEADER = `# Discovery attribution — who found each vulnerability.
@@ -98,6 +122,10 @@ const HEADER = `# Discovery attribution — who found each vulnerability.
 # not an answer. It says nothing about who found the CVE, and is never read as
 # attribution; it only paces retries so a standing refusal reports itself once a
 # day instead of every hour. Entries clear themselves once a page is read.
+#
+# "unavailable" lists advisories the CVE record cites but the origin says it does
+# not have yet — usually a page Fortinet has not published. Also never read as
+# attribution; retried every few hours, and only alarms if it stays that way.
 #
 # discovery: INTERNAL (the vendor's own team) | EXTERNAL | USER | UNKNOWN
 # source:    psirt-field          — the vendor's labelled "Discovered" value
@@ -120,6 +148,7 @@ export function readDiscoveryFile(path: string): DiscoveryFile | null {
     cves: parsed.cves,
     unresolved: parsed.unresolved ?? {},
     blocked: parsed.blocked ?? {},
+    unavailable: parsed.unavailable ?? {},
   };
 }
 
@@ -144,6 +173,8 @@ export function mergeDiscoveryFile(
   unresolvedNow: ReadonlyArray<{ cveId: string; advisory?: string }> = [],
   /** Advisories the origin refused this run — see BlockedRecord. */
   blockedNow: ReadonlyArray<{ cveId: string; advisory?: string }> = [],
+  /** Advisories the origin said it does not have — see UnavailableRecord. */
+  unavailableNow: ReadonlyArray<{ cveId: string; advisory?: string }> = [],
 ): {
   added: number;
   changed: number;
@@ -151,11 +182,13 @@ export function mergeDiscoveryFile(
   total: number;
   unresolved: number;
   blocked: number;
+  unavailable: number;
 } {
   const existing = readDiscoveryFile(path);
   const cves: Record<string, DiscoveryRecord> = { ...(existing?.cves ?? {}) };
   const unresolved: Record<string, UnresolvedRecord> = { ...(existing?.unresolved ?? {}) };
   const blocked: Record<string, BlockedRecord> = { ...(existing?.blocked ?? {}) };
+  const unavailable: Record<string, UnavailableRecord> = { ...(existing?.unavailable ?? {}) };
 
   let added = 0;
   let changed = 0;
@@ -171,9 +204,10 @@ export function mergeDiscoveryFile(
       unchanged++;
     }
     cves[cveId] = record;
-    // It answered — stop counting it against either backoff.
+    // It answered — stop counting it against any backoff.
     delete unresolved[cveId];
     delete blocked[cveId];
+    delete unavailable[cveId];
   }
 
   for (const { cveId, advisory } of unresolvedNow) {
@@ -184,8 +218,10 @@ export function mergeDiscoveryFile(
       lastChecked: now.toISOString(),
       attempts: (prior?.attempts ?? 0) + 1,
     };
-    // We read this one, so whatever refused us before has stopped.
+    // We read this one, so whatever refused us before has stopped, and the page
+    // that was not published before now is.
     delete blocked[cveId];
+    delete unavailable[cveId];
   }
 
   for (const { cveId, advisory } of blockedNow) {
@@ -198,6 +234,20 @@ export function mergeDiscoveryFile(
     };
   }
 
+  for (const { cveId, advisory } of unavailableNow) {
+    if (cves[cveId]) continue;
+    const prior = unavailable[cveId];
+    unavailable[cveId] = {
+      ...(advisory ? { advisory } : {}),
+      firstSeen: prior?.firstSeen ?? now.toISOString(),
+      lastChecked: now.toISOString(),
+      attempts: (prior?.attempts ?? 0) + 1,
+    };
+    // The origin served us a page, so it is not refusing us — whatever was
+    // recorded as a refusal for this CVE was this page, misread.
+    delete blocked[cveId];
+  }
+
   // Sorted so the diff of a re-scrape shows what actually changed rather than a
   // reshuffle of 350 unrelated lines.
   const sorted: Record<string, DiscoveryRecord> = {};
@@ -208,6 +258,9 @@ export function mergeDiscoveryFile(
   const sortedBlocked: Record<string, BlockedRecord> = {};
   for (const key of Object.keys(blocked).sort())
     sortedBlocked[key] = blocked[key] as BlockedRecord;
+  const sortedUnavailable: Record<string, UnavailableRecord> = {};
+  for (const key of Object.keys(unavailable).sort())
+    sortedUnavailable[key] = unavailable[key] as UnavailableRecord;
 
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(
@@ -219,6 +272,7 @@ export function mergeDiscoveryFile(
         cves: sorted,
         ...(Object.keys(sortedUnresolved).length ? { unresolved: sortedUnresolved } : {}),
         ...(Object.keys(sortedBlocked).length ? { blocked: sortedBlocked } : {}),
+        ...(Object.keys(sortedUnavailable).length ? { unavailable: sortedUnavailable } : {}),
       },
       { lineWidth: 100 },
     )}`,
@@ -231,5 +285,6 @@ export function mergeDiscoveryFile(
     total: Object.keys(sorted).length,
     unresolved: Object.keys(sortedUnresolved).length,
     blocked: Object.keys(sortedBlocked).length,
+    unavailable: Object.keys(sortedUnavailable).length,
   };
 }
