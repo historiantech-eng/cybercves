@@ -156,7 +156,8 @@ try {
     `classified ${written}: ${internal} internal, ${external} external · ` +
       `${fromField} from the published Discovered field, ${results.length - fromField} from prose · ` +
       `${run.missing} CVE(s) with no usable attribution · ${run.failed} failed` +
-      (run.blocked ? ` (${run.blocked} of them served a bot challenge, not an advisory)` : ''),
+      (run.blocked ? ` (${run.blocked} of them served a bot challenge, not an advisory)` : '') +
+      (run.unavailable ? ` · ${run.unavailable} whose advisory is not published yet` : ''),
   );
 
   // A run that mostly failed produced a biased sample, not a finding. Exit

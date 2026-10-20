@@ -56,6 +56,23 @@ const { values } = parseArgs({
      * everyone to ignore the one that matters.
      */
     'blocked-retry-hours': { type: 'string', default: '24' },
+    /**
+     * Hours before re-checking an advisory fortiguard.com says it does not have.
+     *
+     * Shorter than either clock above, because this is the one state expected to
+     * change soon: the CVE record is out and the advisory page usually follows
+     * within a day or two. Not hourly, because each check is a commit.
+     */
+    'unavailable-retry-hours': { type: 'string', default: '12' },
+    /**
+     * Days an advisory may stay "Unavailable" before the job fails over it.
+     *
+     * A late page is normal and should not page anyone. One that never appears is
+     * not — the CVE cites the wrong FG-IR, or Fortinet pulled it — and that is
+     * worth a human. Past this age the entry is re-checked daily rather than every
+     * --unavailable-retry-hours, so the alarm fires once a day, like a refusal.
+     */
+    'unavailable-alarm-days': { type: 'string', default: '14' },
     /** Escape hatch: scrape advisory pages only, as this job did before CSAF. */
     'no-csaf': { type: 'boolean', default: false },
     /**
@@ -85,20 +102,28 @@ const payload: Pending = /^https?:\/\//.test(source)
 
 const OUT = values.out ?? join(discoveryDir(), `${values.vendor}.yaml`);
 
-// Drop anything held by either backoff. Both are backoffs, not blocklists — an
+// Drop anything held by a backoff. All three are backoffs, not blocklists — an
 // advisory published late, or an origin that stops refusing us, is picked up
 // again as soon as the entry ages past its window. They are kept apart because
 // they encode different facts: `unresolved` is "it said nothing", `blocked` is
-// "we never got to read it".
+// "we never got to read it", `unavailable` is "it does not exist yet".
 const retryAfterMs = Number.parseFloat(values['retry-after-days']) * 86_400_000;
 const blockedRetryMs = Number.parseFloat(values['blocked-retry-hours']) * 3_600_000;
+const unavailableRetryMs = Number.parseFloat(values['unavailable-retry-hours']) * 3_600_000;
+const unavailableAlarmMs = Number.parseFloat(values['unavailable-alarm-days']) * 86_400_000;
 const priorFile = readDiscoveryFile(OUT);
 const suppressed = priorFile?.unresolved ?? {};
 const refused = priorFile?.blocked ?? {};
+const notPublished = priorFile?.unavailable ?? {};
 const now = Date.now();
+const overdue = (cveId: string) => {
+  const entry = notPublished[cveId];
+  return entry !== undefined && now - Date.parse(entry.firstSeen) > unavailableAlarmMs;
+};
 
 let heldBack = 0;
 let heldBlocked = 0;
+let heldUnavailable = 0;
 const all = (payload.pending ?? []).filter((t) => {
   const prior = suppressed[t.cveId];
   if (prior && now - Date.parse(prior.lastChecked) <= retryAfterMs) {
@@ -110,13 +135,20 @@ const all = (payload.pending ?? []).filter((t) => {
     heldBlocked++;
     return false;
   }
+  const missingPage = notPublished[t.cveId];
+  const window = overdue(t.cveId) ? Math.max(unavailableRetryMs, 86_400_000) : unavailableRetryMs;
+  if (missingPage && now - Date.parse(missingPage.lastChecked) <= window) {
+    heldUnavailable++;
+    return false;
+  }
   return true;
 });
 const targets = all.slice(0, Number.parseInt(values.max, 10));
 
 const heldNote =
   (heldBack ? ` · ${heldBack} held back by the retry backoff` : '') +
-  (heldBlocked ? ` · ${heldBlocked} waiting out a refused scrape` : '');
+  (heldBlocked ? ` · ${heldBlocked} waiting out a refused scrape` : '') +
+  (heldUnavailable ? ` · ${heldUnavailable} waiting for Fortinet to publish the advisory` : '');
 
 if (targets.length === 0) {
   // Said plainly rather than as "nothing to fetch". A run that makes no
@@ -191,6 +223,8 @@ const EMPTY_RUN = {
   blocked: 0,
   failedCveIds: [],
   blockedCveIds: [],
+  unavailable: 0,
+  unavailableCveIds: [],
 };
 const run = csaf.remaining.length
   ? await fetchAcknowledgements(csaf.remaining, {
@@ -209,6 +243,9 @@ const found = [...csaf.results, ...run.results];
 const resolved = new Set(found.map((r) => r.cveId));
 const unreachable = new Set(run.failedCveIds);
 const blockedSet = new Set(run.blockedCveIds);
+const unavailableSet = new Set(run.unavailableCveIds);
+const pick = (set: ReadonlySet<string>) =>
+  targets.filter((t) => set.has(t.cveId)).map((t) => ({ cveId: t.cveId, advisory: t.url.split('/').pop() }));
 const merged = mergeDiscoveryFile(
   OUT,
   values.vendor,
@@ -224,17 +261,18 @@ const merged = mergeDiscoveryFile(
     ]),
   ),
   new Date(),
-  targets.filter((t) => !resolved.has(t.cveId) && !unreachable.has(t.cveId)).map((t) => ({
-    cveId: t.cveId,
-    advisory: t.url.split('/').pop(),
-  })),
+  targets
+    .filter(
+      (t) => !resolved.has(t.cveId) && !unreachable.has(t.cveId) && !unavailableSet.has(t.cveId),
+    )
+    .map((t) => ({ cveId: t.cveId, advisory: t.url.split('/').pop() })),
   // Refusals go to their own bucket, never to `unresolved`. The distinction is
   // load-bearing: one is a statement about the advisory, the other only about
   // our access to it.
-  targets.filter((t) => blockedSet.has(t.cveId)).map((t) => ({
-    cveId: t.cveId,
-    advisory: t.url.split('/').pop(),
-  })),
+  pick(blockedSet),
+  // And so do pages that do not exist yet: no advisory, so nothing it could
+  // have failed to credit.
+  pick(unavailableSet),
 );
 
 console.log(
@@ -242,9 +280,11 @@ console.log(
     `advisory page) · ${run.missing} with no usable attribution · ` +
     `${run.failed} failed` +
     (run.blocked ? ` (${run.blocked} served a bot challenge, not an advisory)` : '') +
+    (run.unavailable ? ` · ${run.unavailable} not published yet` : '') +
     ` · file now holds ${merged.total} attributed, ` +
     `${merged.unresolved} on backoff (+${merged.added} new, ${merged.changed} changed)` +
-    (merged.blocked ? ` · ${merged.blocked} waiting out a refused scrape` : ''),
+    (merged.blocked ? ` · ${merged.blocked} waiting out a refused scrape` : '') +
+    (merged.unavailable ? ` · ${merged.unavailable} waiting for Fortinet to publish` : ''),
 );
 
 /**
@@ -261,7 +301,9 @@ const summary = process.env.GITHUB_OUTPUT;
 if (summary) {
   appendFileSync(
     summary,
-    `attribution-changed=${merged.added + merged.changed > 0}\n` + `blocked=${run.blocked}\n`,
+    `attribution-changed=${merged.added + merged.changed > 0}\n` +
+      `blocked=${run.blocked}\n` +
+      `unavailable=${run.unavailable}\n`,
   );
 }
 
@@ -289,4 +331,19 @@ if (found.length === 0 && run.failed > csaf.remaining.length * 0.5) {
         : ''),
   );
   process.exitCode = 2;
+}
+
+// An advisory that has been "Unavailable" for weeks is no longer a late page.
+// Its own exit code, so the workflow can say what actually needs doing — a
+// refusal and a missing advisory have nothing in common but being unread.
+const stale = run.unavailableCveIds.filter(overdue);
+if (stale.length && !process.exitCode) {
+  console.error(
+    `\n${stale.length} advisor${stale.length === 1 ? 'y has' : 'ies have'} been unavailable on ` +
+      `fortiguard.com for over ${values['unavailable-alarm-days']} days: ` +
+      stale.map((id) => `${id} (${notPublished[id]?.advisory ?? '?'})`).join(', ') +
+      `.\nThe CVE record may cite the wrong advisory, or Fortinet may have withdrawn it. ` +
+      `Nothing was recorded as uncredited. Re-checked daily until it resolves.`,
+  );
+  process.exitCode = 3;
 }

@@ -137,6 +137,30 @@ export function isAdvisoryPage(html: string): boolean {
 }
 
 /**
+ * Did fortiguard.com answer, but with "there is no such advisory"?
+ *
+ * Fortinet routinely publishes a CVE record citing an FG-IR before the advisory
+ * page itself is live. Until it is, /psirt/FG-IR-* serves the full site with an
+ * empty body and one alert (verified live 2026-10-19, identical for an ID that
+ * does not exist):
+ *
+ *   <div lang="en" class="alert alert-danger">
+ *       <strong>Unavailable</strong><br/> Could not retrieve this post at this time. …
+ *
+ * It fails `isAdvisoryPage`, and it used to be filed as a bot challenge — which
+ * it is not. The origin served us; it simply has nothing to say yet. Treating it
+ * as a refusal made the refresh job go red every day for a week over CVE-2025-46773
+ * while reporting a block that did not exist.
+ *
+ * Positive, like `isAdvisoryPage`, and checked before it: a page matches only by
+ * carrying this alert, so a challenge page — or any other unreadable page — still
+ * falls through to the refusal bucket and keeps failing loudly.
+ */
+export function isUnavailableAdvisoryPage(html: string): boolean {
+  return /<strong>\s*Unavailable\s*<\/strong>[\s\S]{0,40}?Could not retrieve this post/i.test(html);
+}
+
+/**
  * Thrown when a fetch succeeded but did not return an advisory.
  *
  * Deliberately routed into the same bin as a transport failure: both mean the
@@ -188,6 +212,16 @@ export interface AcknowledgementRun {
    * standing refusal reports itself once rather than once per run.
    */
   blockedCveIds: string[];
+  /**
+   * Advisories fortiguard.com says it does not have — see isUnavailableAdvisoryPage.
+   *
+   * Neither failed nor missing. Not `failed`, because the origin answered and is
+   * not refusing us; not `missing`, because there is no advisory to have said
+   * nothing — putting these on the seven-day no-attribution backoff would delay
+   * the attribution for a week after Fortinet does publish.
+   */
+  unavailable: number;
+  unavailableCveIds: string[];
 }
 
 /**
@@ -249,8 +283,10 @@ export async function fetchAcknowledgements(
   let missing = 0;
   let failed = 0;
   let blocked = 0;
+  let unavailable = 0;
   const failedCveIds: string[] = [];
   const blockedCveIds: string[] = [];
+  const unavailableCveIds: string[] = [];
 
   // One fetch per advisory, not per CVE. A Fortinet advisory routinely covers
   // several CVEs, and refetching the same page once per CVE would add ~15
@@ -273,6 +309,13 @@ export async function fetchAcknowledgements(
       // After, not before: this is the gap the next request in this worker
       // waits out, and a cached page owes the origin no gap at all.
       if (!loaded.fromCache) await sleep(delayMs);
+      // Before the advisory test, which this page fails: it is an answer, not a
+      // refusal. See isUnavailableAdvisoryPage.
+      if (isUnavailableAdvisoryPage(loaded.html)) {
+        unavailable += page.cveIds.length;
+        unavailableCveIds.push(...page.cveIds);
+        return [];
+      }
       // Before classifying: a challenge page classifies perfectly well, as
       // "nobody is credited". See isAdvisoryPage.
       if (!isAdvisoryPage(loaded.html)) throw new UnreadableAdvisoryError(page.url);
@@ -298,5 +341,14 @@ export async function fetchAcknowledgements(
     }
   });
 
-  return { results: settled.flat(), missing, failed, blocked, failedCveIds, blockedCveIds };
+  return {
+    results: settled.flat(),
+    missing,
+    failed,
+    blocked,
+    failedCveIds,
+    blockedCveIds,
+    unavailable,
+    unavailableCveIds,
+  };
 }
