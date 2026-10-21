@@ -12,13 +12,17 @@
 # attribution; it only paces retries so a standing refusal reports itself once a
 # day instead of every hour. Entries clear themselves once a page is read.
 #
+# "unavailable" lists advisories the CVE record cites but the origin says it does
+# not have yet — usually a page Fortinet has not published. Also never read as
+# attribution; retried every few hours, and only alarms if it stays that way.
+#
 # discovery: INTERNAL (the vendor's own team) | EXTERNAL | USER | UNKNOWN
 # source:    psirt-field          — the vendor's labelled "Discovered" value
 #            psirt-acknowledgement — our classification of their credit prose
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-10-20T15:11:45.602Z
+generated: 2026-10-21T17:22:17.576Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -2136,8 +2140,9 @@ cves:
     source: psirt-acknowledgement
     advisory: FG-IR-26-174
     credit: Internally discovered and reported by John Headley of the Fortinet System Engineering team.
-blocked:
+unavailable:
   CVE-2025-46773:
     advisory: FG-IR-25-246
-    lastBlocked: 2026-10-20T15:11:45.602Z
-    attempts: 7
+    firstSeen: 2026-10-21T17:22:17.576Z
+    lastChecked: 2026-10-21T17:22:17.576Z
+    attempts: 1
