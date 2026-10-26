@@ -22,7 +22,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-10-26T13:22:04.994Z
+generated: 2026-10-26T19:24:54.495Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -1740,6 +1740,15 @@ cves:
     source: psirt-acknowledgement
     advisory: FG-IR-26-183
     credit: Discovered and Responsibly reported by external researcher khalooda0x - Khaled ibn Al-Walid.
+  CVE-2026-107656:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-185
+    credit: >-
+      Internally discovered and reported by Adham El Karn of Fortinet Product Security team.
+
+      Fortinet is also pleased to thank Jason McFadyen of TrendAI Research for reporting this
+      vulnerability under responsible disclosure.
   CVE-2026-21643:
     discovery: INTERNAL
     source: psirt-field
