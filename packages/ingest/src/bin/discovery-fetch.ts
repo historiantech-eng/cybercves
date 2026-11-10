@@ -120,6 +120,9 @@ const overdue = (cveId: string) => {
   const entry = notPublished[cveId];
   return entry !== undefined && now - Date.parse(entry.firstSeen) > unavailableAlarmMs;
 };
+// Someone has looked at it and written down what they did — see
+// UnavailableRecord.acknowledged. Still checked, still reported, never fails.
+const acknowledged = (cveId: string) => Boolean(notPublished[cveId]?.acknowledged);
 
 let heldBack = 0;
 let heldBlocked = 0;
@@ -136,7 +139,14 @@ const all = (payload.pending ?? []).filter((t) => {
     return false;
   }
   const missingPage = notPublished[t.cveId];
-  const window = overdue(t.cveId) ? Math.max(unavailableRetryMs, 86_400_000) : unavailableRetryMs;
+  // Overdue: daily, so the alarm fires once a day. Acknowledged: weekly — the
+  // alarm is off, and each check is a commit, so there is no reason to keep
+  // asking daily about a page a human has already chased.
+  const window = acknowledged(t.cveId)
+    ? Math.max(unavailableRetryMs, retryAfterMs)
+    : overdue(t.cveId)
+      ? Math.max(unavailableRetryMs, 86_400_000)
+      : unavailableRetryMs;
   if (missingPage && now - Date.parse(missingPage.lastChecked) <= window) {
     heldUnavailable++;
     return false;
@@ -336,7 +346,21 @@ if (found.length === 0 && run.failed > csaf.remaining.length * 0.5) {
 // An advisory that has been "Unavailable" for weeks is no longer a late page.
 // Its own exit code, so the workflow can say what actually needs doing — a
 // refusal and a missing advisory have nothing in common but being unread.
-const stale = run.unavailableCveIds.filter(overdue);
+const overdueNow = run.unavailableCveIds.filter(overdue);
+const stale = overdueNow.filter((id) => !acknowledged(id));
+const accepted = overdueNow.filter(acknowledged);
+if (accepted.length) {
+  // Reported every time it is checked, so an acknowledged entry cannot quietly
+  // become a permanent fixture nobody remembers adding. As an Actions warning
+  // it shows on the run summary without failing the job.
+  const prefix = process.env.GITHUB_ACTIONS ? '::warning::' : '';
+  for (const id of accepted) {
+    console.log(
+      `${prefix}${id} (${notPublished[id]?.advisory ?? '?'}) is still unavailable on ` +
+        `fortiguard.com, acknowledged: ${notPublished[id]?.acknowledged}`,
+    );
+  }
+}
 if (stale.length && !process.exitCode) {
   console.error(
     `\n${stale.length} advisor${stale.length === 1 ? 'y has' : 'ies have'} been unavailable on ` +

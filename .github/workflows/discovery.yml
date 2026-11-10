@@ -182,7 +182,7 @@ jobs:
           if [ "${{ steps.fetch.outputs.exit-code }}" = "2" ]; then
             echo "::error::fortiguard.com refused the scrape — it served its bot challenge instead of advisories. The affected advisories are on a 24h backoff, so this job reports again after the next refused attempt rather than every hour. No CVE has been recorded as uncredited on this evidence."
           elif [ "${{ steps.fetch.outputs.exit-code }}" = "3" ]; then
-            echo "::error::An advisory cited by a CVE record has been unavailable on fortiguard.com for over 14 days — the CVE may cite the wrong FG-IR, or Fortinet withdrew it. See the Fetch attribution step for which. Not a refusal; re-checked daily."
+            echo "::error::An advisory cited by a CVE record has been unavailable on fortiguard.com for over 14 days — the CVE may cite the wrong FG-IR, or Fortinet withdrew it. See the Fetch attribution step for which. Not a refusal; re-checked daily. Once you have looked into it, add acknowledged: \"<date>: <what you did>\" to its entry under unavailable: in data/discovery/<vendor>.yaml to stop this failing."
           else
             echo "::error::discovery:fetch exited ${{ steps.fetch.outputs.exit-code }} — see the Fetch attribution step."
           fi
