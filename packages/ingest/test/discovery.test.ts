@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -542,6 +542,30 @@ describe('discovery store', () => {
     const r = mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [], target);
     expect(r.blocked).toBe(0);
     expect(r.unavailable).toBe(1);
+  });
+
+  it('keeps a hand-written acknowledgement across retries, but not onto a different advisory', () => {
+    const path = tmp();
+    const target = [{ cveId: 'CVE-2025-46773', advisory: 'FG-IR-25-246' }];
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [], target);
+    // What a human does: edit the YAML by hand.
+    const raw = readFileSync(path, 'utf8').replace(
+      /(attempts: 1)/,
+      '$1\n    acknowledged: "2026-11-10: reported to Fortinet PSIRT"',
+    );
+    writeFileSync(path, raw);
+
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [], target);
+    expect(readDiscoveryFile(path)?.unavailable?.['CVE-2025-46773']).toMatchObject({
+      attempts: 2,
+      acknowledged: '2026-11-10: reported to Fortinet PSIRT',
+    });
+
+    // The CVE record now cites a different FG-IR: that one gets its own alarm.
+    mergeDiscoveryFile(path, 'fortinet', {}, new Date(), [], [], [
+      { cveId: 'CVE-2025-46773', advisory: 'FG-IR-25-999' },
+    ]);
+    expect(readDiscoveryFile(path)?.unavailable?.['CVE-2025-46773']?.acknowledged).toBeUndefined();
   });
 
   it('clears the unpublished record once the advisory appears', () => {

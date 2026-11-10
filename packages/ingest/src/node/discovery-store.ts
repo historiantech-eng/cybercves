@@ -98,6 +98,17 @@ export interface UnavailableRecord {
   firstSeen: string;
   lastChecked: string;
   attempts: number;
+  /**
+   * Hand-written: a human has looked, and the alarm should stop failing the job.
+   *
+   * Free text saying what was done and when — "2026-11-10: reported to Fortinet
+   * PSIRT". It silences the failure, not the record: the entry is still
+   * re-checked (weekly), still listed in every run's log, and clears itself the
+   * moment the page appears. Tied to the advisory it was written about, so if
+   * the CVE record is corrected to cite a different FG-IR the acknowledgement
+   * is dropped and the new one gets its own alarm.
+   */
+  acknowledged?: string;
 }
 
 export interface DiscoveryFile {
@@ -126,6 +137,8 @@ const HEADER = `# Discovery attribution — who found each vulnerability.
 # "unavailable" lists advisories the CVE record cites but the origin says it does
 # not have yet — usually a page Fortinet has not published. Also never read as
 # attribution; retried every few hours, and only alarms if it stays that way.
+# Add \`acknowledged: "<date>: <what was done>"\` by hand to an entry to stop it
+# failing the job once someone has looked; it is then re-checked weekly.
 #
 # discovery: INTERNAL (the vendor's own team) | EXTERNAL | USER | UNKNOWN
 # source:    psirt-field          — the vendor's labelled "Discovered" value
@@ -237,11 +250,16 @@ export function mergeDiscoveryFile(
   for (const { cveId, advisory } of unavailableNow) {
     if (cves[cveId]) continue;
     const prior = unavailable[cveId];
+    // An acknowledgement is about one specific advisory. Carried across retries,
+    // but not onto a different FG-IR the CVE record has since been changed to.
+    const acknowledged =
+      prior?.acknowledged && prior.advisory === advisory ? prior.acknowledged : undefined;
     unavailable[cveId] = {
       ...(advisory ? { advisory } : {}),
       firstSeen: prior?.firstSeen ?? now.toISOString(),
       lastChecked: now.toISOString(),
       attempts: (prior?.attempts ?? 0) + 1,
+      ...(acknowledged ? { acknowledged } : {}),
     };
     // The origin served us a page, so it is not refusing us — whatever was
     // recorded as a refusal for this CVE was this page, misread.
