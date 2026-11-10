@@ -15,6 +15,8 @@
 # "unavailable" lists advisories the CVE record cites but the origin says it does
 # not have yet — usually a page Fortinet has not published. Also never read as
 # attribution; retried every few hours, and only alarms if it stays that way.
+# Add `acknowledged: "<date>: <what was done>"` by hand to an entry to stop it
+# failing the job once someone has looked; it is then re-checked weekly.
 #
 # discovery: INTERNAL (the vendor's own team) | EXTERNAL | USER | UNKNOWN
 # source:    psirt-field          — the vendor's labelled "Discovered" value
@@ -22,7 +24,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-11-10T02:16:26.640Z
+generated: 2026-11-10T23:32:08.751Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -1576,6 +1578,11 @@ cves:
     source: psirt-field
     advisory: FG-IR-26-122
     credit: Internal
+  CVE-2025-61625:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-190
+    credit: Internal
   CVE-2025-61713:
     discovery: INTERNAL
     source: psirt-field
@@ -1756,6 +1763,12 @@ cves:
 
       Fortinet is also pleased to thank Jason McFadyen of TrendAI Research for reporting this
       vulnerability under responsible disclosure.
+  CVE-2026-126261:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-275
+    credit: "Internally discovered and reported by Theo Leleu of Fortinet Product Security team with the
+      use of Frontier AI model: Claude Mythos."
   CVE-2026-21643:
     discovery: INTERNAL
     source: psirt-field
@@ -2162,4 +2175,5 @@ unavailable:
     firstSeen: 2026-10-21T17:22:17.576Z
     lastChecked: 2026-11-10T02:16:26.640Z
     attempts: 28
-    acknowledged: "2026-11-10: CVE published 2026-10-13 citing FG-IR-25-246, page never went live; reported to Fortinet PSIRT"
+    acknowledged: "2026-11-10: CVE published 2026-10-13 citing FG-IR-25-246, page never went live;
+      reported to Fortinet PSIRT"
