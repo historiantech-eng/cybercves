@@ -24,7 +24,7 @@
 #            cna-source            — the CVE record's own field
 
 vendor: fortinet
-generated: 2026-11-11T22:09:48.368Z
+generated: 2026-11-12T03:12:23.288Z
 cves:
   CVE-2019-5591:
     discovery: EXTERNAL
@@ -1789,12 +1789,239 @@ cves:
     advisory: FG-IR-26-195
     credit: Fortinet is pleased to thank Juan A. Zavala from EchoStar/HUGHES for reporting this
       vulnerability under responsible disclosure
+  CVE-2026-126176:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-222
+    credit: Internal
+  CVE-2026-126177:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-222
+    credit: Internal
+  CVE-2026-126178:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-223
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126182:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-227
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126183:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-228
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126184:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-229
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126185:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-230
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126211:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-231
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126212:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-232
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126213:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-233
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126214:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-234
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126215:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-234
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126216:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-234
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126217:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-234
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126218:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-235
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126219:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-236
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126220:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-236
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126221:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-236
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126222:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-237
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos"
+  CVE-2026-126223:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-238
+    credit: Internal
+  CVE-2026-126224:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-239
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126225:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-240
+    credit: Internal
+  CVE-2026-126226:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-241
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126227:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-242
+    credit: Internal
+  CVE-2026-126228:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-243
+    credit: Internal
   CVE-2026-126229:
     discovery: INTERNAL
     source: psirt-acknowledgement
     advisory: FG-IR-26-244
     credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
       with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126230:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-245
+    credit: Internal
+  CVE-2026-126231:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-246
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126232:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-247
+    credit: "Internally discovered and reported by Loic Pantano of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126233:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-248
+    credit: Internal
+  CVE-2026-126234:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-249
+    credit: "Internally discovered and reported by David Maciejak of the Fortinet Product Security team
+      with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126235:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-250
+    credit: "Internally discovered and reported by Chris Magistrado of Fortinet Product Security team
+      with the use of Frontier AI model: Claude Mythos."
+  CVE-2026-126236:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-251
+    credit: "Internally discovered and reported by David Maciejak, Loic Pantano of the Fortinet Product
+      Security team with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126237:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-252
+    credit: Internal
+  CVE-2026-126238:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-253
+    credit: Internal
+  CVE-2026-126239:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-254
+    credit: Internal
+  CVE-2026-126240:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-255
+    credit: "Internally discovered and reported by Gwendal Guegniaud of the Fortinet Product Security
+      team with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126241:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-256
+    credit: "Internally discovered and reported by Gwendal Guegniaud of the Fortinet Product Security
+      team with the use of the frontier AI model: Claude Mythos."
+  CVE-2026-126242:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-257
+    credit: Internal
+  CVE-2026-126243:
+    discovery: INTERNAL
+    source: psirt-field
+    advisory: FG-IR-26-257
+    credit: Internal
+  CVE-2026-126244:
+    discovery: INTERNAL
+    source: psirt-acknowledgement
+    advisory: FG-IR-26-258
+    credit: "Internally discovered and reported by Gwendal Guegniaud of the Fortinet Product Security
+      team with the use of the frontier AI model: Claude Mythos."
   CVE-2026-126245:
     discovery: INTERNAL
     source: psirt-field
