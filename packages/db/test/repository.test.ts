@@ -462,6 +462,31 @@ describe('taxonomy review queue', () => {
   });
 });
 
+describe('getAcquiredBrandShare', () => {
+  it('reports a brand against its vendor total, on the security-only rollup terms', async () => {
+    await ingest('CVE-2025-32756', 'CVE-2023-20198');
+    await db.run("UPDATE product SET brand = 'Acme' WHERE slug = 'fortinet-fortimail'");
+
+    const share = await repo.getAcquiredBrandShare(2025);
+    const rollup = await repo.getVendorRollup(2025, true);
+    expect(share).toEqual([
+      {
+        vendor_slug: 'fortinet',
+        vendor_name: 'Fortinet',
+        brand: 'Acme',
+        brand_count: 1,
+        vendor_count: rollup.find((r) => r.vendor_slug === 'fortinet')?.cve_count,
+      },
+    ]);
+  });
+
+  it('ignores a brand whose products are all outside the security categories', async () => {
+    await ingest('CVE-2025-32756');
+    await db.run("UPDATE product SET brand = 'Acme' WHERE slug = 'fortinet-fortivoice'");
+    expect(await repo.getAcquiredBrandShare(2025)).toEqual([]);
+  });
+});
+
 describe('site queries', () => {
   it('builds the live snapshot the odometer reads', async () => {
     await ingest('CVE-2025-32756');

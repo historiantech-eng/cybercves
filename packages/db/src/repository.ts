@@ -895,6 +895,50 @@ export class Repository {
   }
 
   /**
+   * How much of each vendor's year comes from brands it acquired.
+   *
+   * Same scope as the default vendor rollup — security categories only, one
+   * count per vendor/CVE pair — so `vendor_count` is the number on the home page
+   * race and `brand_count` is the part of it that brand accounts for. Vendors
+   * with no branded products in the year are absent.
+   */
+  async getAcquiredBrandShare(year: number) {
+    return this.#db.all<{
+      vendor_slug: string;
+      vendor_name: string;
+      brand: string;
+      brand_count: number;
+      vendor_count: number;
+    }>(
+      `WITH vendor_cve AS (
+         SELECT DISTINCT cp.vendor_slug AS vendor_slug, cp.cve_id AS cve_id, p.brand AS brand
+         FROM cve_product cp
+         JOIN product p    ON p.slug = cp.product_slug
+         JOIN category cat ON cat.slug = p.category_slug
+         JOIN cve c        ON c.cve_id = cp.cve_id
+         WHERE c.published_year = ?
+           AND c.state = 'PUBLISHED'
+           AND cat.is_security = 1
+       ),
+       totals AS (
+         SELECT vendor_slug, COUNT(DISTINCT cve_id) AS n FROM vendor_cve GROUP BY vendor_slug
+       ),
+       brands AS (
+         SELECT vendor_slug, brand, COUNT(DISTINCT cve_id) AS n
+         FROM vendor_cve WHERE brand IS NOT NULL
+         GROUP BY vendor_slug, brand
+       )
+       SELECT v.slug AS vendor_slug, v.name AS vendor_name, b.brand AS brand,
+              b.n AS brand_count, t.n AS vendor_count
+       FROM brands b
+       JOIN totals t ON t.vendor_slug = b.vendor_slug
+       JOIN vendor v ON v.slug = b.vendor_slug
+       ORDER BY b.n DESC, v.name, b.brand`,
+      [year],
+    );
+  }
+
+  /**
    * Per-category breakdown for a vendor — the firewall-vs-endpoint view.
    *
    * Carries `risk` on the same terms as the vendor rollup, so a category can be
