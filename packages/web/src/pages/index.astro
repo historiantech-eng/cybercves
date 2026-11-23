@@ -5,7 +5,7 @@ import VendorRace from '../components/VendorRace.astro';
 import CveTable from '../components/CveTable.astro';
 import SeverityChart from '../components/SeverityChart.astro';
 import { CURRENT_YEAR, db, formatDate } from '../lib/data';
-import { toCompactRows } from '../lib/cve-rows';
+import { toCompactRows, toSecurityRows, type SecurityProducts } from '../lib/cve-rows';
 
 const repo = db();
 
@@ -17,6 +17,24 @@ const vendorLabels = Object.fromEntries(
   (repo ? await repo.listVendors() : []).map((v) => [v.slug, v.name]),
 );
 const kevRecent = repo ? await repo.listKevCves(5) : [];
+
+// The vendor race counts security product lines only, so everything on this
+// page that sits beside it does too. Without this the severity chart counted
+// routing and collaboration CVEs the race excludes, and the same vendor showed
+// two different totals one card apart.
+const securityCategories = new Set(
+  (repo ? await repo.listCategories() : []).filter((c) => c.is_security === 1).map((c) => c.slug),
+);
+const securityProducts: SecurityProducts = Object.fromEntries(
+  (repo ? await repo.listProducts() : [])
+    .filter((p) => securityCategories.has(p.category_slug))
+    .map((p) => [p.slug, [p.vendor_slug, p.category_slug] as const]),
+);
+// Distinct CVEs, from the same rows the severity chart draws. Summing the
+// race's per-vendor counts would count a CVE affecting two vendors twice.
+const exploitedThisYear = toSecurityRows(severityRows, securityProducts).filter(
+  (r) => r.k === 1,
+).length;
 
 // The hero counter is deliberately current-year — it resets on 1 January, which
 // is the point. The vendor race is not: for the first days of a new year that
@@ -124,10 +142,9 @@ const paceDelta =
               </div>
             </div>
             <div>
-              <div class="stat-label">Known exploited</div>
-              <div class="stat-value">
-                {rollup.reduce((sum, r) => sum + r.kev_count, 0).toLocaleString()}
-              </div>
+              <div class="stat-label">Known exploited, {CURRENT_YEAR}</div>
+              <div class="stat-value">{exploitedThisYear.toLocaleString()}</div>
+              <div class="small muted">security products · <a href="/kev">all years</a></div>
             </div>
           </div>
         </div>
@@ -155,7 +172,8 @@ const paceDelta =
     groupLabels={vendorLabels}
     year={CURRENT_YEAR}
     title={`Severity, ${CURRENT_YEAR}`}
-    caption="How serious this year's disclosures are."
+    caption="How serious this year's disclosures are, for the same security product lines as the vendor chart above."
+    security={securityProducts}
   />
 
   <div class="ad-slot" aria-hidden="true">Reserved</div>

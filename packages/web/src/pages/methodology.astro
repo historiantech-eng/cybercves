@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
-import { db } from '../lib/data';
+import { CURRENT_YEAR, db } from '../lib/data';
+import { aggregateBy, countCves } from '../lib/kev-timing';
 import {
   EXPOSURE_LABELS,
   PRIORITY_TIERS,
@@ -16,6 +17,32 @@ const scored = repo ? await repo.getUnscoredShare() : { total: 0, unscored: 0 };
 const discoverySources = repo ? await repo.getDiscoverySourceCounts() : [];
 const discovery = repo ? await repo.getDiscoveryBreakdown() : [];
 const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFixed(1) : '0.0';
+
+// The small-sample caveat quotes the corpus, so it is computed from the same
+// rows /kev draws. Written by hand it said "about fifty" while /kev said 71.
+const timing = repo ? await repo.getKevTiming() : [];
+const kevTotal = countCves(timing);
+const kevByVendor = aggregateBy(timing, 'vendor');
+const kevByProduct = aggregateBy(timing, 'product');
+const kevVendorN = kevByVendor.map((s) => s.n);
+const kevSingles = kevByProduct.filter((s) => s.n === 1).length;
+const kevMedians = kevByVendor.flatMap((s) => (s.median === null ? [] : [s.median]));
+const days = (n: number) => `${n.toLocaleString()} day${n === 1 ? '' : 's'}`;
+const kevSampleSentence =
+  `Only ${kevTotal.toLocaleString()} CVEs we track have ever been listed as exploited` +
+  (kevVendorN.length
+    ? ` — ${Math.min(...kevVendorN)} to ${Math.max(...kevVendorN)} per vendor, and a single` +
+      ` observation for ${kevSingles} of the ${kevByProduct.length} products involved.`
+    : '.');
+const kevMedianSentence =
+  kevMedians.length > 1
+    ? `The vendor medians run from ${days(Math.min(...kevMedians))} to` +
+      ` ${days(Math.max(...kevMedians))} and the distributions overlap almost entirely, so the` +
+      ` ordering between them is not a finding.`
+    : 'With so few observations, any ordering between vendors is not a finding.';
+
+const brandShare = repo ? await repo.getAcquiredBrandShare(CURRENT_YEAR) : [];
+const topBrand = brandShare[0] ?? null;
 ---
 
 <Base
@@ -474,9 +501,23 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
           no count on this site.
         </li>
         <li>
-          <strong>Acquisitions lag.</strong> Splunk counts under Cisco, and CyberArk and Venafi
-          under Palo Alto, from the whole period we cover — not from the acquisition date. A
-          newly acquired brand is invisible until its name is added to the taxonomy.
+          <strong>Acquired brands count as the parent's own products.</strong> Splunk counts
+          under Cisco, and CyberArk and Venafi under Palo Alto, the same way FortiSIEM (bought by
+          Fortinet as AccelOps) counts under Fortinet: the parent now ships and patches them.
+          They count from the whole period we cover, not from the acquisition date, and a newly
+          acquired brand is invisible until its name is added to the taxonomy.
+          {
+            topBrand && (
+              <>
+                {' '}
+                It can move a vendor's total a long way: {topBrand.brand} accounts for{' '}
+                {topBrand.brand_count.toLocaleString()} of {topBrand.vendor_name}'s{' '}
+                {topBrand.vendor_count.toLocaleString()} security-product CVEs published in{' '}
+                {CURRENT_YEAR}. A comparison of {topBrand.vendor_name} over time is partly a
+                comparison of what it owned.
+              </>
+            )
+          }
         </li>
         <li>
           <strong>A product stated only in prose may be missing.</strong> We read the structured
@@ -503,11 +544,8 @@ const unscoredPct = scored.total ? ((scored.unscored / scored.total) * 100).toFi
           against each other.
         </li>
         <li>
-          <strong>Time-to-exploitation rests on very few CVEs.</strong> Only about fifty CVEs we
-          track have ever been listed as exploited — eleven to twenty-three per vendor, and a
-          single observation for half the products involved. The vendor medians sit within days
-          of each other and the distributions overlap almost entirely, so the ordering between
-          them is not a finding. Treat that panel as a description of how little warning these
+          <strong>Time-to-exploitation rests on very few CVEs.</strong> {kevSampleSentence}{' '}
+          {kevMedianSentence} Treat that panel as a description of how little warning these
           products tend to come with, not as a ranking of the companies behind them.
         </li>
       </ul>

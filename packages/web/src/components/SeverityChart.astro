@@ -1,5 +1,5 @@
 ---
-import type { CveRow } from '../lib/cve-rows';
+import { toSecurityRows, type CveRow, type SecurityProducts } from '../lib/cve-rows';
 import {
   aggregateSeverity,
   aggregateSeverityBy,
@@ -31,10 +31,16 @@ interface Props {
    * year shard. Set so the script does not fetch or bind its own year.
    */
   driven?: boolean;
+  /**
+   * Narrow to security product lines, so the chart counts what the vendor
+   * rollup beside it counts. Applied here and again in the script below to the
+   * shard, by the same function, so the two renders cannot disagree.
+   */
+  security?: SecurityProducts;
 }
 
 const {
-  rows,
+  rows: allRows,
   groupBy,
   groupLabels = {},
   title = 'Severity',
@@ -43,7 +49,10 @@ const {
   scopeField,
   scopeSlug,
   driven = false,
+  security,
 } = Astro.props;
+
+const rows = security ? toSecurityRows(allRows, security) : allRows;
 
 const overall = aggregateSeverity(rows);
 const segments = segmentsOf(overall.counts);
@@ -76,6 +85,7 @@ const groupNoun = groupBy === 'vendor' ? 'vendor' : 'category';
     data-scope-slug={scopeSlug}
     data-driven={driven ? '' : undefined}
     data-labels={JSON.stringify(groupLabels)}
+    data-security={security ? JSON.stringify(security) : undefined}
   >
     <div class="section-head svc-head">
       <div>
@@ -181,7 +191,12 @@ const groupNoun = groupBy === 'vendor' ? 'vendor' : 'category';
 
 
 <script>
-  import { createShardLoader, type CveRow } from '../lib/cve-rows';
+  import {
+    createShardLoader,
+    toSecurityRows,
+    type CveRow,
+    type SecurityProducts,
+  } from '../lib/cve-rows';
   import {
     aggregateSeverity,
     aggregateSeverityBy,
@@ -214,8 +229,13 @@ const groupNoun = groupBy === 'vendor' ? 'vendor' : 'category';
     // serving every consumer on the page.
     const scopeField = root.dataset.scopeField === 'category' ? 'g' : 'v';
     const scopeSlug = root.dataset.scopeSlug;
-    const scoped = (all: CveRow[]): CveRow[] =>
-      scopeSlug ? all.filter((r) => r[scopeField].includes(scopeSlug)) : all;
+    const security = root.dataset.security
+      ? (JSON.parse(root.dataset.security) as SecurityProducts)
+      : null;
+    const scoped = (all: CveRow[]): CveRow[] => {
+      const narrowed = security ? toSecurityRows(all, security) : all;
+      return scopeSlug ? narrowed.filter((r) => r[scopeField].includes(scopeSlug)) : narrowed;
+    };
 
     // Presentation choices persist; the data slice never does. Keyed per
     // grouping so a vendor page and the browse page do not fight over one value.

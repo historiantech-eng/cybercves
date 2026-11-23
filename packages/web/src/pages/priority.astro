@@ -18,6 +18,13 @@ const vendors = repo ? await repo.listVendors() : [];
 const categories = repo ? await repo.listCategories() : [];
 const vendorNames = Object.fromEntries(vendors.map((v) => [v.slug, v.name]));
 
+// The same list /kev counts. Tier 1 can only hold CVEs mapped to a product,
+// since the tiers filter by vendor and category, so it runs short of the /kev
+// total by however many are still unmapped. Said on the page, not left for a
+// reader comparing the two numbers to work out.
+const kevAll = repo ? await repo.listKevCves(100_000) : [];
+const kevUnmapped = kevAll.filter((r) => !r.vendors).length;
+
 // Which archived days the build was supposed to fetch, and which it actually
 // has. A day that failed to download is reported as missing, never guessed at.
 const asOf = repo ? await repo.getEpssAsOf() : null;
@@ -124,6 +131,14 @@ function fixSummary(solution: string | null): string | null {
               </h2>
               <p>
                 {rule}
+                {tier === 1 && kevUnmapped > 0 && (
+                  <span class="muted small">
+                    {' '}
+                    {kevUnmapped.toLocaleString()} of the {kevAll.length.toLocaleString()}{' '}
+                    <a href="/kev">exploited CVEs</a> we track are not yet mapped to a product, so
+                    they are not listed here.
+                  </span>
+                )}
                 {tier === 2 && !hasLong && (
                   <strong>
                     {' '}
