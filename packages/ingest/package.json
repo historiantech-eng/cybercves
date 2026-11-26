@@ -24,6 +24,6 @@
   "dependencies": {
     "@cybercves/core": "*",
     "@cybercves/db": "*",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   }
 }
